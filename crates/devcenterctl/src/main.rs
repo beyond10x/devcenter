@@ -67,6 +67,8 @@ struct HelmTarget {
     values: PathBuf,
     #[arg(long, default_value = "10m")]
     timeout: String,
+    #[arg(long)]
+    create_namespace: bool,
 }
 
 #[derive(Debug, Args)]
@@ -209,10 +211,11 @@ fn apply(args: &HelmTarget) -> Result<()> {
         &args.chart,
         "--namespace",
         &args.target.namespace,
-        "--create-namespace",
-        "--values",
     ]);
-    command.arg(&args.values);
+    if args.create_namespace {
+        command.arg("--create-namespace");
+    }
+    command.arg("--values").arg(&args.values);
     command.args([
         "--atomic",
         "--wait",
