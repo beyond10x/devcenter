@@ -136,7 +136,7 @@ fn main() -> Result<()> {
 
 fn leak_check(args: &LeakCheck) -> Result<()> {
     let markers = leak::read_markers(&args.deny_file)?;
-    let findings = leak::scan(&args.root, &markers)?;
+    let findings = leak::scan(&args.root, &markers, Some(&args.deny_file))?;
     for finding in &findings {
         println!(
             "{}:{}: confidential marker #{}",

@@ -35,7 +35,14 @@ pub fn read_markers(path: &Path) -> Result<Vec<String>> {
 }
 
 /// Scan path names and UTF-8 file content without printing the confidential marker itself.
-pub fn scan(root: &Path, markers: &[String]) -> Result<Vec<Finding>> {
+///
+/// `excluded_file` is intended for the runtime-supplied denylist. It is excluded by canonical path
+/// so a denylist inside `root` does not inevitably report every marker it defines.
+pub fn scan(root: &Path, markers: &[String], excluded_file: Option<&Path>) -> Result<Vec<Finding>> {
+    let excluded_file = excluded_file
+        .map(fs::canonicalize)
+        .transpose()
+        .context("cannot resolve excluded denylist")?;
     let mut findings = Vec::new();
     for entry in WalkDir::new(root)
         .follow_links(false)
@@ -43,6 +50,11 @@ pub fn scan(root: &Path, markers: &[String]) -> Result<Vec<Finding>> {
         .filter_entry(included)
     {
         let entry = entry.with_context(|| format!("cannot walk {}", root.display()))?;
+        if excluded_file.as_ref().is_some_and(|excluded| {
+            fs::canonicalize(entry.path()).is_ok_and(|candidate| candidate == *excluded)
+        }) {
+            continue;
+        }
         let relative = entry.path().strip_prefix(root).unwrap_or(entry.path());
         let rendered = relative.to_string_lossy().to_ascii_lowercase();
         for (index, marker) in markers.iter().enumerate() {
@@ -98,9 +110,21 @@ mod tests {
             "safe\nPrivateMarker\n",
         )
         .expect("fixture");
-        let findings = scan(directory.path(), &["privatemarker".into()]).expect("scan");
+        let findings = scan(directory.path(), &["privatemarker".into()], None).expect("scan");
         assert_eq!(findings.len(), 1);
         assert_eq!(findings[0].line, 2);
         assert_eq!(findings[0].marker, 1);
+    }
+
+    #[test]
+    fn excludes_the_runtime_denylist_from_its_own_scan() {
+        let directory = tempfile::tempdir().expect("temp directory");
+        let denylist = directory.path().join("denylist");
+        fs::write(&denylist, "PrivateMarker\n").expect("denylist fixture");
+
+        let findings =
+            scan(directory.path(), &["privatemarker".into()], Some(&denylist)).expect("scan");
+
+        assert!(findings.is_empty());
     }
 }
