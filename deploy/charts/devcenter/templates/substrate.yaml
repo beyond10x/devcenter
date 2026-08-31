@@ -1,0 +1,62 @@
+{{- if .Values.substrate.enabled }}
+apiVersion: apps/v1
+kind: StatefulSet
+metadata:
+  name: {{ include "devcenter.fullname" . }}-substrate
+  labels:
+    {{- include "devcenter.labels" . | nindent 4 }}
+    app.kubernetes.io/component: substrate
+spec:
+  serviceName: {{ include "devcenter.fullname" . }}-substrate
+  replicas: 1
+  podManagementPolicy: OrderedReady
+  updateStrategy: {type: RollingUpdate}
+  selector:
+    matchLabels:
+      app.kubernetes.io/instance: {{ .Release.Name }}
+      app.kubernetes.io/component: substrate
+  template:
+    metadata:
+      labels:
+        {{- include "devcenter.labels" . | nindent 8 }}
+        app.kubernetes.io/component: substrate
+    spec:
+      {{- with .Values.global.imagePullSecrets }}
+      imagePullSecrets:
+        {{- range . }}
+        - name: {{ . }}
+        {{- end }}
+      {{- end }}
+      nodeSelector: {{ toYaml .Values.substrate.nodeSelector | nindent 8 }}
+      tolerations: {{ toYaml .Values.substrate.tolerations | nindent 8 }}
+      containers:
+        - name: substrate
+          image: {{ include "devcenter.image" .Values.substrate.image | quote }}
+          imagePullPolicy: {{ .Values.substrate.image.pullPolicy }}
+          ports: [{name: http, containerPort: {{ .Values.substrate.port }}}]
+          volumeMounts: [{name: state, mountPath: /var/lib/substrate}]
+          resources: {{ toYaml .Values.substrate.resources | nindent 12 }}
+          securityContext: {allowPrivilegeEscalation: false, capabilities: {drop: ["ALL"]}}
+  volumeClaimTemplates:
+    - metadata: {name: state}
+      spec:
+        accessModes: ["ReadWriteOnce"]
+        {{- with .Values.substrate.storage.className }}
+        storageClassName: {{ . | quote }}
+        {{- end }}
+        resources: {requests: {storage: {{ .Values.substrate.storage.size }}}}
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: {{ include "devcenter.fullname" . }}-substrate
+  labels:
+    {{- include "devcenter.labels" . | nindent 4 }}
+    app.kubernetes.io/component: substrate
+spec:
+  clusterIP: None
+  selector:
+    app.kubernetes.io/instance: {{ .Release.Name }}
+    app.kubernetes.io/component: substrate
+  ports: [{name: http, port: {{ .Values.substrate.port }}, targetPort: http}]
+{{- end }}

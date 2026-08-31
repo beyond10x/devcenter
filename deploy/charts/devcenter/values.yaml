@@ -1,0 +1,103 @@
+global:
+  tenantId: ""
+  publicOrigin: ""
+  imagePullSecrets: []
+  podLabels: {}
+
+devcenter:
+  replicaCount: 1
+  image:
+    repository: ""
+    digest: ""
+    pullPolicy: IfNotPresent
+  service:
+    port: 8080
+  resources:
+    requests:
+      cpu: 100m
+      memory: 128Mi
+    limits:
+      cpu: "1"
+      memory: 512Mi
+
+ingress:
+  enabled: false
+  className: ""
+  host: ""
+  annotations: {}
+  tls:
+    enabled: true
+    secretName: ""
+
+# Inner services are private ClusterIP workloads. Every enabled component requires an immutable
+# image digest supplied by the deployment. Environment-specific configuration uses Secret and
+# ConfigMap references rather than values embedded in this chart.
+components:
+  identity:
+    enabled: false
+    image: {repository: "", digest: "", pullPolicy: IfNotPresent}
+    port: 8080
+    envFrom: []
+  connectors:
+    enabled: false
+    image: {repository: "", digest: "", pullPolicy: IfNotPresent}
+    port: 8090
+    envFrom: []
+  aep-service:
+    enabled: false
+    image: {repository: "", digest: "", pullPolicy: IfNotPresent}
+    port: 8080
+    envFrom: []
+  agent-platform:
+    enabled: false
+    image: {repository: "", digest: "", pullPolicy: IfNotPresent}
+    port: 8080
+    envFrom: []
+  workflow:
+    enabled: false
+    image: {repository: "", digest: "", pullPolicy: IfNotPresent}
+    port: 8080
+    envFrom: []
+  llmgw:
+    enabled: false
+    image: {repository: "", digest: "", pullPolicy: IfNotPresent}
+    port: 8080
+    envFrom: []
+
+connectorsCatalogBundle:
+  enabled: false
+  image:
+    repository: ""
+    digest: ""
+    pullPolicy: IfNotPresent
+  sourcePath: /bundle
+  mountPath: /var/lib/connectors/catalog
+
+substrate:
+  enabled: false
+  image: {repository: "", digest: "", pullPolicy: IfNotPresent}
+  port: 8080
+  storage:
+    className: ""
+    size: 20Gi
+  nodeSelector:
+    kubernetes.io/arch: amd64
+    kubernetes.io/os: linux
+  tolerations: []
+  resources:
+    requests: {cpu: "1", memory: 1Gi}
+    limits: {cpu: "4", memory: 4Gi}
+
+networkPolicy:
+  enabled: true
+  # Required when both ingress and NetworkPolicy are enabled. These selectors identify the
+  # cluster's ingress controller without baking one distribution into the chart.
+  ingressNamespaceSelector: {}
+  ingressPodSelector: {}
+  # Connectors and model providers normally use external HTTPS APIs. Restrict this at the
+  # infrastructure layer when the cluster exposes stable destination CIDRs or an egress proxy.
+  allowExternalHttps: true
+
+serviceMonitor:
+  enabled: false
+  interval: 30s

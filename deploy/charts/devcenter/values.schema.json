@@ -1,0 +1,36 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["global", "devcenter", "components", "substrate"],
+  "properties": {
+    "global": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["tenantId", "publicOrigin", "imagePullSecrets", "podLabels"],
+      "properties": {
+        "tenantId": {"type": "string"},
+        "publicOrigin": {"type": "string"},
+        "imagePullSecrets": {"type": "array", "items": {"type": "string"}},
+        "podLabels": {"type": "object"}
+      }
+    },
+    "devcenter": {"type": "object"},
+    "ingress": {"type": "object"},
+    "components": {"type": "object"},
+    "connectorsCatalogBundle": {"type": "object"},
+    "substrate": {"type": "object"},
+    "networkPolicy": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["enabled", "ingressNamespaceSelector", "ingressPodSelector", "allowExternalHttps"],
+      "properties": {
+        "enabled": {"type": "boolean"},
+        "ingressNamespaceSelector": {"type": "object"},
+        "ingressPodSelector": {"type": "object"},
+        "allowExternalHttps": {"type": "boolean"}
+      }
+    },
+    "serviceMonitor": {"type": "object"}
+  }
+}

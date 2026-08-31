@@ -1,0 +1,44 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: {{ include "devcenter.fullname" . }}
+  labels:
+    {{- include "devcenter.labels" . | nindent 4 }}
+spec:
+  replicas: {{ .Values.devcenter.replicaCount }}
+  strategy:
+    type: RollingUpdate
+  selector:
+    matchLabels:
+      app.kubernetes.io/name: {{ include "devcenter.name" . }}
+      app.kubernetes.io/instance: {{ .Release.Name }}
+  template:
+    metadata:
+      labels:
+        {{- include "devcenter.labels" . | nindent 8 }}
+        {{- with .Values.global.podLabels }}{{ toYaml . | nindent 8 }}{{- end }}
+    spec:
+      {{- with .Values.global.imagePullSecrets }}
+      imagePullSecrets:
+        {{- range . }}
+        - name: {{ . }}
+        {{- end }}
+      {{- end }}
+      securityContext:
+        runAsNonRoot: true
+        seccompProfile: {type: RuntimeDefault}
+      containers:
+        - name: devcenter
+          image: {{ include "devcenter.image" .Values.devcenter.image | quote }}
+          imagePullPolicy: {{ .Values.devcenter.image.pullPolicy }}
+          envFrom:
+            - configMapRef: {name: {{ include "devcenter.fullname" . }}}
+          ports:
+            - {name: http, containerPort: 8080, protocol: TCP}
+          readinessProbe: {httpGet: {path: /readyz, port: http}}
+          livenessProbe: {httpGet: {path: /healthz, port: http}}
+          resources: {{ toYaml .Values.devcenter.resources | nindent 12 }}
+          securityContext:
+            allowPrivilegeEscalation: false
+            readOnlyRootFilesystem: true
+            capabilities: {drop: ["ALL"]}

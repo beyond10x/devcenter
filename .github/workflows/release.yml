@@ -1,0 +1,137 @@
+name: Release
+
+on:
+  push:
+    tags: ["[0-9]+.[0-9]+.[0-9]+"]
+
+permissions:
+  contents: write
+  packages: write
+  id-token: write
+
+env:
+  HELM_VERSION: 3.19.0
+
+jobs:
+  gate:
+    uses: ./.github/workflows/gate.yml
+    secrets: inherit
+
+  validate-version:
+    needs: gate
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+      - name: Match every release version
+        run: |
+          cargo_version=$(sed -n 's/^version = "\([^"]*\)"/\1/p' Cargo.toml | head -1)
+          chart_version=$(sed -n 's/^version: //p' deploy/charts/devcenter/Chart.yaml)
+          test "$cargo_version" = "${GITHUB_REF_NAME}"
+          test "$chart_version" = "${GITHUB_REF_NAME}"
+
+  binaries:
+    needs: validate-version
+    strategy:
+      matrix:
+        include:
+          - os: ubuntu-latest
+            target: x86_64-unknown-linux-gnu
+          - os: macos-15-large
+            target: x86_64-apple-darwin
+          - os: macos-15
+            target: aarch64-apple-darwin
+    runs-on: ${{ matrix.os }}
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+      - uses: dtolnay/rust-toolchain@4360b52568e2003a75bf9bc1d59f33a8e3fc893c # stable
+        with:
+          toolchain: 1.97.0
+          targets: ${{ matrix.target }}
+      - run: cargo build --release --locked --bin devcenter --bin devcenterctl --target ${{ matrix.target }}
+      - name: Package binaries
+        run: |
+          bundle="devcenter-${GITHUB_REF_NAME}-${{ matrix.target }}"
+          mkdir "$bundle"
+          cp "target/${{ matrix.target }}/release/devcenter" "$bundle/"
+          cp "target/${{ matrix.target }}/release/devcenterctl" "$bundle/"
+          cp LICENSE README.md "$bundle/"
+          tar --create --gzip --file "$bundle.tar.gz" "$bundle"
+      - uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: devcenter-${{ matrix.target }}
+          path: devcenter-${{ github.ref_name }}-${{ matrix.target }}.tar.gz
+
+  images:
+    needs: validate-version
+    runs-on: ubuntu-latest
+    strategy:
+      matrix:
+        include:
+          - target: server
+            package: devcenter
+          - target: ctl
+            package: devcenterctl
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+      - uses: docker/setup-qemu-action@c7c53464625b32c7a7e944ae62b3e17d2b600130 # v3
+      - uses: docker/setup-buildx-action@8d2750c68a42422c14e847fe6c8ac0403b4cbd6f # v3
+      - uses: docker/login-action@c94ce9fb468520275223c153574b00df6fe4bcc9 # v3
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+      - id: build
+        uses: docker/build-push-action@10e90e3645eae34f1e60eeb005ba3a3d33f178e8 # v6
+        with:
+          context: .
+          target: ${{ matrix.target }}
+          platforms: linux/amd64,linux/arm64
+          push: true
+          provenance: mode=max
+          sbom: true
+          tags: ghcr.io/beyond10x/${{ matrix.package }}:${{ github.ref_name }}
+      - uses: sigstore/cosign-installer@6f9f17788090df1f26f669e9d70d6ae9567deba6 # v4.1.2
+      - name: Sign immutable image
+        run: cosign sign --yes "ghcr.io/beyond10x/${{ matrix.package }}@${{ steps.build.outputs.digest }}"
+      - name: Enforce private package visibility
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: gh api --method PATCH "/orgs/beyond10x/packages/container/${{ matrix.package }}/visibility" -f visibility=private
+
+  chart:
+    needs: validate-version
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+      - name: Install Helm
+        run: |
+          curl --fail --silent --show-error --location \
+            --output /tmp/helm.tar.gz \
+            https://get.helm.sh/helm-v${HELM_VERSION}-linux-amd64.tar.gz
+          echo 'a7f81ce08007091b86d8bd696eb4d86b8d0f2e1b9f6c714be62f82f96a594496  /tmp/helm.tar.gz' | sha256sum --check
+          tar --extract --gzip --file /tmp/helm.tar.gz --directory /tmp
+          sudo install /tmp/linux-amd64/helm /usr/local/bin/helm
+      - name: Publish configuration-neutral chart
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          echo "$GH_TOKEN" | helm registry login ghcr.io --username "$GITHUB_ACTOR" --password-stdin
+          helm package deploy/charts/devcenter --destination /tmp
+          helm push "/tmp/devcenter-${GITHUB_REF_NAME}.tgz" oci://ghcr.io/beyond10x/charts
+          gh api --method PATCH "/orgs/beyond10x/packages/container/charts%2Fdevcenter/visibility" -f visibility=public
+
+  github-release:
+    needs: [binaries, images, chart]
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8
+        with:
+          pattern: devcenter-*
+          merge-multiple: true
+      - run: sha256sum devcenter-*.tar.gz > SHA256SUMS
+      - uses: softprops/action-gh-release@3bb12739c298aeb8a4eeaf626c5b8d85266b0e65 # v2
+        with:
+          generate_release_notes: true
+          files: |
+            devcenter-*.tar.gz
+            SHA256SUMS

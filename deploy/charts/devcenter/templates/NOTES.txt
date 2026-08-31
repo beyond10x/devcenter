@@ -1,0 +1,5 @@
+Devcenter has been installed for tenant {{ .Values.global.tenantId | quote }}.
+
+Documentation: {{ .Values.global.publicOrigin | trimSuffix "/" }}/docs/
+OpenAPI:       {{ .Values.global.publicOrigin | trimSuffix "/" }}/openapi.json
+MCP:           {{ .Values.global.publicOrigin | trimSuffix "/" }}/mcp

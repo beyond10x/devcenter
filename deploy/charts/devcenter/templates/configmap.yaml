@@ -1,0 +1,13 @@
+{{- $_ := required "global.tenantId is required" .Values.global.tenantId -}}
+{{- $_ := required "global.publicOrigin is required" .Values.global.publicOrigin -}}
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: {{ include "devcenter.fullname" . }}
+  labels:
+    {{- include "devcenter.labels" . | nindent 4 }}
+data:
+  DEV_CENTER_TENANT_ID: {{ .Values.global.tenantId | quote }}
+  DEV_CENTER_PUBLIC_ORIGIN: {{ .Values.global.publicOrigin | quote }}
+  DEV_CENTER_LISTEN: "0.0.0.0:8080"
+  DEV_CENTER_INSECURE_DEV_AUTH: "false"

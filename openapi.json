@@ -1,0 +1,12 @@
+{
+  "openapi": "3.1.0",
+  "info": {"title": "Devcenter API", "version": "0.1.0"},
+  "paths": {
+    "/healthz": {"get": {"operationId": "health", "responses": {"200": {"description": "Process is alive"}}}},
+    "/readyz": {"get": {"operationId": "readiness", "responses": {"200": {"description": "Configuration is ready"}}}},
+    "/metrics": {"get": {"operationId": "metrics", "responses": {"200": {"description": "Prometheus metrics"}}}},
+    "/openapi.json": {"get": {"operationId": "openapi", "responses": {"200": {"description": "This document"}}}},
+    "/mcp": {"post": {"operationId": "mcp", "security": [{"identityBearer": []}], "responses": {"200": {"description": "MCP JSON-RPC response"}, "401": {"description": "Authentication required"}, "503": {"description": "Identity verifier is not configured"}}}}
+  },
+  "components": {"securitySchemes": {"identityBearer": {"type": "http", "scheme": "bearer"}}}
+}

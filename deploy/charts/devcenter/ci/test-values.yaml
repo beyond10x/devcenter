@@ -1,0 +1,7 @@
+global:
+  tenantId: tenant-example
+  publicOrigin: https://devcenter.example.invalid
+devcenter:
+  image:
+    repository: registry.example.invalid/devcenter
+    digest: sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa

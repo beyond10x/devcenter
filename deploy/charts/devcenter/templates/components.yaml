@@ -1,0 +1,69 @@
+{{- range $name, $component := .Values.components }}
+{{- if $component.enabled }}
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: {{ include "devcenter.fullname" $ }}-{{ $name }}
+  labels:
+    {{- include "devcenter.labels" $ | nindent 4 }}
+    app.kubernetes.io/component: {{ $name }}
+spec:
+  replicas: 1
+  strategy: {type: Recreate}
+  selector:
+    matchLabels:
+      app.kubernetes.io/instance: {{ $.Release.Name }}
+      app.kubernetes.io/component: {{ $name }}
+  template:
+    metadata:
+      labels:
+        {{- include "devcenter.labels" $ | nindent 8 }}
+        app.kubernetes.io/component: {{ $name }}
+    spec:
+      {{- with $.Values.global.imagePullSecrets }}
+      imagePullSecrets:
+        {{- range . }}
+        - name: {{ . }}
+        {{- end }}
+      {{- end }}
+      {{- if and (eq $name "connectors") $.Values.connectorsCatalogBundle.enabled }}
+      initContainers:
+        - name: catalog-bundle
+          image: {{ include "devcenter.image" $.Values.connectorsCatalogBundle.image | quote }}
+          imagePullPolicy: {{ $.Values.connectorsCatalogBundle.image.pullPolicy }}
+          command: ["sh", "-ec", "cp -R {{ $.Values.connectorsCatalogBundle.sourcePath }}/. /catalog/"]
+          volumeMounts: [{name: connector-catalog, mountPath: /catalog}]
+          securityContext: {allowPrivilegeEscalation: false, readOnlyRootFilesystem: true, capabilities: {drop: ["ALL"]}}
+      {{- end }}
+      containers:
+        - name: {{ $name }}
+          image: {{ include "devcenter.image" $component.image | quote }}
+          imagePullPolicy: {{ $component.image.pullPolicy }}
+          ports: [{name: http, containerPort: {{ $component.port }}, protocol: TCP}]
+          {{- with $component.envFrom }}
+          envFrom: {{ toYaml . | nindent 12 }}
+          {{- end }}
+          {{- if and (eq $name "connectors") $.Values.connectorsCatalogBundle.enabled }}
+          volumeMounts: [{name: connector-catalog, mountPath: {{ $.Values.connectorsCatalogBundle.mountPath }}, readOnly: true}]
+          {{- end }}
+          securityContext: {allowPrivilegeEscalation: false, readOnlyRootFilesystem: true, capabilities: {drop: ["ALL"]}}
+      {{- if and (eq $name "connectors") $.Values.connectorsCatalogBundle.enabled }}
+      volumes: [{name: connector-catalog, emptyDir: {}}]
+      {{- end }}
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: {{ include "devcenter.fullname" $ }}-{{ $name }}
+  labels:
+    {{- include "devcenter.labels" $ | nindent 4 }}
+    app.kubernetes.io/component: {{ $name }}
+spec:
+  type: ClusterIP
+  selector:
+    app.kubernetes.io/instance: {{ $.Release.Name }}
+    app.kubernetes.io/component: {{ $name }}
+  ports: [{name: http, port: {{ $component.port }}, targetPort: http}]
+{{- end }}
+{{- end }}

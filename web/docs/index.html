@@ -1,0 +1,10 @@
+<!doctype html>
+<html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Devcenter documentation</title><style>body{font:17px/1.65 system-ui;max-width:54rem;margin:4rem auto;padding:0 1.5rem;color:#1d2733}code{background:#eef1f3;padding:.15rem .35rem;border-radius:.25rem}nav a{margin-right:1rem}</style></head><body>
+<nav><a href="/">Devcenter</a><a href="/openapi.json">OpenAPI</a></nav>
+<h1>Devcenter documentation</h1>
+<p>Devcenter is an authenticated composition of independent agent, workflow, connector, identity, and execution services.</p>
+<h2>Authority</h2><p>Identity establishes the actor and tenant. Connector Grants establish available external effects. Tasks and triggers carry revocable delegation references rather than browser credentials.</p>
+<h2>Model access</h2><p>User-bound agents use a user-owned model connection held by Connectors. Service-bound agents use an operator-defined model route. Harness receives only the credential material required for the current provider attempt.</p>
+<h2>MCP</h2><p>The <code>/mcp</code> endpoint projects the same governed operation catalog used by built-in agents. A client must authenticate through the configured Identity service.</p>
+<h2>Deployment</h2><p>The public Helm chart is intentionally configuration-neutral. Supply tenant, hosts, immutable image references, storage, secret references, and any private Connector catalog bundle from a separate deployment repository.</p>
+</body></html>
