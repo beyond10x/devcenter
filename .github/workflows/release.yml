@@ -93,10 +93,10 @@ jobs:
       - uses: sigstore/cosign-installer@6f9f17788090df1f26f669e9d70d6ae9567deba6 # v4.1.2
       - name: Sign immutable image
         run: cosign sign --yes "ghcr.io/beyond10x/${{ matrix.package }}@${{ steps.build.outputs.digest }}"
-      - name: Enforce private package visibility
+      - name: Verify private package visibility
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-        run: gh api --method PATCH "/orgs/beyond10x/packages/container/${{ matrix.package }}/visibility" -f visibility=private
+        run: test "$(gh api "/orgs/beyond10x/packages/container/${{ matrix.package }}" --jq .visibility)" = private
 
   chart:
     needs: validate-version
@@ -118,7 +118,11 @@ jobs:
           echo "$GH_TOKEN" | helm registry login ghcr.io --username "$GITHUB_ACTOR" --password-stdin
           helm package deploy/charts/devcenter --destination /tmp
           helm push "/tmp/devcenter-${GITHUB_REF_NAME}.tgz" oci://ghcr.io/beyond10x/charts
-          gh api --method PATCH "/orgs/beyond10x/packages/container/charts%2Fdevcenter/visibility" -f visibility=public
+          visibility=$(gh api "/orgs/beyond10x/packages/container/charts%2Fdevcenter" --jq .visibility)
+          if [ "$visibility" != public ]; then
+            echo 'The one-time chart package bootstrap is incomplete: make charts/devcenter public in Package Settings.' >&2
+            exit 1
+          fi
 
   github-release:
     needs: [binaries, images, chart]
