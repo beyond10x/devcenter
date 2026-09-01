@@ -18,6 +18,10 @@ spec:
       app.kubernetes.io/component: {{ $name }}
   template:
     metadata:
+      {{- if eq $name "secrets" }}
+      annotations:
+        checksum/secrets-workloads: {{ include "devcenter.secretsWorkloadGrants" $ | sha256sum | quote }}
+      {{- end }}
       labels:
         {{- include "devcenter.labels" $ | nindent 8 }}
         app.kubernetes.io/component: {{ $name }}

@@ -35,6 +35,7 @@ cargo fmt --all --check
 cargo clippy --workspace --all-targets --locked -- -D warnings
 cargo test --workspace --locked
 helm lint deploy/charts/devcenter --values deploy/charts/devcenter/ci/test-values.yaml
+bash ci/check-chart-rollouts.sh
 cargo run --locked --bin devcenterctl -- leak-check --root . --deny-file ci/denylist.example
 ```
 

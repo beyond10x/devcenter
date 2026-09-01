@@ -15,6 +15,12 @@
 {{- include "devcenter.fullname" . -}}
 {{- end }}
 
+{{- define "devcenter.secretsWorkloadGrants" -}}
+{{- $serviceAccount := default (printf "%s-connectors" (include "devcenter.fullname" .)) (index .Values.components "connectors").serviceAccountName -}}
+{{- $subject := printf "system:serviceaccount:%s:%s" .Release.Namespace $serviceAccount -}}
+{{- list (dict "subject" $subject "tenant" .Values.global.tenantId "actions" (list "secret:abort" "secret:commit" "secret:delete" "secret:list" "secret:prepare" "secret:read_metadata" "secret:read_value" "secret:write")) | toJson -}}
+{{- end }}
+
 {{- define "devcenter.labels" -}}
 app.kubernetes.io/name: {{ include "devcenter.name" . }}
 app.kubernetes.io/instance: {{ .Release.Name }}

@@ -2,6 +2,13 @@
 
 ## Unreleased
 
+## 0.3.3 - 2026-09-01
+
+- Roll Secrets whenever its rendered workload grants change, preventing the process from retaining
+  a stale startup-loaded service-account subject after a Connectors identity transition.
+- Verify that changing the configured Connectors service account changes the Secrets pod-template
+  checksum before publishing the chart.
+
 ## 0.3.2 - 2026-09-01
 
 - Canonicalize every chart resource name so a `devcenter` release no longer produces a second
