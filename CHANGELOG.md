@@ -2,6 +2,12 @@
 
 ## Unreleased
 
+## 0.3.1 - 2026-09-01
+
+- Let cluster bootstrap own the exact Secrets TokenReview ClusterRoleBinding when deployment uses a
+  deliberately namespaced reconciler, without granting that reconciler cluster-wide RBAC creation.
+- Keep chart-managed TokenReview authority enabled by default for direct cluster-authorized installs.
+
 ## 0.3.0 - 2026-09-01
 
 - Compose the public Secrets service directly in the Devcenter chart with digest-pinned images,

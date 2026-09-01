@@ -154,6 +154,8 @@ connectorsCatalogBundle:
 secrets:
   identityAudience: urn:b10x:secrets
   workloadAudience: urn:b10x:secrets:workload
+  tokenReviewRbac:
+    create: true
   database:
     existingSecret: ""
     databaseUrlKey: database-url
