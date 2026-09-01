@@ -2231,6 +2231,40 @@ a {
 .project-surface {
   min-height: 22rem;
 }
+.repository-tree-surface {
+  padding: 1rem;
+}
+.repository-tree-surface > header,
+.repository-tree > div {
+  display: flex;
+  align-items: center;
+  gap: 0.65rem;
+}
+.repository-tree-surface > header {
+  justify-content: space-between;
+  padding-bottom: 0.85rem;
+  border-bottom: 1px solid var(--line);
+}
+.repository-tree {
+  display: grid;
+}
+.repository-tree > div {
+  min-height: 2.7rem;
+  padding: 0.45rem 0.3rem;
+  border-bottom: 1px solid var(--line-soft);
+}
+.repository-tree > div svg {
+  color: var(--accent);
+}
+.repository-tree > div small {
+  margin-left: auto;
+  color: var(--muted);
+}
+.surface-note {
+  margin: 1rem 0 0;
+  color: var(--muted);
+  font-size: 0.78rem;
+}
 .aep-surface {
   display: flex;
   align-items: center;

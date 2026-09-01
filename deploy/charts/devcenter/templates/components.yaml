@@ -86,6 +86,10 @@ spec:
               value: "urn:b10x:workspace"
             - name: WORKSPACE_CONNECTORS_API_BASE
               value: {{ printf "http://%s-connectors.%s.svc.cluster.local:%v/api/connectors/v1" (include "devcenter.fullname" $) $.Release.Namespace (index $.Values.components "connectors").port | quote }}
+            {{- if and (index $.Values.components "agent-platform").enabled (hasKey ($component.env | default dict) "WORKSPACE_PROJECT_AGENT_MODEL") }}
+            - name: WORKSPACE_AGENT_PLATFORM_ORIGIN
+              value: {{ printf "http://%s-agent-platform.%s.svc.cluster.local:%v" (include "devcenter.fullname" $) $.Release.Namespace (index $.Values.components "agent-platform").port | quote }}
+            {{- end }}
             {{- end }}
           {{- end }}
           {{- with $component.envFrom }}

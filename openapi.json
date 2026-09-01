@@ -559,6 +559,28 @@
         }
       }
     },
+    "/api/projects/{project_id}/tree": {
+      "get": {
+        "operationId": "listProjectTree",
+        "parameters": [{ "$ref": "#/components/parameters/ProjectId" }],
+        "security": [{ "browserSession": [] }, { "identityBearer": [] }],
+        "responses": {
+          "200": {
+            "description": "Read-only root entries at the exact pinned commit",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "array",
+                  "items": { "$ref": "#/components/schemas/RepositoryEntry" }
+                }
+              }
+            }
+          },
+          "403": { "$ref": "#/components/responses/Problem" },
+          "409": { "$ref": "#/components/responses/Problem" }
+        }
+      }
+    },
     "/api/projects/{project_id}/branch": {
       "post": {
         "operationId": "selectProjectBranch",
@@ -1090,6 +1112,18 @@
           "commit": { "type": "string" },
           "provider_default": { "type": "boolean" },
           "protected": { "type": "boolean" }
+        },
+        "additionalProperties": false
+      },
+      "RepositoryEntry": {
+        "type": "object",
+        "required": ["object_id", "name", "path", "kind", "mode"],
+        "properties": {
+          "object_id": { "type": "string" },
+          "name": { "type": "string" },
+          "path": { "type": "string" },
+          "kind": { "type": "string", "enum": ["blob", "tree"] },
+          "mode": { "type": "string" }
         },
         "additionalProperties": false
       },

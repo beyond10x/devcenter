@@ -103,6 +103,21 @@ async function mockAuthenticatedWorkspace(page: Page) {
       });
       return;
     }
+    if (path === `/api/projects/${project.id}/tree`) {
+      await route.fulfill({
+        json: [
+          { object_id: "tree-src", name: "src", path: "src", kind: "tree", mode: "040000" },
+          {
+            object_id: "blob-readme",
+            name: "README.md",
+            path: "README.md",
+            kind: "blob",
+            mode: "100644",
+          },
+        ],
+      });
+      return;
+    }
     if (path === `/api/projects/${project.id}/threads`) {
       await route.fulfill({ json: [] });
       return;
@@ -188,6 +203,9 @@ test("opens a visible repository as a commit-pinned project", async ({ page }, t
   await expect(page.getByRole("heading", { name: "foundation/devcenter" })).toBeVisible();
   await expect(page.getByText("0123456789", { exact: true })).toBeVisible();
   await expect(page.getByRole("button", { name: "Refresh snapshot" })).toBeVisible();
+  await page.getByRole("button", { name: "files" }).click();
+  await expect(page.getByText("README.md", { exact: true })).toBeVisible();
+  await expect(page.getByText(/separate materialization step/)).toBeVisible();
   const accessibility = await new AxeBuilder({ page }).withTags(["wcag2a", "wcag2aa"]).analyze();
   expect(accessibility.violations).toEqual([]);
 });

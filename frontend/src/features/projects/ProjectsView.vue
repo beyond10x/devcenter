@@ -25,6 +25,7 @@ import {
   type ProjectMessage,
   type ProjectThread,
   type RepositoryCandidate,
+  type RepositoryEntry,
   type WorkflowDefinition,
   type WorkflowRun,
 } from "@/api/client";
@@ -39,6 +40,7 @@ const search = ref("");
 const repositories = ref<RepositoryCandidate[]>([]);
 const project = ref<Project>();
 const branches = ref<Branch[]>([]);
+const repositoryTree = ref<RepositoryEntry[]>([]);
 const threads = ref<ProjectThread[]>([]);
 const selectedThreadId = ref<string>();
 const messages = ref<ProjectMessage[]>([]);
@@ -79,13 +81,15 @@ async function load() {
       project.value = undefined;
     } else {
       const loadedProject = await api.project(projectId.value);
-      const [loadedBranches, loadedThreads, loadedWorkflows] = await Promise.all([
+      const [loadedBranches, loadedTree, loadedThreads, loadedWorkflows] = await Promise.all([
         api.branches(projectId.value),
+        api.repositoryTree(projectId.value),
         api.threads(projectId.value),
         api.workflows(projectId.value),
       ]);
       project.value = loadedProject;
       branches.value = loadedBranches;
+      repositoryTree.value = loadedTree;
       threads.value = loadedThreads;
       workflows.value = loadedWorkflows;
       selectedThreadId.value = loadedThreads[0]?.id;
@@ -158,10 +162,24 @@ async function sendMessage() {
     const message = await api.createMessage(thread.id, content);
     messages.value.push(message);
     draft.value = "";
+    void observeAgentReply(thread.id, message.sequence);
   } catch (caught) {
     error.value = errorMessage(caught);
   } finally {
     sending.value = false;
+  }
+}
+
+async function observeAgentReply(threadId: string, afterSequence: number) {
+  try {
+    for (let attempt = 0; attempt < 120; attempt += 1) {
+      await new Promise((resolve) => window.setTimeout(resolve, 1000));
+      const observed = await api.messages(threadId);
+      messages.value = observed;
+      if (observed.some((message) => message.sequence > afterSequence)) return;
+    }
+  } catch {
+    // A later thread selection or refresh provides a natural retry boundary.
   }
 }
 
@@ -325,14 +343,27 @@ function shortCommit(commit?: string | null) {
         </article>
       </section>
 
-      <section v-else-if="activeTab === 'files'" class="project-surface placeholder-surface">
-        <FileCode2 :size="30" />
-        <h2>Read-only source snapshot</h2>
-        <p>
-          The project contract is pinned. The file tree appears after Substrate redeems the matching
-          source materialization lease; no editor or mutation path is exposed.
+      <section v-else-if="activeTab === 'files'" class="project-surface repository-tree-surface">
+        <header>
+          <div>
+            <p class="eyebrow">Governed repository preview</p>
+            <h2>Root tree at {{ shortCommit(project.pinned_commit) }}</h2>
+          </div>
+          <span class="status-pill neutral">Read only</span>
+        </header>
+        <div class="repository-tree" role="list">
+          <div v-for="entry in repositoryTree" :key="entry.object_id" role="listitem">
+            <FolderGit2 v-if="entry.kind === 'tree'" :size="18" />
+            <FileCode2 v-else :size="18" />
+            <strong>{{ entry.name }}</strong>
+            <small>{{ entry.kind }} · {{ entry.mode }}</small>
+          </div>
+          <p v-if="!repositoryTree.length">The exact snapshot contains no root entries.</p>
+        </div>
+        <p class="surface-note">
+          This preview is read through the current Connector grant. A populated Substrate filesystem
+          remains a separate materialization step.
         </p>
-        <span class="commit-chip">{{ shortCommit(project.pinned_commit) }}</span>
       </section>
 
       <section v-else-if="activeTab === 'chat'" class="project-chat">

@@ -71,6 +71,7 @@ components:
       digest: sha256:abababababababababababababababababababababababababababababababab
     env:
       WORKSPACE_DATABASE_URL: "sqlite::memory:"
+      WORKSPACE_PROJECT_AGENT_MODEL: "default"
 secrets:
   database:
     existingSecret: example-secrets-database

@@ -39,6 +39,13 @@ export interface Branch {
   provider_default: boolean;
   protected: boolean;
 }
+export interface RepositoryEntry {
+  object_id: string;
+  name: string;
+  path: string;
+  kind: "blob" | "tree";
+  mode: string;
+}
 export interface ProjectThread {
   id: string;
   project_id: string;
@@ -119,6 +126,8 @@ export const api = {
     request<Project>(`/api/projects/${encodeURIComponent(projectId)}`),
   branches: (projectId: string) =>
     request<Branch[]>(`/api/projects/${encodeURIComponent(projectId)}/branches`),
+  repositoryTree: (projectId: string) =>
+    request<RepositoryEntry[]>(`/api/projects/${encodeURIComponent(projectId)}/tree`),
   selectBranch: (projectId: string, branch: string) =>
     request<Project>(`/api/projects/${encodeURIComponent(projectId)}/branch`, {
       method: "POST",

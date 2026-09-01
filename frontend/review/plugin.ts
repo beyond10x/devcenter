@@ -80,6 +80,30 @@ const reviewBranches = [
     protected: false,
   },
 ];
+const reviewTree = [
+  { object_id: "tree-crates", name: "crates", path: "crates", kind: "tree", mode: "040000" },
+  {
+    object_id: "blob-agents",
+    name: "AGENTS.md",
+    path: "AGENTS.md",
+    kind: "blob",
+    mode: "100644",
+  },
+  {
+    object_id: "blob-cargo",
+    name: "Cargo.toml",
+    path: "Cargo.toml",
+    kind: "blob",
+    mode: "100644",
+  },
+  {
+    object_id: "blob-readme",
+    name: "README.md",
+    path: "README.md",
+    kind: "blob",
+    mode: "100644",
+  },
+];
 const reviewThreads: Array<Record<string, unknown>> = [];
 const reviewMessages = new Map<string, Array<Record<string, unknown>>>();
 const reviewWorkflows = [
@@ -218,6 +242,10 @@ export function reviewApi(): Plugin {
           }
           if (path === `/api/projects/${reviewProject.id}/branches` && method === "GET") {
             sendJson(response, 200, reviewBranches);
+            return;
+          }
+          if (path === `/api/projects/${reviewProject.id}/tree` && method === "GET") {
+            sendJson(response, 200, reviewTree);
             return;
           }
           if (path === `/api/projects/${reviewProject.id}/branch` && method === "POST") {

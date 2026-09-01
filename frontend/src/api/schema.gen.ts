@@ -341,6 +341,22 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/projects/{project_id}/tree": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get: operations["listProjectTree"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/projects/{project_id}/branch": {
         parameters: {
             query?: never;
@@ -642,6 +658,14 @@ export interface components {
             commit: string;
             provider_default: boolean;
             protected: boolean;
+        };
+        RepositoryEntry: {
+            object_id: string;
+            name: string;
+            path: string;
+            /** @enum {string} */
+            kind: "blob" | "tree";
+            mode: string;
         };
         SelectBranch: {
             branch: string;
@@ -1364,6 +1388,30 @@ export interface operations {
                 };
             };
             403: components["responses"]["Problem"];
+        };
+    };
+    listProjectTree: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                project_id: components["parameters"]["ProjectId"];
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Read-only root entries at the exact pinned commit */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["RepositoryEntry"][];
+                };
+            };
+            403: components["responses"]["Problem"];
+            409: components["responses"]["Problem"];
         };
     };
     selectProjectBranch: {
