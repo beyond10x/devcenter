@@ -3,7 +3,8 @@
 Devcenter is a generic control surface for governed agents, workflows, connectors, and sandboxed
 execution. This public repository contains the application source and deployment CLI, plus the
 source of the public, configuration-neutral Helm chart. The repository remains proprietary under
-the included license; application images and binary releases remain private.
+the included license; application and deployment CLI container images remain private. Devcenter
+does not publish native binary archives.
 
 The repository deliberately contains no real deployment values. A deployment supplies its tenant,
 hosts, image mirrors, Identity configuration, connector catalogue bundle, storage classes, and
@@ -11,25 +12,30 @@ Secret references separately.
 
 ## Run locally
 
-Install and build the Vue application before compiling the Rust server:
+Build the same Linux container used by deployments. The token grants the Docker build temporary
+read access to the private Rust dependencies and is not retained in an image layer:
 
 ```console
-npm install --global pnpm@11.25.0
-pnpm --dir frontend install --frozen-lockfile
-pnpm --dir frontend build
+DEV_CENTER_BUILD_TOKEN="$(gh auth token)"
+docker build \
+  --secret id=github_token,env=DEV_CENTER_BUILD_TOKEN \
+  --target server \
+  --tag devcenter:local \
+  .
 ```
 
 ```console
-DEV_CENTER_TENANT_ID=local \
-DEV_CENTER_PUBLIC_ORIGIN=http://127.0.0.1:8080 \
-cargo run --bin devcenter
+docker run --rm --publish 8080:8080 \
+  --env DEV_CENTER_TENANT_ID=local \
+  --env DEV_CENTER_PUBLIC_ORIGIN=http://127.0.0.1:8080 \
+  devcenter:local
 ```
 
 Open `http://127.0.0.1:8080/docs/` for the embedded documentation and
 `http://127.0.0.1:8080/openapi.json` for the service contract.
 
 For frontend development, run `pnpm --dir frontend dev`; Vite proxies the allowlisted API and auth
-routes to the Rust server on `127.0.0.1:8080`.
+routes to the container on `127.0.0.1:8080`.
 
 To review every frontend journey without service credentials or a deployment, run
 `pnpm --dir frontend review` and open `http://127.0.0.1:4173`. Review mode is visibly marked, uses
@@ -51,8 +57,7 @@ DEV_CENTER_IDENTITY_REDIRECT_URI=https://devcenter.example.test/auth/sso/callbac
 DEV_CENTER_IDENTITY_PROVIDERS='[{"id":"provider-a","display_name":"Provider A"}]' \
 DEV_CENTER_DATABASE_URL=postgresql://... \
 DEV_CENTER_AGENT_PLATFORM_ORIGIN=https://agents.example.test \
-DEV_CENTER_CONNECTORS_API_BASE=https://connectors.example.test/api/connectors/v1 \
-cargo run --locked -p devcenter-app
+DEV_CENTER_CONNECTORS_API_BASE=https://connectors.example.test/api/connectors/v1
 ```
 
 The browser receives only an opaque, Secure, HttpOnly session cookie. `Connect Claude` starts a
@@ -78,12 +83,8 @@ capability-profile retrieval, grant re-evaluation, and one-time approval issuanc
 ## Deployment CLI
 
 `devcenterctl` verifies and renders a pinned OCI chart, checks a cluster, performs atomic Helm
-upgrades, verifies the result, and rolls back to an explicit revision. It takes all environment
-coordinates as arguments; none are compiled into the binary.
-
-```console
-cargo run --bin devcenterctl -- --help
-```
+upgrades, verifies the result, and rolls back to an explicit revision. It is distributed only as a
+multi-arch Linux container, including `linux/arm64` for Docker on Apple Silicon.
 
 The public chart is released as `oci://ghcr.io/beyond10x/charts/devcenter`.
 
