@@ -28,6 +28,8 @@ spec:
       serviceAccountName: {{ $component.serviceAccountName }}
       {{- else if eq $name "connectors" }}
       serviceAccountName: {{ include "devcenter.fullname" $ }}-connectors
+      {{- else if eq $name "secrets" }}
+      serviceAccountName: {{ include "devcenter.fullname" $ }}-secrets
       {{- end }}
       {{- with $.Values.global.imagePullSecrets }}
       imagePullSecrets:
@@ -52,17 +54,31 @@ spec:
           args: {{ toYaml . | nindent 12 }}
           {{- end }}
           ports: [{name: http, containerPort: {{ $component.port }}, protocol: TCP}]
-          {{- with $component.env }}
+          {{- if or $component.env (eq $name "secrets") }}
           env:
-            {{- range $key, $value := . }}
+            {{- range $key, $value := $component.env }}
             - name: {{ $key }}
               value: {{ $value | quote }}
+            {{- end }}
+            {{- if eq $name "secrets" }}
+            - name: SECRETS_DATABASE_URL
+              valueFrom: {secretKeyRef: {name: {{ required "secrets.database.existingSecret is required" $.Values.secrets.database.existingSecret }}, key: {{ $.Values.secrets.database.databaseUrlKey }}}}
+            - name: SECRETS_KEYRING_FILE
+              value: /etc/secrets-keyring/keyring.json
+            - name: SECRETS_IDENTITY_ORIGIN
+              value: {{ printf "http://%s-identity.%s.svc.cluster.local:%v" (include "devcenter.fullname" $) $.Release.Namespace (index $.Values.components "identity").port | quote }}
+            - name: SECRETS_IDENTITY_AUDIENCE
+              value: {{ $.Values.secrets.identityAudience | quote }}
+            - name: SECRETS_WORKLOAD_AUDIENCE
+              value: {{ $.Values.secrets.workloadAudience | quote }}
+            - name: SECRETS_WORKLOAD_GRANTS_FILE
+              value: /etc/secrets-workloads/grants.json
             {{- end }}
           {{- end }}
           {{- with $component.envFrom }}
           envFrom: {{ toYaml . | nindent 12 }}
           {{- end }}
-          {{- if or $component.configFiles $component.persistence.enabled $component.volumeMounts (and (eq $name "connectors") $.Values.connectorsCatalogBundle.enabled) }}
+          {{- if or $component.configFiles $component.persistence.enabled $component.volumeMounts (and (eq $name "connectors") $.Values.connectorsCatalogBundle.enabled) (and (eq $name "connectors") (index $.Values.components "secrets").enabled) (eq $name "secrets") }}
           volumeMounts:
             {{- if $component.configFiles }}
             {{- range $path, $_ := $component.configFiles }}
@@ -77,6 +93,19 @@ spec:
               mountPath: {{ $.Values.connectorsCatalogBundle.mountPath }}
               readOnly: true
             {{- end }}
+            {{- if and (eq $name "connectors") (index $.Values.components "secrets").enabled }}
+            - name: secrets-workload-token
+              mountPath: /var/run/secrets/tokens
+              readOnly: true
+            {{- end }}
+            {{- if eq $name "secrets" }}
+            - name: secrets-keyring
+              mountPath: /etc/secrets-keyring
+              readOnly: true
+            - name: secrets-workloads
+              mountPath: /etc/secrets-workloads
+              readOnly: true
+            {{- end }}
             {{- if $component.persistence.enabled }}
             - name: component-state
               mountPath: {{ $component.persistence.mountPath }}
@@ -86,7 +115,11 @@ spec:
             {{- end }}
           {{- end }}
           securityContext: {allowPrivilegeEscalation: false, readOnlyRootFilesystem: true, capabilities: {drop: ["ALL"]}}
-      {{- if or $component.configFiles $component.persistence.enabled $component.volumes (and (eq $name "connectors") $.Values.connectorsCatalogBundle.enabled) }}
+          {{- if eq $name "secrets" }}
+          readinessProbe: {httpGet: {path: /health/ready, port: http}}
+          livenessProbe: {httpGet: {path: /health/live, port: http}}
+          {{- end }}
+      {{- if or $component.configFiles $component.persistence.enabled $component.volumes (and (eq $name "connectors") $.Values.connectorsCatalogBundle.enabled) (and (eq $name "connectors") (index $.Values.components "secrets").enabled) (eq $name "secrets") }}
       volumes:
         {{- if $component.configFiles }}
         - name: component-config
@@ -95,6 +128,23 @@ spec:
         {{- if and (eq $name "connectors") $.Values.connectorsCatalogBundle.enabled }}
         - name: connector-catalog
           emptyDir: {}
+        {{- end }}
+        {{- if and (eq $name "connectors") (index $.Values.components "secrets").enabled }}
+        - name: secrets-workload-token
+          projected:
+            sources:
+              - serviceAccountToken:
+                  path: token
+                  audience: {{ $.Values.secrets.workloadAudience | quote }}
+                  expirationSeconds: 3600
+        {{- end }}
+        {{- if eq $name "secrets" }}
+        - name: secrets-keyring
+          secret:
+            secretName: {{ required "secrets.keyring.existingSecret is required" $.Values.secrets.keyring.existingSecret }}
+            items: [{key: {{ $.Values.secrets.keyring.key }}, path: keyring.json}]
+        - name: secrets-workloads
+          configMap: {name: {{ include "devcenter.fullname" $ }}-secrets-workloads}
         {{- end }}
         {{- if $component.persistence.enabled }}
         - name: component-state

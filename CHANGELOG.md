@@ -2,6 +2,17 @@
 
 ## Unreleased
 
+## 0.3.0 - 2026-09-01
+
+- Compose the public Secrets service directly in the Devcenter chart with digest-pinned images,
+  Identity authority configuration, a read-only versioned keyring, and readiness probes.
+- Project an exact-audience service-account token into Connectors and grant its exact subject only
+  the tenant-scoped workload actions required by the remote secret-store adapter.
+- Add optional single-replica PostgreSQL for development, external-DSN production configuration,
+  persistent storage, and NetworkPolicy isolation allowing database access only from Secrets.
+- Keep database credentials and key material in deployment-created Kubernetes Secrets; the public
+  chart contains references and wiring only.
+
 ## 0.2.8 - 2026-09-01
 
 - Reduce release-to-deployment latency by publishing the private Devcenter images for native

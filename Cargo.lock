@@ -376,7 +376,7 @@ dependencies = [
 
 [[package]]
 name = "devcenter-app"
-version = "0.2.8"
+version = "0.3.0"
 dependencies = [
  "anyhow",
  "axum",
@@ -389,7 +389,7 @@ dependencies = [
 
 [[package]]
 name = "devcenter-auth"
-version = "0.2.8"
+version = "0.3.0"
 dependencies = [
  "identity-client",
  "tokio",
@@ -397,18 +397,18 @@ dependencies = [
 
 [[package]]
 name = "devcenter-core"
-version = "0.2.8"
+version = "0.3.0"
 dependencies = [
  "devcenter-auth",
 ]
 
 [[package]]
 name = "devcenter-docs"
-version = "0.2.8"
+version = "0.3.0"
 
 [[package]]
 name = "devcenter-http"
-version = "0.2.8"
+version = "0.3.0"
 dependencies = [
  "agent-platform-client",
  "axum",
@@ -432,7 +432,7 @@ dependencies = [
 
 [[package]]
 name = "devcenterctl"
-version = "0.2.8"
+version = "0.3.0"
 dependencies = [
  "anyhow",
  "clap",

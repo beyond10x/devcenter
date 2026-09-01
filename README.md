@@ -53,3 +53,11 @@ cargo run --bin devcenterctl -- --help
 ```
 
 The public chart is released as `oci://ghcr.io/beyond10x/charts/devcenter`.
+
+Secrets is an inner service of that composition, not a standalone chart dependency. The chart
+accepts a pre-created versioned keyring Secret and a pre-created database Secret. For development it
+can run one persistent PostgreSQL StatefulSet; production values disable that StatefulSet and point
+the same database-URL key at an externally managed PostgreSQL service. Connectors receives a
+projected token for the exact Secrets workload audience, while Secrets receives TokenReview
+authority and an exact service-account-to-tenant grant. Secret values and key bytes never appear in
+chart values or rendered ConfigMaps.

@@ -69,6 +69,20 @@ components:
     volumeMounts: []
     volumes: []
     persistence: {enabled: false, storageClass: "", size: 1Gi, mountPath: /var/lib/connectors}
+  secrets:
+    enabled: false
+    image: {repository: ghcr.io/beyond10x/secrets, digest: "", pullPolicy: IfNotPresent}
+    port: 8080
+    replicas: 1
+    serviceAccountName: ""
+    podSecurityContext: {runAsNonRoot: true, seccompProfile: {type: RuntimeDefault}}
+    args: [serve]
+    env: {}
+    envFrom: []
+    configFiles: {}
+    volumeMounts: []
+    volumes: []
+    persistence: {enabled: false, storageClass: "", size: 1Gi, mountPath: /var/lib/secrets}
   aep-service:
     enabled: false
     image: {repository: "", digest: "", pullPolicy: IfNotPresent}
@@ -134,6 +148,29 @@ connectorsCatalogBundle:
     pullPolicy: IfNotPresent
   sourcePath: /bundle
   mountPath: /var/lib/connectors/catalog
+
+# Secrets is composed here rather than through a standalone chart. Deployment automation creates
+# both referenced Secrets: one with a PostgreSQL DSN/password and one versioned KEK keyring.
+secrets:
+  identityAudience: urn:b10x:secrets
+  workloadAudience: urn:b10x:secrets:workload
+  database:
+    existingSecret: ""
+    databaseUrlKey: database-url
+    passwordKey: password
+  keyring:
+    existingSecret: ""
+    key: keyring.json
+  postgresql:
+    enabled: false
+    image: {repository: postgres, digest: "", pullPolicy: IfNotPresent}
+    database: secrets
+    username: secrets
+    storageClass: ""
+    size: 5Gi
+    resources:
+      requests: {cpu: 100m, memory: 128Mi}
+      limits: {cpu: "1", memory: 1Gi}
 
 substrate:
   enabled: false
