@@ -51,9 +51,6 @@ jobs:
       - run: cargo clippy --workspace --all-targets --locked -- -D warnings
       - run: cargo test --workspace --locked
       - run: helm lint deploy/charts/devcenter --values deploy/charts/devcenter/ci/test-values.yaml
-      - run: helm lint deploy/charts/devcenter --values deploy/charts/devcenter/ci/vault-values.yaml
-      - run: helm template devcenter deploy/charts/devcenter --values deploy/charts/devcenter/ci/test-values.yaml >/dev/null
-      - run: helm template devcenter deploy/charts/devcenter --values deploy/charts/devcenter/ci/vault-values.yaml >/dev/null
       - name: Scan generic test markers
         run: cargo run --locked --bin devcenterctl -- leak-check --root . --deny-file ci/denylist.example
       - name: Scan confidential markers

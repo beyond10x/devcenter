@@ -10,7 +10,7 @@ members = [
 ]
 
 [workspace.package]
-version = "0.3.0"
+version = "0.2.8"
 edition = "2024"
 rust-version = "1.97"
 license = "LicenseRef-B10x-Proprietary"
@@ -27,18 +27,12 @@ agent-platform-client = { git = "ssh://git@github.com/beyond10x/agent-platform.g
 connectors-client = { git = "ssh://git@github.com/beyond10x/connectors.git", tag = "v0.3.2" }
 
 anyhow = "1"
-aws-config = "1"
-aws-sdk-eks = "1"
-aws-sdk-iam = "1"
-aws-sdk-kms = "1"
-aws-sdk-s3 = "1"
-aws-sdk-sts = "1"
 axum = "0.8"
 base64 = "0.22"
 clap = { version = "4.6", features = ["derive", "env"] }
 getrandom = "0.3"
 http-body-util = "0.1"
-reqwest = { version = "0.13", default-features = false, features = ["json", "rustls", "stream"] }
+reqwest = { version = "0.13", default-features = false, features = ["stream"] }
 serde = { version = "1", features = ["derive"] }
 serde_json = "1"
 sha2 = "0.10"

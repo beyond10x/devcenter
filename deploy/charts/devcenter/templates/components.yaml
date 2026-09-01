@@ -62,7 +62,7 @@ spec:
           {{- with $component.envFrom }}
           envFrom: {{ toYaml . | nindent 12 }}
           {{- end }}
-          {{- if or $component.configFiles $component.persistence.enabled $component.volumeMounts (and (eq $name "connectors") $.Values.connectorsCatalogBundle.enabled) (and (eq $name "connectors") $.Values.secretStore.vault.enabled) }}
+          {{- if or $component.configFiles $component.persistence.enabled $component.volumeMounts (and (eq $name "connectors") $.Values.connectorsCatalogBundle.enabled) }}
           volumeMounts:
             {{- if $component.configFiles }}
             {{- range $path, $_ := $component.configFiles }}
@@ -77,11 +77,6 @@ spec:
               mountPath: {{ $.Values.connectorsCatalogBundle.mountPath }}
               readOnly: true
             {{- end }}
-            {{- if and (eq $name "connectors") $.Values.secretStore.vault.enabled }}
-            - name: vault-ca
-              mountPath: /etc/devcenter-vault
-              readOnly: true
-            {{- end }}
             {{- if $component.persistence.enabled }}
             - name: component-state
               mountPath: {{ $component.persistence.mountPath }}
@@ -91,7 +86,7 @@ spec:
             {{- end }}
           {{- end }}
           securityContext: {allowPrivilegeEscalation: false, readOnlyRootFilesystem: true, capabilities: {drop: ["ALL"]}}
-      {{- if or $component.configFiles $component.persistence.enabled $component.volumes (and (eq $name "connectors") $.Values.connectorsCatalogBundle.enabled) (and (eq $name "connectors") $.Values.secretStore.vault.enabled) }}
+      {{- if or $component.configFiles $component.persistence.enabled $component.volumes (and (eq $name "connectors") $.Values.connectorsCatalogBundle.enabled) }}
       volumes:
         {{- if $component.configFiles }}
         - name: component-config
@@ -100,13 +95,6 @@ spec:
         {{- if and (eq $name "connectors") $.Values.connectorsCatalogBundle.enabled }}
         - name: connector-catalog
           emptyDir: {}
-        {{- end }}
-        {{- if and (eq $name "connectors") $.Values.secretStore.vault.enabled }}
-        - name: vault-ca
-          secret:
-            secretName: {{ default (printf "%s-vault-tls" $.Release.Name) $.Values.secretStore.vault.tls.existingSecret }}
-            items:
-              - {key: ca.crt, path: ca.crt}
         {{- end }}
         {{- if $component.persistence.enabled }}
         - name: component-state

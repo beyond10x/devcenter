@@ -1,4 +1,3 @@
-{{- if .Values.devcenter.enabled }}
 {{- $_ := required "global.tenantId is required" .Values.global.tenantId -}}
 {{- $_ := required "global.publicOrigin is required" .Values.global.publicOrigin -}}
 apiVersion: v1
@@ -24,4 +23,3 @@ data:
   {{- if (index .Values.components "connectors").enabled }}
   DEV_CENTER_CONNECTORS_API_BASE: {{ printf "http://%s-connectors.%s.svc.cluster.local:%v/api/connectors/v1" (include "devcenter.fullname" .) .Release.Namespace (index .Values.components "connectors").port | quote }}
   {{- end }}
-{{- end }}

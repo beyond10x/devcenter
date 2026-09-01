@@ -1,4 +1,3 @@
-{{- if .Values.devcenter.enabled }}
 apiVersion: apps/v1
 kind: Deployment
 metadata:
@@ -51,4 +50,3 @@ spec:
             allowPrivilegeEscalation: false
             readOnlyRootFilesystem: true
             capabilities: {drop: ["ALL"]}
-{{- end }}
