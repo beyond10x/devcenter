@@ -9,6 +9,7 @@ spec:
   selector:
     app.kubernetes.io/name: {{ include "devcenter.name" . }}
     app.kubernetes.io/instance: {{ .Release.Name }}
+    app.kubernetes.io/component: devcenter
   ports:
     - name: http
       port: {{ .Values.devcenter.service.port }}

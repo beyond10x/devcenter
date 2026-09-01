@@ -16,6 +16,7 @@ spec:
     metadata:
       labels:
         {{- include "devcenter.labels" . | nindent 8 }}
+        app.kubernetes.io/component: devcenter
         {{- with .Values.global.podLabels }}{{ toYaml . | nindent 8 }}{{- end }}
     spec:
       {{- with .Values.global.imagePullSecrets }}
