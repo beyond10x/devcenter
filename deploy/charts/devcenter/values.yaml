@@ -6,6 +6,9 @@ global:
 
 devcenter:
   replicaCount: 1
+  nodeSelector:
+    kubernetes.io/arch: amd64
+    kubernetes.io/os: linux
   image:
     repository: ""
     digest: ""

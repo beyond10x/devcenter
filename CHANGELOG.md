@@ -2,6 +2,12 @@
 
 ## Unreleased
 
+## 0.2.8 - 2026-09-01
+
+- Reduce release-to-deployment latency by publishing the private Devcenter images for native
+  `linux/amd64` only, sharing one cached builder across the server and deployment CLI targets, and
+  scheduling the Devcenter workload explicitly onto compatible Linux AMD64 nodes.
+
 ## 0.2.7 - 2026-09-01
 
 - Collapse repeated release/chart names for Deployment and pod workload names, so a `devcenter`

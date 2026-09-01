@@ -28,6 +28,10 @@ spec:
       securityContext:
         runAsNonRoot: true
         seccompProfile: {type: RuntimeDefault}
+      {{- with .Values.devcenter.nodeSelector }}
+      nodeSelector:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
       containers:
         - name: devcenter
           image: {{ include "devcenter.image" .Values.devcenter.image | quote }}
