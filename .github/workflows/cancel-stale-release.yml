@@ -1,0 +1,20 @@
+name: Cancel stale release
+
+on:
+  push:
+    branches: [main]
+    paths: [.github/workflows/cancel-stale-release.yml]
+
+permissions:
+  actions: write
+  contents: read
+
+jobs:
+  cancel:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Cancel obsolete 0.2.7 publisher
+        env:
+          GH_TOKEN: ${{ github.token }}
+          GH_REPO: ${{ github.repository }}
+        run: gh api --method POST "/repos/${GH_REPO}/actions/runs/33484278545/force-cancel"
