@@ -21,10 +21,16 @@
     <aside class="stack">
       <article class="card stack">
         <div class="row"><h2>Claude Code</h2><span class="status"><span id="claude-dot" class="dot"></span><span id="claude-label">Checking</span></span></div>
-        <p class="muted">Use your own subscription for tasks started as you. The credential is sent directly into connector custody.</p>
+        <p class="muted">Use your own subscription for tasks started as you. Authorization and refresh credentials stay in connector custody.</p>
+        <div id="claude-message" class="notice error hidden" role="status"></div>
         <form id="connect-form" class="stack">
-          <div><label for="credential">Subscription credential</label><input id="credential" name="credential" type="password" autocomplete="off" required></div>
           <button class="button primary" type="submit">Connect Claude</button>
+        </form>
+        <form id="oauth-form" class="stack hidden">
+          <p class="muted">Authorize in Claude, then paste the one-time code shown after approval.</p>
+          <a id="authorize-link" class="button" target="_blank" rel="noopener noreferrer">Continue to Claude</a>
+          <div><label for="oauth-code">One-time code</label><input id="oauth-code" name="code" type="password" autocomplete="off" spellcheck="false" required></div>
+          <div class="row"><button class="button primary" type="submit">Finish connection</button><button id="cancel-oauth" class="button" type="button">Cancel</button></div>
         </form>
         <button id="disconnect" class="button danger hidden" type="button">Disconnect</button>
       </article>
@@ -40,6 +46,7 @@
     </aside>
     <article class="card">
       <div class="row"><h2>Your agents</h2><button id="refresh" class="button" type="button">Refresh</button></div>
+      <div id="agents-message" class="notice error hidden" role="status"></div>
       <div id="agents" class="muted">Loading agents…</div>
     </article>
   </section>
@@ -48,14 +55,19 @@
 const $=id=>document.getElementById(id);const message=$('message');
 function tell(text,error=false){message.textContent=text;message.className='notice'+(error?' error':'');}
 function clearMessage(){message.className='notice hidden';message.textContent='';}
+function sectionMessage(id,text=''){const node=$(id);node.textContent=text;node.classList.toggle('hidden',!text)}
 async function api(path,options={}){const response=await fetch(path,{credentials:'same-origin',headers:{'content-type':'application/json',...(options.headers||{})},...options});if(!response.ok){let code=`HTTP ${response.status}`;try{code=(await response.json()).code||code}catch{}throw new Error(code)}return response.status===204?null:response.json()}
-async function loadClaude(){try{const status=await api('/api/connectors/claude-code');$('claude-dot').classList.toggle('ok',status.connected);$('claude-label').textContent=status.connected?'Connected':'Not connected';$('connect-form').classList.toggle('hidden',status.connected);$('disconnect').classList.toggle('hidden',!status.connected)}catch(error){tell(`Claude status: ${error.message}`,true)}}
+let claudeFlowId=null;
+function resetClaudeFlow(){claudeFlowId=null;$('oauth-code').value='';$('authorize-link').removeAttribute('href');$('oauth-form').classList.add('hidden')}
+async function loadClaude(){sectionMessage('claude-message');try{const status=await api('/api/connectors/claude-code');$('claude-dot').classList.toggle('ok',status.connected);$('claude-label').textContent=status.connected?'Connected':'Not connected';$('connect-form').classList.toggle('hidden',status.connected||claudeFlowId!==null);$('disconnect').classList.toggle('hidden',!status.connected);if(status.connected)resetClaudeFlow()}catch(error){$('claude-label').textContent='Unavailable';sectionMessage('claude-message',`Status: ${error.message}`)}}
 function renderAgents(agents){const root=$('agents');root.className='';root.replaceChildren();if(!agents.length){root.className='muted';root.textContent='No agents yet. Create the first one from the form.';return}for(const agent of agents){const article=document.createElement('section');article.className='agent stack';const heading=document.createElement('div');heading.className='row';const name=document.createElement('span');name.className='agent-name';name.textContent=agent.name;const revision=document.createElement('span');revision.className='muted';revision.textContent=`revision ${agent.active_revision??'inactive'}`;heading.append(name,revision);const form=document.createElement('form');form.className='stack';const prompt=document.createElement('textarea');prompt.required=true;prompt.placeholder='Describe the task for this agent…';const submit=document.createElement('button');submit.className='button primary';submit.type='submit';submit.textContent='Run task';const output=document.createElement('pre');output.className='result hidden';form.append(prompt,submit);form.addEventListener('submit',async event=>{event.preventDefault();clearMessage();submit.disabled=true;output.textContent='';output.classList.remove('hidden');try{const task=await api(`/api/agents/${encodeURIComponent(agent.id)}/tasks`,{method:'POST',body:JSON.stringify({prompt:prompt.value,idempotency_key:crypto.randomUUID()})});output.textContent='Task accepted. Waiting for output…\n';streamTask(task.id,output,submit)}catch(error){output.textContent=`Task refused: ${error.message}`;submit.disabled=false}});article.append(heading,form,output);root.append(article)}}
 function streamTask(taskId,output,button){const events=new EventSource(`/api/tasks/${encodeURIComponent(taskId)}/events`);events.addEventListener('task',event=>{try{const envelope=JSON.parse(event.data);const update=envelope.event||{};if(update.kind==='text_delta'){if(output.textContent.startsWith('Task accepted.'))output.textContent='';output.textContent+=update.text}else if(update.kind==='succeeded'){output.textContent=update.output;events.close();button.disabled=false}else if(update.kind==='failed'){output.textContent+=`\nFailed: ${update.failure?.message||'unknown failure'}`;events.close();button.disabled=false}}catch{output.textContent+='\nInvalid event received.'}});events.onerror=()=>{if(events.readyState===EventSource.CLOSED){button.disabled=false}else{output.textContent+='\nStream interrupted; reconnecting…'}}}
-async function loadAgents(){try{renderAgents(await api('/api/agents'))}catch(error){tell(`Agents: ${error.message}`,true)}}
-$('connect-form').addEventListener('submit',async event=>{event.preventDefault();clearMessage();const field=$('credential');try{await api('/api/connectors/claude-code',{method:'PUT',body:JSON.stringify({credential:field.value})});field.value='';tell('Claude Code is connected.');await loadClaude()}catch(error){field.value='';tell(`Connection failed: ${error.message}`,true)}});
+async function loadAgents(){sectionMessage('agents-message');try{renderAgents(await api('/api/agents'))}catch(error){$('agents').className='muted';$('agents').textContent='Agents could not be loaded.';sectionMessage('agents-message',error.message)}}
+$('connect-form').addEventListener('submit',async event=>{event.preventDefault();clearMessage();sectionMessage('claude-message');const button=event.submitter;button.disabled=true;try{const start=await api('/api/connectors/claude-code/oauth/start',{method:'POST'});claudeFlowId=start.flow_id;$('authorize-link').href=start.authorization_url;$('oauth-form').classList.remove('hidden');$('connect-form').classList.add('hidden');const popup=window.open(start.authorization_url,'_blank','noopener,noreferrer');if(!popup)tell('Continue to Claude in the new authorization step, then return with the one-time code.')}catch(error){resetClaudeFlow();$('connect-form').classList.remove('hidden');tell(`Connection start failed: ${error.message}`,true)}finally{button.disabled=false}});
+$('oauth-form').addEventListener('submit',async event=>{event.preventDefault();clearMessage();const field=$('oauth-code');const code=field.value;field.value='';if(!claudeFlowId){tell('The connection flow expired. Start again.',true);resetClaudeFlow();$('connect-form').classList.remove('hidden');return}const flowId=claudeFlowId;event.submitter.disabled=true;try{await api('/api/connectors/claude-code/oauth/complete',{method:'POST',body:JSON.stringify({flow_id:flowId,code})});resetClaudeFlow();tell('Claude Code is connected.');await loadClaude()}catch(error){tell(`Connection failed: ${error.message}`,true)}finally{event.submitter.disabled=false}});
+$('cancel-oauth').addEventListener('click',()=>{resetClaudeFlow();$('connect-form').classList.remove('hidden');clearMessage()});
 $('disconnect').addEventListener('click',async()=>{clearMessage();try{await api('/api/connectors/claude-code',{method:'DELETE'});tell('Claude Code was disconnected.');await loadClaude()}catch(error){tell(`Disconnect failed: ${error.message}`,true)}});
 $('agent-form').addEventListener('submit',async event=>{event.preventDefault();clearMessage();try{await api('/api/agents',{method:'POST',body:JSON.stringify({name:$('agent-name').value,instructions:$('instructions').value,model:$('model').value})});event.target.reset();$('model').value='claude-opus-4-1';tell('Agent created and activated.');await loadAgents()}catch(error){tell(`Agent creation failed: ${error.message}`,true)}});
 $('refresh').addEventListener('click',loadAgents);
-(async()=>{try{const session=await api('/api/session');$('session').textContent=session.email||session.subject;$('landing').classList.add('hidden');$('workspace').classList.remove('hidden');await Promise.all([loadClaude(),loadAgents()])}catch{$('landing').classList.remove('hidden')}})();
+(async()=>{try{const session=await api('/api/session');$('session').textContent=session.email||session.subject;$('landing').classList.add('hidden');$('workspace').classList.remove('hidden');await Promise.allSettled([loadClaude(),loadAgents()])}catch{$('landing').classList.remove('hidden')}})();
 </script></body></html>

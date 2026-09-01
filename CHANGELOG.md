@@ -1,5 +1,15 @@
 # Changelog
 
+## 0.2.5 - 2026-09-01
+
+- Replace the dashboard's pasted-credential journey with a Connector-owned Claude OAuth2 PKCE
+  start and completion flow, including refresh-capable custody in Connectors.
+- Keep the opaque connection flow only in browser memory and clear the one-time code immediately
+  after submission. Provider tokens and PKCE verifiers never enter Devcenter persistence.
+- Distinguish Agent Platform authentication refusals, operation refusals, invalid requests, and
+  transport outages using browser-safe codes without relaying downstream response bodies.
+- Record the architectural boundary that Identity remains provider- and service-agnostic.
+
 ## 0.2.4 - 2026-09-01
 
 - Fix the upstream login callback by exchanging OAuth authorization codes as standard

@@ -308,16 +308,16 @@ dependencies = [
 
 [[package]]
 name = "connector-state"
-version = "0.3.1"
-source = "git+ssh://git@github.com/beyond10x/connectors.git?tag=v0.3.1#bcd3e3a4c220d83bbeeb7c64ef33ba928ef6c408"
+version = "0.3.2"
+source = "git+ssh://git@github.com/beyond10x/connectors.git?tag=v0.3.2#4d32458f0d7fda2a0514e00d31bd6767d791b56d"
 dependencies = [
  "thiserror",
 ]
 
 [[package]]
 name = "connectors-client"
-version = "0.3.1"
-source = "git+ssh://git@github.com/beyond10x/connectors.git?tag=v0.3.1#bcd3e3a4c220d83bbeeb7c64ef33ba928ef6c408"
+version = "0.3.2"
+source = "git+ssh://git@github.com/beyond10x/connectors.git?tag=v0.3.2#4d32458f0d7fda2a0514e00d31bd6767d791b56d"
 dependencies = [
  "protocol",
  "reqwest 0.12.28",
@@ -376,7 +376,7 @@ dependencies = [
 
 [[package]]
 name = "devcenter-app"
-version = "0.2.4"
+version = "0.2.5"
 dependencies = [
  "anyhow",
  "axum",
@@ -389,7 +389,7 @@ dependencies = [
 
 [[package]]
 name = "devcenter-auth"
-version = "0.2.4"
+version = "0.2.5"
 dependencies = [
  "identity-client",
  "tokio",
@@ -397,18 +397,18 @@ dependencies = [
 
 [[package]]
 name = "devcenter-core"
-version = "0.2.4"
+version = "0.2.5"
 dependencies = [
  "devcenter-auth",
 ]
 
 [[package]]
 name = "devcenter-docs"
-version = "0.2.4"
+version = "0.2.5"
 
 [[package]]
 name = "devcenter-http"
-version = "0.2.4"
+version = "0.2.5"
 dependencies = [
  "agent-platform-client",
  "axum",
@@ -432,7 +432,7 @@ dependencies = [
 
 [[package]]
 name = "devcenterctl"
-version = "0.2.4"
+version = "0.2.5"
 dependencies = [
  "anyhow",
  "clap",
@@ -464,8 +464,8 @@ dependencies = [
 
 [[package]]
 name = "domain"
-version = "0.3.1"
-source = "git+ssh://git@github.com/beyond10x/connectors.git?tag=v0.3.1#bcd3e3a4c220d83bbeeb7c64ef33ba928ef6c408"
+version = "0.3.2"
+source = "git+ssh://git@github.com/beyond10x/connectors.git?tag=v0.3.2#4d32458f0d7fda2a0514e00d31bd6767d791b56d"
 dependencies = [
  "async-trait",
  "connector-state",
@@ -1064,8 +1064,8 @@ dependencies = [
 
 [[package]]
 name = "protocol"
-version = "0.3.1"
-source = "git+ssh://git@github.com/beyond10x/connectors.git?tag=v0.3.1#bcd3e3a4c220d83bbeeb7c64ef33ba928ef6c408"
+version = "0.3.2"
+source = "git+ssh://git@github.com/beyond10x/connectors.git?tag=v0.3.2#4d32458f0d7fda2a0514e00d31bd6767d791b56d"
 dependencies = [
  "domain",
  "schemars 1.2.2",

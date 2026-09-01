@@ -6,7 +6,8 @@ use std::sync::{Arc, Mutex};
 use std::time::{SystemTime, UNIX_EPOCH};
 
 use agent_platform_client::{
-    ActivateRevision, AgentId, AgentPlatformClient, CreateAgent, RevisionSpec, SubmitTask, TaskId,
+    ActivateRevision, AgentId, AgentPlatformClient, ClientError as AgentPlatformError, CreateAgent,
+    RevisionSpec, SubmitTask, TaskId,
 };
 use axum::body::Body;
 use axum::extract::{Path, Query, State};
@@ -16,7 +17,7 @@ use axum::routing::{get, post};
 use axum::{Json, Router};
 use base64::Engine as _;
 use base64::engine::general_purpose::URL_SAFE_NO_PAD;
-use connectors_client::HostedClient;
+use connectors_client::{ClientError as ConnectorsError, HostedClient};
 use devcenter_auth::{AuthenticationError, Principal};
 use devcenter_core::Config;
 use serde::{Deserialize, Serialize};
@@ -96,6 +97,14 @@ pub fn router(config: Config) -> Result<Router, ConfigurationError> {
             get(claude_status)
                 .put(connect_claude)
                 .delete(disconnect_claude),
+        )
+        .route(
+            "/api/connectors/claude-code/oauth/start",
+            post(start_claude_oauth),
+        )
+        .route(
+            "/api/connectors/claude-code/oauth/complete",
+            post(complete_claude_oauth),
         )
         .route("/api/agents", get(list_agents).post(create_managed_agent))
         .route("/api/agents/{agent_id}/tasks", post(submit_prompt))
@@ -318,6 +327,96 @@ async fn claude_status(State(state): State<AppState>, headers: HeaderMap) -> Res
     }
 }
 
+async fn start_claude_oauth(State(state): State<AppState>, headers: HeaderMap) -> Response {
+    let authenticated = match authenticate(&state, &headers, true).await {
+        Ok(authenticated) => authenticated,
+        Err(response) => return response,
+    };
+    let (identity, connectors) = match credential_services(&state) {
+        Ok(services) => services,
+        Err(response) => return response,
+    };
+    let Ok(access) = identity
+        .issue_access_token(
+            authenticated.authorization.as_str(),
+            CONNECTORS_AUDIENCE,
+            CONNECTORS_SELF_SCOPE,
+        )
+        .await
+    else {
+        return unavailable("identity_access_unavailable");
+    };
+    match connectors
+        .start_claude_code_subscription_oauth(access.credential.expose_at_authorization_boundary())
+        .await
+    {
+        Ok(start) => confidential_json(json!({
+            "authorization_url": start.authorization_url,
+            "flow_id": start.flow_id,
+            "expires_at": start.expires_at
+        })),
+        Err(error) => connector_error(&error, "claude_connection_start_refused"),
+    }
+}
+
+#[derive(Deserialize)]
+#[serde(deny_unknown_fields)]
+struct CompleteClaudeOAuthRequest {
+    flow_id: String,
+    code: String,
+}
+
+async fn complete_claude_oauth(
+    State(state): State<AppState>,
+    headers: HeaderMap,
+    Json(request): Json<CompleteClaudeOAuthRequest>,
+) -> Response {
+    let authenticated = match authenticate(&state, &headers, true).await {
+        Ok(authenticated) => authenticated,
+        Err(response) => return response,
+    };
+    if request.flow_id.is_empty()
+        || request.flow_id.len() > 512
+        || !request.flow_id.bytes().all(|byte| byte.is_ascii_graphic())
+        || request.code.is_empty()
+        || request.code.len() > 12 * 1024
+        || !request.code.bytes().all(|byte| byte.is_ascii_graphic())
+    {
+        return problem(
+            StatusCode::UNPROCESSABLE_ENTITY,
+            "claude_connection_code_invalid",
+        );
+    }
+    let (identity, connectors) = match credential_services(&state) {
+        Ok(services) => services,
+        Err(response) => return response,
+    };
+    let Ok(access) = identity
+        .issue_access_token(
+            authenticated.authorization.as_str(),
+            CONNECTORS_AUDIENCE,
+            CONNECTORS_SELF_SCOPE,
+        )
+        .await
+    else {
+        return unavailable("identity_access_unavailable");
+    };
+    match connectors
+        .complete_claude_code_subscription_oauth(
+            access.credential.expose_at_authorization_boundary(),
+            &request.flow_id,
+            Zeroizing::new(request.code),
+        )
+        .await
+    {
+        Ok(status) => confidential_json(json!({
+            "provider": status.provider,
+            "connected": status.connected
+        })),
+        Err(error) => connector_error(&error, "claude_connection_refused"),
+    }
+}
+
 #[derive(Deserialize)]
 #[serde(deny_unknown_fields)]
 struct ConnectClaudeRequest {
@@ -407,7 +506,7 @@ async fn list_agents(State(state): State<AppState>, headers: HeaderMap) -> Respo
         .await
     {
         Ok(agents) => Json(agents).into_response(),
-        Err(_) => unavailable("agent_platform_unavailable"),
+        Err(error) => agent_platform_error(&error),
     }
 }
 
@@ -432,13 +531,14 @@ async fn create_managed_agent(
         return unavailable("agent_platform_not_configured");
     };
     let authorization = authenticated.authorization.as_str();
-    let Ok(agent) = client
+    let agent = match client
         .create_agent(authorization, &CreateAgent { name: request.name })
         .await
-    else {
-        return unavailable("agent_platform_unavailable");
+    {
+        Ok(agent) => agent,
+        Err(error) => return agent_platform_error(&error),
     };
-    let Ok(revision) = client
+    let revision = match client
         .create_revision(
             authorization,
             &agent.id,
@@ -450,8 +550,9 @@ async fn create_managed_agent(
             },
         )
         .await
-    else {
-        return unavailable("agent_platform_unavailable");
+    {
+        Ok(revision) => revision,
+        Err(error) => return agent_platform_error(&error),
     };
     match client
         .activate_revision(
@@ -465,7 +566,7 @@ async fn create_managed_agent(
         .await
     {
         Ok(agent) => (StatusCode::CREATED, Json(agent)).into_response(),
-        Err(_) => unavailable("agent_platform_unavailable"),
+        Err(error) => agent_platform_error(&error),
     }
 }
 
@@ -504,7 +605,7 @@ async fn submit_prompt(
         .await
     {
         Ok(task) => (StatusCode::ACCEPTED, Json(task)).into_response(),
-        Err(_) => unavailable("agent_platform_unavailable"),
+        Err(error) => agent_platform_error(&error),
     }
 }
 
@@ -528,7 +629,7 @@ async fn get_task(
         .await
     {
         Ok(task) => Json(task).into_response(),
-        Err(_) => unavailable("agent_platform_unavailable"),
+        Err(error) => agent_platform_error(&error),
     }
 }
 
@@ -547,11 +648,12 @@ async fn task_events(
     let Ok(task_id) = TaskId::new(task_id) else {
         return problem(StatusCode::UNPROCESSABLE_ENTITY, "task_id_invalid");
     };
-    let Ok(upstream) = client
+    let upstream = match client
         .task_events(authenticated.authorization.as_str(), &task_id)
         .await
-    else {
-        return unavailable("agent_platform_unavailable");
+    {
+        Ok(upstream) => upstream,
+        Err(error) => return agent_platform_error(&error),
     };
     let mut response = Response::new(Body::from_stream(upstream.bytes_stream()));
     response.headers_mut().insert(
@@ -701,6 +803,54 @@ fn authentication_problem(error: AuthenticationError) -> Response {
     response
 }
 
+fn connector_error(error: &ConnectorsError, refused_code: &str) -> Response {
+    match error {
+        ConnectorsError::SubscriptionRefused(_) => {
+            problem(StatusCode::UNPROCESSABLE_ENTITY, refused_code)
+        }
+        ConnectorsError::HostedNotGranted => {
+            problem(StatusCode::BAD_GATEWAY, "connectors_authority_refused")
+        }
+        _ => unavailable("connectors_unavailable"),
+    }
+}
+
+fn agent_platform_error(error: &AgentPlatformError) -> Response {
+    match error {
+        AgentPlatformError::Refused(401) => problem(
+            StatusCode::BAD_GATEWAY,
+            "agent_platform_authentication_refused",
+        ),
+        AgentPlatformError::Refused(403) => {
+            problem(StatusCode::FORBIDDEN, "agent_platform_operation_refused")
+        }
+        AgentPlatformError::Refused(404) => {
+            problem(StatusCode::NOT_FOUND, "agent_platform_resource_not_found")
+        }
+        AgentPlatformError::Refused(409) => {
+            problem(StatusCode::CONFLICT, "agent_platform_conflict")
+        }
+        AgentPlatformError::Refused(422) => problem(
+            StatusCode::UNPROCESSABLE_ENTITY,
+            "agent_platform_request_invalid",
+        ),
+        AgentPlatformError::Refused(_) => {
+            problem(StatusCode::BAD_GATEWAY, "agent_platform_request_refused")
+        }
+        AgentPlatformError::Configuration | AgentPlatformError::Transport(_) => {
+            unavailable("agent_platform_unavailable")
+        }
+    }
+}
+
+fn confidential_json(value: Value) -> Response {
+    let mut response = Json(value).into_response();
+    response
+        .headers_mut()
+        .insert(header::CACHE_CONTROL, HeaderValue::from_static("no-store"));
+    response
+}
+
 fn problem(status: StatusCode, code: &str) -> Response {
     (
         status,
@@ -789,6 +939,13 @@ mod tests {
                     .is_empty()
             );
         }
+        assert!(devcenter_docs::APP_HTML.contains("/api/connectors/claude-code/oauth/start"));
+        assert!(devcenter_docs::APP_HTML.contains("/api/connectors/claude-code/oauth/complete"));
+        assert!(!devcenter_docs::APP_HTML.contains("id=\"credential\""));
+        let contract: Value = serde_json::from_str(devcenter_docs::OPENAPI).unwrap();
+        assert_eq!(contract["info"]["version"], "0.2.5");
+        assert!(contract["paths"]["/api/connectors/claude-code/oauth/start"].is_object());
+        assert!(contract["paths"]["/api/connectors/claude-code/oauth/complete"].is_object());
     }
 
     #[tokio::test]
@@ -800,6 +957,41 @@ mod tests {
                 .unwrap();
             assert_eq!(response.status(), StatusCode::UNAUTHORIZED);
         }
+        let start = test_router(devcenter_auth::Authentication::Unconfigured)
+            .oneshot(
+                Request::post("/api/connectors/claude-code/oauth/start")
+                    .body(Body::empty())
+                    .unwrap(),
+            )
+            .await
+            .unwrap();
+        assert_eq!(start.status(), StatusCode::UNAUTHORIZED);
+        let complete = test_router(devcenter_auth::Authentication::Unconfigured)
+            .oneshot(
+                Request::post("/api/connectors/claude-code/oauth/complete")
+                    .header(header::CONTENT_TYPE, "application/json")
+                    .body(Body::from(r#"{"flow_id":"flow","code":"code"}"#))
+                    .unwrap(),
+            )
+            .await
+            .unwrap();
+        assert_eq!(complete.status(), StatusCode::UNAUTHORIZED);
+    }
+
+    #[tokio::test]
+    async fn downstream_refusals_are_classified_without_relaying_bodies() {
+        let response = connector_error(
+            &ConnectorsError::SubscriptionRefused(400),
+            "claude_connection_refused",
+        );
+        assert_eq!(response.status(), StatusCode::UNPROCESSABLE_ENTITY);
+        let body = response.into_body().collect().await.unwrap().to_bytes();
+        assert_eq!(body, r#"{"code":"claude_connection_refused"}"#);
+
+        let response = agent_platform_error(&AgentPlatformError::Refused(401));
+        assert_eq!(response.status(), StatusCode::BAD_GATEWAY);
+        let body = response.into_body().collect().await.unwrap().to_bytes();
+        assert_eq!(body, r#"{"code":"agent_platform_authentication_refused"}"#);
     }
 
     #[tokio::test]

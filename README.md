@@ -36,9 +36,11 @@ DEV_CENTER_CONNECTORS_API_BASE=https://connectors.example.test/api/connectors/v1
 cargo run --locked -p devcenter-app
 ```
 
-The browser receives only an opaque, Secure, HttpOnly session cookie. Subscription credentials are
-forwarded once into Connectors custody; Agent Platform receives an attempt-bound lease and Harness
-redeems it only at the provider request boundary.
+The browser receives only an opaque, Secure, HttpOnly session cookie. `Connect Claude` starts a
+Connector-owned OAuth2 PKCE flow: Devcenter retains only an opaque flow id in browser memory while
+the user authorizes, and Connectors owns provider exchange, refresh, and credential custody. Agent
+Platform receives an attempt-bound lease and Harness redeems it only at the provider request
+boundary. Identity remains provider- and service-agnostic throughout.
 
 ## Deployment CLI
 
