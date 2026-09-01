@@ -1,9 +1,20 @@
 # syntax=docker/dockerfile:1.7
+FROM node:22.23.1-bookworm-slim@sha256:6c74791e557ce11fc957704f6d4fe134a7bc8d6f5ca4403205b2966bd488f6b3 AS frontend-builder
+WORKDIR /source
+RUN npm install --global pnpm@11.25.0
+COPY openapi.json ./openapi.json
+COPY frontend/package.json frontend/pnpm-lock.yaml frontend/pnpm-workspace.yaml ./frontend/
+WORKDIR /source/frontend
+RUN --mount=type=cache,id=devcenter-pnpm,target=/root/.local/share/pnpm/store,sharing=locked \
+    pnpm install --frozen-lockfile
+COPY frontend ./
+RUN pnpm build
+
 FROM rust:1.97.0-bookworm@sha256:8fa55b2f3ddf97471ab6a767bfa3f37e6bad0986ba823e75fea57e2a2a5c3073 AS builder
 WORKDIR /source
 COPY Cargo.toml Cargo.lock ./
 COPY crates ./crates
-COPY web ./web
+COPY --from=frontend-builder /source/frontend/dist ./frontend/dist
 COPY openapi.json ./openapi.json
 RUN --mount=type=secret,id=github_token,required=true \
     --mount=type=cache,id=b10x-cargo-registry,target=/usr/local/cargo/registry,sharing=locked \

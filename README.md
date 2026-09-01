@@ -11,6 +11,14 @@ Secret references separately.
 
 ## Run locally
 
+Install and build the Vue application before compiling the Rust server:
+
+```console
+npm install --global pnpm@11.25.0
+pnpm --dir frontend install --frozen-lockfile
+pnpm --dir frontend build
+```
+
 ```console
 DEV_CENTER_TENANT_ID=local \
 DEV_CENTER_PUBLIC_ORIGIN=http://127.0.0.1:8080 \
@@ -19,6 +27,13 @@ cargo run --bin devcenter
 
 Open `http://127.0.0.1:8080/docs/` for the embedded documentation and
 `http://127.0.0.1:8080/openapi.json` for the service contract.
+
+For frontend development, run `pnpm --dir frontend dev`; Vite proxies the allowlisted API and auth
+routes to the Rust server on `127.0.0.1:8080`.
+
+To review every frontend journey without service credentials or a deployment, run
+`pnpm --dir frontend review` and open `http://127.0.0.1:4173`. Review mode is visibly marked, uses
+process-local sample data, and contacts no Identity, Connector, model provider, or Agent Platform.
 
 Protected routes fail closed until an Identity verifier is configured. For loopback-only MCP
 development, also set `DEV_CENTER_INSECURE_DEV_AUTH=true` and a non-empty

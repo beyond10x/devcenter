@@ -12,7 +12,7 @@ use agent_platform_client::{
 use axum::body::Body;
 use axum::extract::{Path, Query, State};
 use axum::http::{HeaderMap, HeaderValue, StatusCode, header};
-use axum::response::{Html, IntoResponse, Redirect, Response};
+use axum::response::{IntoResponse, Redirect, Response};
 use axum::routing::{get, post};
 use axum::{Json, Router};
 use base64::Engine as _;
@@ -79,8 +79,12 @@ pub fn router(config: Config) -> Result<Router, ConfigurationError> {
     };
     Ok(Router::new()
         .route("/", get(app))
-        .route("/docs", get(docs_redirect))
-        .route("/docs/", get(docs))
+        .route("/agents", get(app))
+        .route("/agents/{agent_id}", get(app))
+        .route("/connections", get(app))
+        .route("/docs", get(app))
+        .route("/docs/", get(app))
+        .route("/assets/{*path}", get(static_asset))
         .route("/openapi.json", get(openapi))
         .route("/healthz", get(health))
         .route("/readyz", get(ready))
@@ -115,24 +119,38 @@ pub fn router(config: Config) -> Result<Router, ConfigurationError> {
 }
 
 async fn app() -> Response {
-    html(devcenter_docs::APP_HTML)
-}
-
-async fn docs_redirect() -> Redirect {
-    Redirect::permanent("/docs/")
-}
-
-async fn docs() -> Response {
-    html(devcenter_docs::DOCS_HTML)
-}
-
-fn html(content: &'static str) -> Response {
-    let mut response = Html(content).into_response();
+    let mut response = embedded_asset("index.html", false);
     response.headers_mut().insert(
         header::CONTENT_SECURITY_POLICY,
         HeaderValue::from_static(
-            "default-src 'self'; script-src 'self' 'unsafe-inline'; style-src 'self' 'unsafe-inline'; connect-src 'self'; base-uri 'none'; form-action 'self'; frame-ancestors 'none'",
+            "default-src 'self'; script-src 'self'; style-src 'self'; font-src 'self'; connect-src 'self'; img-src 'self' data:; base-uri 'none'; form-action 'self'; frame-ancestors 'none'; object-src 'none'",
         ),
+    );
+    response
+}
+
+async fn static_asset(Path(path): Path<String>) -> Response {
+    embedded_asset(&format!("assets/{path}"), true)
+}
+
+fn embedded_asset(path: &str, immutable: bool) -> Response {
+    let Some(asset) = devcenter_web_assets::get(path) else {
+        return StatusCode::NOT_FOUND.into_response();
+    };
+    let Ok(content_type) = HeaderValue::from_str(asset.content_type) else {
+        return StatusCode::INTERNAL_SERVER_ERROR.into_response();
+    };
+    let mut response = Response::new(Body::from(asset.bytes.into_owned()));
+    response
+        .headers_mut()
+        .insert(header::CONTENT_TYPE, content_type);
+    response.headers_mut().insert(
+        header::CACHE_CONTROL,
+        HeaderValue::from_static(if immutable {
+            "public, max-age=31536000, immutable"
+        } else {
+            "no-store"
+        }),
     );
     response.headers_mut().insert(
         header::X_CONTENT_TYPE_OPTIONS,
@@ -147,7 +165,7 @@ async fn openapi() -> impl IntoResponse {
             (header::CONTENT_TYPE, "application/json"),
             (header::CACHE_CONTROL, "no-store"),
         ],
-        devcenter_docs::OPENAPI,
+        devcenter_web_assets::OPENAPI,
     )
 }
 
@@ -922,13 +940,28 @@ mod tests {
     }
 
     #[tokio::test]
-    async fn docs_and_openapi_are_embedded() {
-        for path in ["/docs/", "/openapi.json"] {
+    async fn vue_application_docs_and_openapi_are_embedded() {
+        for path in [
+            "/",
+            "/agents",
+            "/agents/agent-1",
+            "/connections",
+            "/docs",
+            "/docs/",
+        ] {
             let response = test_router(devcenter_auth::Authentication::Unconfigured)
                 .oneshot(Request::builder().uri(path).body(Body::empty()).unwrap())
                 .await
                 .unwrap();
             assert_eq!(response.status(), StatusCode::OK);
+            let policy = response
+                .headers()
+                .get(header::CONTENT_SECURITY_POLICY)
+                .expect("application CSP")
+                .to_str()
+                .unwrap();
+            assert!(!policy.contains("unsafe-inline"));
+            assert!(policy.contains("script-src 'self'"));
             assert!(
                 !response
                     .into_body()
@@ -939,13 +972,49 @@ mod tests {
                     .is_empty()
             );
         }
-        assert!(devcenter_docs::APP_HTML.contains("/api/connectors/claude-code/oauth/start"));
-        assert!(devcenter_docs::APP_HTML.contains("/api/connectors/claude-code/oauth/complete"));
-        assert!(!devcenter_docs::APP_HTML.contains("id=\"credential\""));
-        assert_eq!(devcenter_docs::APP_HTML.matches("claude-opus-5").count(), 2);
-        assert!(!devcenter_docs::APP_HTML.contains("claude-opus-4-1"));
-        let contract: Value = serde_json::from_str(devcenter_docs::OPENAPI).unwrap();
-        assert_eq!(contract["info"]["version"], "0.3.3");
+        let script_path = devcenter_web_assets::WebAssets::iter()
+            .find(|path| path.ends_with(".js"))
+            .expect("compiled Vue script");
+        let script = devcenter_web_assets::get(&script_path).expect("script asset");
+        let script = String::from_utf8(script.bytes.into_owned()).unwrap();
+        assert!(script.contains("/api/connectors/claude-code/oauth/start"));
+        assert!(script.contains("/api/connectors/claude-code/oauth/complete"));
+        assert!(!script.contains("id=\"credential\""));
+        assert!(script.contains("claude-opus-5"));
+        assert!(!script.contains("claude-opus-4-1"));
+
+        let response = test_router(devcenter_auth::Authentication::Unconfigured)
+            .oneshot(
+                Request::builder()
+                    .uri(format!("/{script_path}"))
+                    .body(Body::empty())
+                    .unwrap(),
+            )
+            .await
+            .unwrap();
+        assert_eq!(response.status(), StatusCode::OK);
+        assert_eq!(
+            response.headers().get(header::CONTENT_TYPE).unwrap(),
+            "text/javascript"
+        );
+        assert_eq!(
+            response.headers().get(header::CACHE_CONTROL).unwrap(),
+            "public, max-age=31536000, immutable"
+        );
+
+        let response = test_router(devcenter_auth::Authentication::Unconfigured)
+            .oneshot(
+                Request::builder()
+                    .uri("/not-allowlisted")
+                    .body(Body::empty())
+                    .unwrap(),
+            )
+            .await
+            .unwrap();
+        assert_eq!(response.status(), StatusCode::NOT_FOUND);
+
+        let contract: Value = serde_json::from_str(devcenter_web_assets::OPENAPI).unwrap();
+        assert_eq!(contract["info"]["version"], "0.3.4");
         assert!(contract["paths"]["/api/connectors/claude-code/oauth/start"].is_object());
         assert!(contract["paths"]["/api/connectors/claude-code/oauth/complete"].is_object());
     }

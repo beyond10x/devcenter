@@ -2,6 +2,18 @@
 
 ## Unreleased
 
+## 0.3.4 - 2026-09-01
+
+- Replace the inline browser page with a dedicated Vue 3 and TypeScript application for Identity
+  sessions, Connector custody, agent management, Task submission, streaming output, and embedded
+  product documentation.
+- Embed the deterministic Vite production bundle in the Rust server, serve only explicit SPA and
+  asset routes, and remove inline-script and inline-style allowances from the application CSP.
+- Add responsive operator-console navigation, complete loading/error/empty states, accessible
+  workflows, frontend contract generation, and automated frontend gates.
+- Add a visibly marked, process-local review mode for exercising the product journeys before a
+  merge or deployment without contacting real services.
+
 ## 0.3.3 - 2026-09-01
 
 - Roll Secrets whenever its rendered workload grants change, preventing the process from retaining

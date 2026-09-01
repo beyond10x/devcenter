@@ -25,12 +25,17 @@ explicitly.
 4. User-bound model credentials remain owned by Connectors. Devcenter never stores credential bytes.
 5. Generated and embedded documentation contains no deployment configuration or planning records.
 6. No organization-specific identifier enters source, tests, examples, commits, planning records, release metadata, chart packages, or OCI labels.
-7. Anything that runs is Rust. Shell is orchestration only.
+7. Servers, BFFs, CLIs, deployment tooling, and orchestration are Rust. The browser application is
+   Vue and TypeScript, built by the repository-pinned Node and pnpm toolchain.
 8. The chart uses immutable image references in deployment values and never embeds credentials.
 
 ## Gate
 
 ```console
+pnpm --dir frontend install --frozen-lockfile
+pnpm --dir frontend check
+pnpm --dir frontend exec playwright install chromium
+pnpm --dir frontend test:e2e
 cargo fmt --all --check
 cargo clippy --workspace --all-targets --locked -- -D warnings
 cargo test --workspace --locked

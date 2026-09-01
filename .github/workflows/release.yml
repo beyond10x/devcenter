@@ -46,6 +46,14 @@ jobs:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
         with:
           persist-credentials: false
+      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4
+        with:
+          node-version: 22.23.1
+      - name: Build embedded Vue application
+        run: |
+          npm install --global pnpm@11.25.0
+          pnpm --dir frontend install --frozen-lockfile
+          pnpm --dir frontend build
       - name: Token for private sibling dependencies
         id: app-token
         uses: actions/create-github-app-token@fee1f7d63c2ff003460e3d139729b119787bc349 # v2
