@@ -38,10 +38,19 @@ spec:
           command:
             - sh
             - -ec
-            - chown 65532:65532 /var/lib/substrate /var/run/substrate && chmod 0700 /var/lib/substrate /var/run/substrate
+            - |
+              chown 65532:65532 /var/lib/substrate /var/run/substrate /var/run/substrate-tls &&
+              chmod 0700 /var/lib/substrate /var/run/substrate /var/run/substrate-tls &&
+              cp /var/run/substrate-tls-source/tls.crt /var/run/substrate-tls/tls.crt &&
+              cp /var/run/substrate-tls-source/tls.key /var/run/substrate-tls/tls.key &&
+              chown 65532:65532 /var/run/substrate-tls/tls.crt /var/run/substrate-tls/tls.key &&
+              chmod 0644 /var/run/substrate-tls/tls.crt &&
+              chmod 0600 /var/run/substrate-tls/tls.key
           volumeMounts:
             - {name: state, mountPath: /var/lib/substrate}
             - {name: runtime, mountPath: /var/run/substrate}
+            - {name: tls-source, mountPath: /var/run/substrate-tls-source, readOnly: true}
+            - {name: tls, mountPath: /var/run/substrate-tls}
           securityContext:
             runAsUser: 0
             runAsGroup: 0
@@ -87,7 +96,8 @@ spec:
             capabilities: {drop: ["ALL"]}
       volumes:
         - {name: runtime, emptyDir: {}}
-        - name: tls
+        - {name: tls, emptyDir: {}}
+        - name: tls-source
           secret:
             secretName: {{ $tlsSecret }}
             items:

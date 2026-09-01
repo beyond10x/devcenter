@@ -2,6 +2,11 @@
 
 ## Unreleased
 
+## 0.4.4 - 2026-09-01
+
+- Materialize Kubernetes-projected TLS identity entries as regular, owner-controlled files before
+  starting Substrate, preserving its refusal to follow certificate or private-key symlinks.
+
 ## 0.4.3 - 2026-09-01
 
 - Initialize Substrate state and runtime mounts as owner-only directories before starting the

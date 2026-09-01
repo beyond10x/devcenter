@@ -80,8 +80,12 @@ awk '
 grep -q 'name: SUBSTRATE_TLS_LISTEN' "$rendered"
 grep -q 'name: WORKSPACE_SUBSTRATE_ORIGIN' "$rendered"
 grep -q 'name: volume-permissions' "$rendered"
-grep -q 'chown 65532:65532 /var/lib/substrate /var/run/substrate' "$rendered"
-grep -q 'chmod 0700 /var/lib/substrate /var/run/substrate' "$rendered"
+grep -q 'chown 65532:65532 /var/lib/substrate /var/run/substrate /var/run/substrate-tls' "$rendered"
+grep -q 'chmod 0700 /var/lib/substrate /var/run/substrate /var/run/substrate-tls' "$rendered"
+grep -q 'cp /var/run/substrate-tls-source/tls.crt /var/run/substrate-tls/tls.crt' "$rendered"
+grep -q 'cp /var/run/substrate-tls-source/tls.key /var/run/substrate-tls/tls.key' "$rendered"
+grep -q 'chmod 0600 /var/run/substrate-tls/tls.key' "$rendered"
+grep -q 'name: tls-source' "$rendered"
 
 if helm template devcenter "$chart" \
   --namespace devcenter \
