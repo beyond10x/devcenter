@@ -341,6 +341,22 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/.well-known/oauth-protected-resource": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get: operations["mcpRootProtectedResourceMetadata"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/.well-known/oauth-protected-resource/mcp/{publication_id}": {
         parameters: {
             query?: never;
@@ -538,6 +554,10 @@ export interface operations {
             query?: {
                 code?: string;
                 state?: string;
+                error?: string;
+                error_description?: string;
+                error_uri?: string;
+                iss?: string;
             };
             header?: never;
             path?: never;
@@ -1094,6 +1114,24 @@ export interface operations {
         requestBody?: never;
         responses: {
             /** @description This document */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    mcpRootProtectedResourceMetadata: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description RFC 9728 metadata for the Devcenter MCP resource root */
             200: {
                 headers: {
                     [name: string]: unknown;

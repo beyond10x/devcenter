@@ -107,7 +107,12 @@ async function changeState(state: PublicationState) {
     publications.value = publications.value.map((publication) =>
       publication.publication_id === changed.publication_id ? changed : publication,
     );
-    notice.value = state === "active" ? "Publication resumed." : "Publication suspended.";
+    notice.value =
+      state === "active"
+        ? "Publication resumed."
+        : state === "revoked"
+          ? "Publication revoked."
+          : "Publication suspended.";
   } catch (cause) {
     error.value = errorMessage(cause);
   } finally {

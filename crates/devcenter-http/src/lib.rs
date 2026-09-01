@@ -352,7 +352,6 @@ fn select_provider<'a>(
 }
 
 #[derive(Deserialize)]
-#[serde(deny_unknown_fields)]
 struct LoginCallback {
     code: Option<String>,
     state: Option<String>,
@@ -830,14 +829,6 @@ async fn mcp(
     if !valid_opaque_id(&publication_id) {
         return StatusCode::NOT_FOUND.into_response();
     }
-    let publication = match state.publications.publication(&publication_id).await {
-        Ok(Some(publication)) => publication,
-        Ok(None) => return StatusCode::NOT_FOUND.into_response(),
-        Err(_) => return unavailable("publication_store_unavailable"),
-    };
-    if publication.state != PublicationState::Active {
-        return problem(StatusCode::FORBIDDEN, "publication_not_active");
-    }
     let Ok(authorization) = bearer_authorization(&headers) else {
         return mcp_authentication_problem(&state, &publication_id, false);
     };
@@ -856,6 +847,14 @@ async fn mcp(
             return mcp_authentication_problem(&state, &publication_id, true);
         }
     };
+    let publication = match state.publications.publication(&publication_id).await {
+        Ok(Some(publication)) => publication,
+        Ok(None) => return StatusCode::NOT_FOUND.into_response(),
+        Err(_) => return unavailable("publication_store_unavailable"),
+    };
+    if publication.state != PublicationState::Active {
+        return problem(StatusCode::FORBIDDEN, "publication_not_active");
+    }
     if principal.tenant_id != publication.tenant_id
         || principal.subject != publication.owner_subject
     {
@@ -1404,9 +1403,31 @@ mod tests {
         assert_eq!(response.status(), StatusCode::NOT_FOUND);
 
         let contract: Value = serde_json::from_str(devcenter_web_assets::OPENAPI).unwrap();
-        assert_eq!(contract["info"]["version"], "0.4.1");
+        assert_eq!(contract["info"]["version"], env!("CARGO_PKG_VERSION"));
         assert!(contract["paths"]["/api/connectors/claude-code/oauth/start"].is_object());
         assert!(contract["paths"]["/api/connectors/claude-code/oauth/complete"].is_object());
+        assert!(contract["paths"]["/.well-known/oauth-protected-resource"].is_object());
+    }
+
+    #[tokio::test]
+    async fn login_callback_accepts_standard_authorization_server_parameters() {
+        let response = test_router(devcenter_auth::Authentication::Unconfigured)
+            .oneshot(
+                Request::builder()
+                    .uri(concat!(
+                        "/auth/sso/callback?error=access_denied",
+                        "&error_description=The%20request%20was%20refused",
+                        "&error_uri=https%3A%2F%2Fidentity.example.invalid%2Ferrors%2Faccess_denied",
+                        "&iss=https%3A%2F%2Fidentity.example.invalid"
+                    ))
+                    .body(Body::empty())
+                    .unwrap(),
+            )
+            .await
+            .unwrap();
+        assert_eq!(response.status(), StatusCode::UNAUTHORIZED);
+        let body = response.into_body().collect().await.unwrap().to_bytes();
+        assert_eq!(body, r#"{"code":"login_refused"}"#);
     }
 
     #[tokio::test]
@@ -1455,8 +1476,7 @@ mod tests {
         assert_eq!(body, r#"{"code":"agent_platform_authentication_refused"}"#);
     }
 
-    #[tokio::test]
-    async fn development_mcp_advertises_only_the_immutable_publication_projection() {
+    async fn development_mcp_application() -> Router {
         let store = Store::connect_lazy("sqlite::memory:").unwrap();
         store.ready().await.unwrap();
         let tool = devcenter_mcp::CompiledTool {
@@ -1489,10 +1509,44 @@ mod tests {
                     publication_id: "pub_opaque".to_owned(),
                     revision: 1,
                     profile_revision: 3,
-                    toolset_digest: digest,
-                    tools,
+                    toolset_digest: digest.clone(),
+                    tools: tools.clone(),
                     created_at_ms: 1,
                 },
+            )
+            .await
+            .unwrap();
+        store
+            .create_publication(
+                &devcenter_store::Publication {
+                    publication_id: "pub_suspended".to_owned(),
+                    tenant_id: "local".to_owned(),
+                    owner_subject: "human:developer".to_owned(),
+                    profile_id: "profile-2".to_owned(),
+                    active_revision: 1,
+                    toolset_digest: digest.clone(),
+                    state: PublicationState::Active,
+                    created_at_ms: 2,
+                    updated_at_ms: 2,
+                },
+                &devcenter_store::PublicationRevision {
+                    publication_id: "pub_suspended".to_owned(),
+                    revision: 1,
+                    profile_revision: 4,
+                    toolset_digest: digest,
+                    tools,
+                    created_at_ms: 2,
+                },
+            )
+            .await
+            .unwrap();
+        store
+            .set_publication_state(
+                "pub_suspended",
+                "local",
+                "human:developer",
+                PublicationState::Suspended,
+                3,
             )
             .await
             .unwrap();
@@ -1508,8 +1562,37 @@ mod tests {
             agent_platform_origin: None,
             connectors_api_base: None,
         };
-        let response = router_with_store(config, store)
-            .unwrap()
+        router_with_store(config, store).unwrap()
+    }
+
+    #[tokio::test]
+    async fn development_mcp_authenticates_before_revealing_publication_state() {
+        let application = development_mcp_application().await;
+        for publication_id in ["pub_opaque", "pub_suspended", "pub_unknown"] {
+            let response = application
+                .clone()
+                .oneshot(
+                    Request::builder()
+                        .method("POST")
+                        .uri(format!("/mcp/{publication_id}"))
+                        .header(header::CONTENT_TYPE, "application/json")
+                        .body(Body::from(
+                            r#"{"jsonrpc":"2.0","id":1,"method":"tools/list"}"#,
+                        ))
+                        .unwrap(),
+                )
+                .await
+                .unwrap();
+            assert_eq!(response.status(), StatusCode::UNAUTHORIZED);
+            let body = response.into_body().collect().await.unwrap().to_bytes();
+            assert_eq!(body, r#"{"code":"mcp_authentication_required"}"#);
+        }
+    }
+
+    #[tokio::test]
+    async fn development_mcp_advertises_only_the_immutable_publication_projection() {
+        let application = development_mcp_application().await;
+        let response = application
             .oneshot(
                 Request::builder()
                     .method("POST")

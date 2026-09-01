@@ -49,7 +49,7 @@ describe("workspace store", () => {
   it("shows sign in only when the session endpoint returns 401", async () => {
     server.use(
       http.get("/api/session", () =>
-        HttpResponse.json({ code: "authentication_required" }, { status: 401 }),
+        HttpResponse.json({ code: "identity_authentication_required" }, { status: 401 }),
       ),
     );
     const workspace = useWorkspaceStore();

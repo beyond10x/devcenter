@@ -21,6 +21,17 @@ const agents = [
     created_at_ms: 1_769_904_000_000,
   },
 ];
+const publication = {
+  publication_id: "pub-test-1",
+  tenant_id: "tenant-1",
+  owner_subject: "actor-1",
+  profile_id: "profile-release",
+  active_revision: 2,
+  toolset_digest: "0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef",
+  state: "active",
+  created_at_ms: 1_788_260_000_000,
+  updated_at_ms: 1_788_260_000_000,
+};
 
 async function mockAuthenticatedWorkspace(page: Page) {
   await page.route(/^https?:\/\/[^/]+\/api\//, async (route) => {
@@ -50,22 +61,13 @@ async function mockAuthenticatedWorkspace(page: Page) {
       await route.fulfill({ json: { ...agents[0], id: "agent-new", name: submitted.name } });
       return;
     }
-    if (path === "/api/mcp/publications") {
-      await route.fulfill({
-        json: [
-          {
-            publication_id: "pub-test-1",
-            tenant_id: "tenant-1",
-            owner_subject: "actor-1",
-            profile_id: "profile-release",
-            active_revision: 2,
-            toolset_digest: "0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef",
-            state: "active",
-            created_at_ms: 1_788_260_000_000,
-            updated_at_ms: 1_788_260_000_000,
-          },
-        ],
-      });
+    if (path === "/api/mcp/publications" && request.method() === "GET") {
+      await route.fulfill({ json: [publication] });
+      return;
+    }
+    if (path === "/api/mcp/publications/pub-test-1" && request.method() === "PATCH") {
+      const submitted = request.postDataJSON() as { state: string };
+      await route.fulfill({ json: { ...publication, state: submitted.state } });
       return;
     }
     if (path === "/api/mcp/publications/pub-test-1/clients") {
@@ -82,7 +84,7 @@ async function mockAuthenticatedWorkspace(page: Page) {
 
 test("renders a signed-out authority path instead of an empty shell", async ({ page }) => {
   await page.route("**/api/session", (route) =>
-    route.fulfill({ status: 401, json: { code: "authentication_required" } }),
+    route.fulfill({ status: 401, json: { code: "identity_authentication_required" } }),
   );
   await page.goto("/");
 
@@ -137,6 +139,8 @@ test("shows one stable MCP endpoint and separate client setup commands", async (
   await expect(page.getByText(/codex mcp add devcenter/)).toBeVisible();
   await expect(page.getByText(/claude mcp add --transport http/)).toBeVisible();
   await expect(page.getByText("Browser logout does not revoke it.")).toBeVisible();
+  await page.getByRole("button", { name: "Revoke permanently" }).click();
+  await expect(page.getByRole("status")).toContainText("Publication revoked.");
   const accessibility = await new AxeBuilder({ page }).withTags(["wcag2a", "wcag2aa"]).analyze();
   expect(accessibility.violations).toEqual([]);
 });

@@ -4,6 +4,7 @@
 /frontend/playwright-report/
 /frontend/test-results/
 /.devcenter/
+/devcenter.sqlite
 *.rendered.yaml
 *.pem
 *.key

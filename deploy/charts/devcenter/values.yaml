@@ -23,7 +23,7 @@ devcenter:
     # Opaque Identity-owned provider IDs. Empty preserves Identity's existing provider flow.
     providers: []
   database:
-    # Hosted deployments inject a PostgreSQL URL. Local execution defaults to SQLite.
+    # Required by the chart. Hosted deployments inject a PostgreSQL URL; local non-chart execution defaults to SQLite.
     existingSecret: ""
     databaseUrlKey: database-url
   resources:
@@ -61,6 +61,9 @@ components:
     volumeMounts: []
     volumes: []
     persistence: {enabled: false, storageClass: "", size: 1Gi, mountPath: /var/lib/identity}
+    readinessProbe: {httpGet: {path: /readyz, port: http}}
+    livenessProbe: {httpGet: {path: /livez, port: http}}
+    resources: {requests: {cpu: 100m, memory: 128Mi}, limits: {cpu: "1", memory: 512Mi}}
   connectors:
     enabled: false
     image: {repository: "", digest: "", pullPolicy: IfNotPresent}
@@ -75,6 +78,9 @@ components:
     volumeMounts: []
     volumes: []
     persistence: {enabled: false, storageClass: "", size: 1Gi, mountPath: /var/lib/connectors}
+    readinessProbe: {httpGet: {path: /readyz, port: http}}
+    livenessProbe: {httpGet: {path: /livez, port: http}}
+    resources: {requests: {cpu: 100m, memory: 128Mi}, limits: {cpu: "1", memory: 512Mi}}
   secrets:
     enabled: false
     image: {repository: ghcr.io/beyond10x/secrets, digest: "", pullPolicy: IfNotPresent}
@@ -89,6 +95,9 @@ components:
     volumeMounts: []
     volumes: []
     persistence: {enabled: false, storageClass: "", size: 1Gi, mountPath: /var/lib/secrets}
+    readinessProbe: {httpGet: {path: /health/ready, port: http}}
+    livenessProbe: {httpGet: {path: /health/live, port: http}}
+    resources: {requests: {cpu: 100m, memory: 128Mi}, limits: {cpu: "1", memory: 512Mi}}
   aep-service:
     enabled: false
     image: {repository: "", digest: "", pullPolicy: IfNotPresent}
@@ -103,6 +112,9 @@ components:
     volumeMounts: []
     volumes: []
     persistence: {enabled: false, storageClass: "", size: 1Gi, mountPath: /var/lib/aep-service}
+    readinessProbe: {httpGet: {path: /readyz, port: http}}
+    livenessProbe: {httpGet: {path: /livez, port: http}}
+    resources: {requests: {cpu: 100m, memory: 128Mi}, limits: {cpu: "1", memory: 512Mi}}
   agent-platform:
     enabled: false
     image: {repository: "", digest: "", pullPolicy: IfNotPresent}
@@ -117,6 +129,9 @@ components:
     volumeMounts: []
     volumes: []
     persistence: {enabled: false, storageClass: "", size: 1Gi, mountPath: /var/lib/agent-platform}
+    readinessProbe: {httpGet: {path: /livez, port: http}}
+    livenessProbe: {httpGet: {path: /livez, port: http}}
+    resources: {requests: {cpu: 100m, memory: 128Mi}, limits: {cpu: "1", memory: 512Mi}}
   workflow:
     enabled: false
     image: {repository: "", digest: "", pullPolicy: IfNotPresent}
@@ -131,6 +146,9 @@ components:
     volumeMounts: []
     volumes: []
     persistence: {enabled: false, storageClass: "", size: 1Gi, mountPath: /var/lib/workflow}
+    readinessProbe: {tcpSocket: {port: http}}
+    livenessProbe: {tcpSocket: {port: http}}
+    resources: {requests: {cpu: 100m, memory: 128Mi}, limits: {cpu: "1", memory: 512Mi}}
   llmgw:
     enabled: false
     image: {repository: "", digest: "", pullPolicy: IfNotPresent}
@@ -145,6 +163,9 @@ components:
     volumeMounts: []
     volumes: []
     persistence: {enabled: false, storageClass: "", size: 1Gi, mountPath: /var/lib/llmgw}
+    readinessProbe: {httpGet: {path: /readyz, port: http}}
+    livenessProbe: {httpGet: {path: /livez, port: http}}
+    resources: {requests: {cpu: 100m, memory: 128Mi}, limits: {cpu: "1", memory: 512Mi}}
 
 connectorsCatalogBundle:
   enabled: false

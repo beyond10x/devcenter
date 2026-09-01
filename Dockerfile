@@ -31,8 +31,10 @@ FROM debian:bookworm-slim@sha256:88200866dfff7ea7f5cbcb6ec7c8a701889efe6fe859fe6
 ARG SOURCE_SHA=unknown
 LABEL org.opencontainers.image.revision=$SOURCE_SHA
 RUN apt-get update && apt-get install -y --no-install-recommends ca-certificates && rm -rf /var/lib/apt/lists/*
-RUN useradd --system --uid 10001 --home /nonexistent devcenter
+RUN useradd --system --uid 10001 --home /nonexistent devcenter && \
+    install -d --owner=10001 --group=10001 /var/lib/devcenter
 COPY --from=builder /out/devcenter /usr/local/bin/devcenter
+WORKDIR /var/lib/devcenter
 USER 10001:10001
 EXPOSE 8080
 ENTRYPOINT ["/usr/local/bin/devcenter"]

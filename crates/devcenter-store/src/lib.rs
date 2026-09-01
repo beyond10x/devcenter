@@ -230,7 +230,7 @@ impl Store {
         }
         let tools = serde_json::to_string(&revision.tools).map_err(|_| StoreError::Corrupt)?;
         let mut transaction = self.pool.begin().await.map_err(StoreError::Database)?;
-        sqlx::query("INSERT INTO mcp_publications (publication_id, tenant_id, owner_subject, profile_id, active_revision, toolset_digest, state, created_at_ms, updated_at_ms) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)")
+        sqlx::query("INSERT INTO mcp_publications (publication_id, tenant_id, owner_subject, profile_id, active_revision, toolset_digest, state, created_at_ms, updated_at_ms) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)")
             .bind(&publication.publication_id)
             .bind(&publication.tenant_id)
             .bind(&publication.owner_subject)
@@ -243,7 +243,7 @@ impl Store {
             .execute(&mut *transaction)
             .await
             .map_err(StoreError::Database)?;
-        sqlx::query("INSERT INTO mcp_publication_revisions (publication_id, revision, profile_revision, toolset_digest, tools_json, created_at_ms) VALUES (?, ?, ?, ?, ?, ?)")
+        sqlx::query("INSERT INTO mcp_publication_revisions (publication_id, revision, profile_revision, toolset_digest, tools_json, created_at_ms) VALUES ($1, $2, $3, $4, $5, $6)")
             .bind(&revision.publication_id)
             .bind(revision.revision)
             .bind(revision.profile_revision)
@@ -261,7 +261,7 @@ impl Store {
         publication_id: &str,
     ) -> Result<Option<Publication>, StoreError> {
         self.ensure_schema().await?;
-        sqlx::query("SELECT publication_id, tenant_id, owner_subject, profile_id, active_revision, toolset_digest, state, created_at_ms, updated_at_ms FROM mcp_publications WHERE publication_id = ?")
+        sqlx::query("SELECT publication_id, tenant_id, owner_subject, profile_id, active_revision, toolset_digest, state, created_at_ms, updated_at_ms FROM mcp_publications WHERE publication_id = $1")
             .bind(publication_id)
             .fetch_optional(&self.pool)
             .await
@@ -276,7 +276,7 @@ impl Store {
         owner_subject: &str,
     ) -> Result<Vec<Publication>, StoreError> {
         self.ensure_schema().await?;
-        let rows = sqlx::query("SELECT publication_id, tenant_id, owner_subject, profile_id, active_revision, toolset_digest, state, created_at_ms, updated_at_ms FROM mcp_publications WHERE tenant_id = ? AND owner_subject = ? ORDER BY created_at_ms DESC")
+        let rows = sqlx::query("SELECT publication_id, tenant_id, owner_subject, profile_id, active_revision, toolset_digest, state, created_at_ms, updated_at_ms FROM mcp_publications WHERE tenant_id = $1 AND owner_subject = $2 ORDER BY created_at_ms DESC")
             .bind(tenant_id)
             .bind(owner_subject)
             .fetch_all(&self.pool)
@@ -290,7 +290,7 @@ impl Store {
         publication: &Publication,
     ) -> Result<PublicationRevision, StoreError> {
         self.ensure_schema().await?;
-        let row = sqlx::query("SELECT publication_id, revision, profile_revision, toolset_digest, tools_json, created_at_ms FROM mcp_publication_revisions WHERE publication_id = ? AND revision = ?")
+        let row = sqlx::query("SELECT publication_id, revision, profile_revision, toolset_digest, tools_json, created_at_ms FROM mcp_publication_revisions WHERE publication_id = $1 AND revision = $2")
             .bind(&publication.publication_id)
             .bind(publication.active_revision)
             .fetch_optional(&self.pool)
@@ -309,26 +309,29 @@ impl Store {
         now_ms: i64,
     ) -> Result<Publication, StoreError> {
         self.ensure_schema().await?;
-        let result = sqlx::query("UPDATE mcp_publications SET state = ?, updated_at_ms = ? WHERE publication_id = ? AND tenant_id = ? AND owner_subject = ? AND state <> 'revoked'")
+        let mut transaction = self.pool.begin().await.map_err(StoreError::Database)?;
+        let result = sqlx::query("UPDATE mcp_publications SET state = $1, updated_at_ms = $2 WHERE publication_id = $3 AND tenant_id = $4 AND owner_subject = $5 AND state <> 'revoked'")
             .bind(state.as_str())
             .bind(now_ms)
             .bind(publication_id)
             .bind(tenant_id)
             .bind(owner_subject)
-            .execute(&self.pool)
+            .execute(&mut *transaction)
             .await
             .map_err(StoreError::Database)?;
         if result.rows_affected() != 1 {
+            transaction.rollback().await.map_err(StoreError::Database)?;
             return Err(StoreError::Conflict);
         }
         if state == PublicationState::Revoked {
-            sqlx::query("UPDATE mcp_client_authorizations SET state = 'revoked', last_used_at_ms = ? WHERE publication_id = ? AND state = 'active'")
+            sqlx::query("UPDATE mcp_client_authorizations SET state = 'revoked', last_used_at_ms = $1 WHERE publication_id = $2 AND state = 'active'")
                 .bind(now_ms)
                 .bind(publication_id)
-                .execute(&self.pool)
+                .execute(&mut *transaction)
                 .await
                 .map_err(StoreError::Database)?;
         }
+        transaction.commit().await.map_err(StoreError::Database)?;
         self.publication(publication_id)
             .await?
             .ok_or(StoreError::Corrupt)
@@ -339,7 +342,7 @@ impl Store {
         authorization: &ClientAuthorization,
     ) -> Result<(), StoreError> {
         self.ensure_schema().await?;
-        sqlx::query("INSERT INTO mcp_client_authorizations (authorization_id, publication_id, subject, client_id, display_name, state, first_used_at_ms, last_used_at_ms) VALUES (?, ?, ?, ?, ?, ?, ?, ?) ON CONFLICT (authorization_id) DO UPDATE SET last_used_at_ms = EXCLUDED.last_used_at_ms")
+        sqlx::query("INSERT INTO mcp_client_authorizations (authorization_id, publication_id, subject, client_id, display_name, state, first_used_at_ms, last_used_at_ms) VALUES ($1, $2, $3, $4, $5, $6, $7, $8) ON CONFLICT (authorization_id) DO UPDATE SET last_used_at_ms = EXCLUDED.last_used_at_ms")
             .bind(&authorization.authorization_id)
             .bind(&authorization.publication_id)
             .bind(&authorization.subject)
@@ -359,7 +362,7 @@ impl Store {
         publication_id: &str,
     ) -> Result<Vec<ClientAuthorization>, StoreError> {
         self.ensure_schema().await?;
-        let rows = sqlx::query("SELECT authorization_id, publication_id, subject, client_id, display_name, state, first_used_at_ms, last_used_at_ms FROM mcp_client_authorizations WHERE publication_id = ? ORDER BY first_used_at_ms DESC")
+        let rows = sqlx::query("SELECT authorization_id, publication_id, subject, client_id, display_name, state, first_used_at_ms, last_used_at_ms FROM mcp_client_authorizations WHERE publication_id = $1 ORDER BY first_used_at_ms DESC")
             .bind(publication_id)
             .fetch_all(&self.pool)
             .await
@@ -375,7 +378,7 @@ impl Store {
         now_ms: i64,
     ) -> Result<(), StoreError> {
         self.ensure_schema().await?;
-        let result = sqlx::query("UPDATE mcp_client_authorizations SET state = 'revoked', last_used_at_ms = ? WHERE authorization_id = ? AND publication_id = ? AND subject = ? AND state = 'active'")
+        let result = sqlx::query("UPDATE mcp_client_authorizations SET state = 'revoked', last_used_at_ms = $1 WHERE authorization_id = $2 AND publication_id = $3 AND subject = $4 AND state = 'active'")
             .bind(now_ms)
             .bind(authorization_id)
             .bind(publication_id)
@@ -393,7 +396,7 @@ impl Store {
         if approval.state != ApprovalState::Pending {
             return Err(StoreError::Conflict);
         }
-        sqlx::query("INSERT INTO mcp_approvals (approval_id, publication_id, authorization_id, subject, client_id, tool_name, operation_ref, connection_id, input_digest, state, expires_at_ms, audit_ref, created_at_ms, updated_at_ms) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)")
+        sqlx::query("INSERT INTO mcp_approvals (approval_id, publication_id, authorization_id, subject, client_id, tool_name, operation_ref, connection_id, input_digest, state, expires_at_ms, audit_ref, created_at_ms, updated_at_ms) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14)")
             .bind(&approval.approval_id)
             .bind(&approval.publication_id)
             .bind(&approval.authorization_id)
@@ -421,14 +424,14 @@ impl Store {
         now_ms: i64,
     ) -> Result<Vec<Approval>, StoreError> {
         self.ensure_schema().await?;
-        sqlx::query("UPDATE mcp_approvals SET state = 'expired', updated_at_ms = ? WHERE publication_id = ? AND state IN ('pending', 'approved') AND expires_at_ms <= ?")
+        sqlx::query("UPDATE mcp_approvals SET state = 'expired', updated_at_ms = $1 WHERE publication_id = $2 AND state IN ('pending', 'approved') AND expires_at_ms <= $3")
             .bind(now_ms)
             .bind(publication_id)
             .bind(now_ms)
             .execute(&self.pool)
             .await
             .map_err(StoreError::Database)?;
-        let rows = sqlx::query("SELECT approval_id, publication_id, authorization_id, subject, client_id, tool_name, operation_ref, connection_id, input_digest, state, expires_at_ms, audit_ref, created_at_ms, updated_at_ms FROM mcp_approvals WHERE publication_id = ? AND subject = ? AND state = 'pending' ORDER BY created_at_ms")
+        let rows = sqlx::query("SELECT approval_id, publication_id, authorization_id, subject, client_id, tool_name, operation_ref, connection_id, input_digest, state, expires_at_ms, audit_ref, created_at_ms, updated_at_ms FROM mcp_approvals WHERE publication_id = $1 AND subject = $2 AND state = 'pending' ORDER BY created_at_ms")
             .bind(publication_id)
             .bind(subject)
             .fetch_all(&self.pool)
@@ -449,7 +452,7 @@ impl Store {
         if !matches!(decision, ApprovalState::Approved | ApprovalState::Denied) {
             return Err(StoreError::Conflict);
         }
-        let result = sqlx::query("UPDATE mcp_approvals SET state = ?, audit_ref = ?, updated_at_ms = ? WHERE approval_id = ? AND subject = ? AND state = 'pending' AND expires_at_ms > ?")
+        let result = sqlx::query("UPDATE mcp_approvals SET state = $1, audit_ref = $2, updated_at_ms = $3 WHERE approval_id = $4 AND subject = $5 AND state = 'pending' AND expires_at_ms > $6")
             .bind(decision.as_str())
             .bind(audit_ref)
             .bind(now_ms)
@@ -480,7 +483,7 @@ impl Store {
         now_ms: i64,
     ) -> Result<(), StoreError> {
         self.ensure_schema().await?;
-        let result = sqlx::query("UPDATE mcp_approvals SET state = 'consumed', updated_at_ms = ? WHERE approval_id = ? AND publication_id = ? AND authorization_id = ? AND subject = ? AND client_id = ? AND tool_name = ? AND operation_ref = ? AND connection_id = ? AND input_digest = ? AND state = 'approved' AND expires_at_ms > ?")
+        let result = sqlx::query("UPDATE mcp_approvals SET state = 'consumed', updated_at_ms = $1 WHERE approval_id = $2 AND publication_id = $3 AND authorization_id = $4 AND subject = $5 AND client_id = $6 AND tool_name = $7 AND operation_ref = $8 AND connection_id = $9 AND input_digest = $10 AND state = 'approved' AND expires_at_ms > $11")
             .bind(now_ms)
             .bind(approval_id)
             .bind(publication_id)
@@ -596,13 +599,18 @@ mod tests {
         store
     }
 
-    async fn seed(store: &Store) -> Publication {
+    async fn seed_named(
+        store: &Store,
+        publication_id: &str,
+        tenant_id: &str,
+        owner_subject: &str,
+    ) -> Publication {
         let tools = vec![tool()];
         let digest = Toolset::compile(tools.clone()).unwrap().digest().to_owned();
         let publication = Publication {
-            publication_id: "pub_opaque".to_owned(),
-            tenant_id: "tenant-1".to_owned(),
-            owner_subject: "human-1".to_owned(),
+            publication_id: publication_id.to_owned(),
+            tenant_id: tenant_id.to_owned(),
+            owner_subject: owner_subject.to_owned(),
             profile_id: "profile-1".to_owned(),
             active_revision: 1,
             toolset_digest: digest.clone(),
@@ -625,6 +633,10 @@ mod tests {
             .await
             .unwrap();
         publication
+    }
+
+    async fn seed(store: &Store) -> Publication {
+        seed_named(store, "pub_opaque", "tenant-1", "human-1").await
     }
 
     #[tokio::test]
@@ -693,6 +705,61 @@ mod tests {
                 )
                 .await
                 .is_err()
+        );
+    }
+
+    #[tokio::test]
+    async fn publication_revocation_rolls_back_when_client_revocation_fails() {
+        let store = store().await;
+        let publication = seed(&store).await;
+        store
+            .record_client_use(&ClientAuthorization {
+                authorization_id: "authorization-1".to_owned(),
+                publication_id: publication.publication_id.clone(),
+                subject: publication.owner_subject.clone(),
+                client_id: "client-1".to_owned(),
+                display_name: "CLI".to_owned(),
+                state: AuthorizationState::Active,
+                first_used_at_ms: 20,
+                last_used_at_ms: 20,
+            })
+            .await
+            .unwrap();
+        sqlx::query(
+            "CREATE TRIGGER refuse_client_revocation BEFORE UPDATE ON mcp_client_authorizations BEGIN SELECT RAISE(FAIL, 'refused'); END",
+        )
+        .execute(&store.pool)
+        .await
+        .unwrap();
+
+        assert!(
+            store
+                .set_publication_state(
+                    &publication.publication_id,
+                    &publication.tenant_id,
+                    &publication.owner_subject,
+                    PublicationState::Revoked,
+                    30,
+                )
+                .await
+                .is_err()
+        );
+        assert_eq!(
+            store
+                .publication(&publication.publication_id)
+                .await
+                .unwrap()
+                .unwrap()
+                .state,
+            PublicationState::Active
+        );
+        assert_eq!(
+            store
+                .client_authorizations(&publication.publication_id)
+                .await
+                .unwrap()[0]
+                .state,
+            AuthorizationState::Active
         );
     }
 
@@ -780,6 +847,147 @@ mod tests {
                 .await
                 .is_err(),
             "an identical concurrent retry cannot replay consumed approval"
+        );
+    }
+
+    #[tokio::test]
+    #[allow(clippy::too_many_lines)]
+    async fn postgresql_executes_the_complete_store_contract() {
+        let Ok(database_url) = std::env::var("DEV_CENTER_TEST_POSTGRES_URL") else {
+            return;
+        };
+        let store = Store::connect_lazy(&database_url).unwrap();
+        store.ready().await.unwrap();
+        let suffix = format!(
+            "{}-{}",
+            std::process::id(),
+            std::time::SystemTime::now()
+                .duration_since(std::time::UNIX_EPOCH)
+                .unwrap()
+                .as_nanos()
+        );
+        let publication_id = format!("pub_{suffix}");
+        let tenant_id = format!("tenant-{suffix}");
+        let subject = format!("human-{suffix}");
+        let publication = seed_named(&store, &publication_id, &tenant_id, &subject).await;
+
+        assert_eq!(
+            store.publication(&publication_id).await.unwrap(),
+            Some(publication.clone())
+        );
+        assert_eq!(
+            store.publications_for(&tenant_id, &subject).await.unwrap(),
+            vec![publication.clone()]
+        );
+        assert_eq!(
+            store
+                .active_revision(&publication)
+                .await
+                .unwrap()
+                .profile_revision,
+            7
+        );
+
+        let authorization_id = format!("authorization-{suffix}");
+        let second_authorization_id = format!("authorization-second-{suffix}");
+        for authorization_id in [&authorization_id, &second_authorization_id] {
+            store
+                .record_client_use(&ClientAuthorization {
+                    authorization_id: authorization_id.clone(),
+                    publication_id: publication_id.clone(),
+                    subject: subject.clone(),
+                    client_id: format!("client-{authorization_id}"),
+                    display_name: "CLI".to_owned(),
+                    state: AuthorizationState::Active,
+                    first_used_at_ms: 20,
+                    last_used_at_ms: 20,
+                })
+                .await
+                .unwrap();
+        }
+        assert_eq!(
+            store
+                .client_authorizations(&publication_id)
+                .await
+                .unwrap()
+                .len(),
+            2
+        );
+        store
+            .revoke_client(&publication_id, &second_authorization_id, &subject, 25)
+            .await
+            .unwrap();
+
+        let approval_id = format!("approval-{suffix}");
+        store
+            .create_approval(&Approval {
+                approval_id: approval_id.clone(),
+                publication_id: publication_id.clone(),
+                authorization_id: authorization_id.clone(),
+                subject: subject.clone(),
+                client_id: format!("client-{authorization_id}"),
+                tool_name: "issue_close".to_owned(),
+                operation_ref: "git/issue.close".to_owned(),
+                connection_id: "connection-1".to_owned(),
+                input_digest: "digest".to_owned(),
+                state: ApprovalState::Pending,
+                expires_at_ms: 600_000,
+                audit_ref: None,
+                created_at_ms: 10,
+                updated_at_ms: 10,
+            })
+            .await
+            .unwrap();
+        assert_eq!(
+            store
+                .pending_approvals(&publication_id, &subject, 20)
+                .await
+                .unwrap()
+                .len(),
+            1
+        );
+        store
+            .decide_approval(
+                &approval_id,
+                &subject,
+                ApprovalState::Approved,
+                Some("audit-1"),
+                21,
+            )
+            .await
+            .unwrap();
+        store
+            .consume_approval(
+                &approval_id,
+                &publication_id,
+                &authorization_id,
+                &subject,
+                &format!("client-{authorization_id}"),
+                "issue_close",
+                "git/issue.close",
+                "connection-1",
+                "digest",
+                22,
+            )
+            .await
+            .unwrap();
+        store
+            .set_publication_state(
+                &publication_id,
+                &tenant_id,
+                &subject,
+                PublicationState::Revoked,
+                30,
+            )
+            .await
+            .unwrap();
+        assert!(
+            store
+                .client_authorizations(&publication_id)
+                .await
+                .unwrap()
+                .iter()
+                .all(|authorization| authorization.state == AuthorizationState::Revoked)
         );
     }
 }

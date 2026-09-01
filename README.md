@@ -40,6 +40,7 @@ docker build \
 
 ```bash
 docker run --rm --publish 8080:8080 \
+  --env DEV_CENTER_LISTEN=0.0.0.0:8080 \
   --env DEV_CENTER_TENANT_ID=local \
   --env DEV_CENTER_PUBLIC_ORIGIN=http://127.0.0.1:8080 \
   devcenter:local
@@ -82,9 +83,9 @@ single-click flow; with several, Devcenter requires an explicit choice. It never
 account linking.
 
 The MCP publication store supports SQLite and PostgreSQL and owns only credential-free publication,
-immutable revision, client metadata, pending approval, and audit-reference records. Hosted values
-inject the PostgreSQL URL from `devcenter.database.existingSecret`; it is never rendered into a
-ConfigMap. A publication URL is `/mcp/{opaque_id}` and its exact RFC 9728 document is
+immutable revision, client metadata, pending approval, and audit-reference records. The chart
+requires hosted values to inject the PostgreSQL URL from `devcenter.database.existingSecret`; it is
+never rendered into a ConfigMap. A publication URL is `/mcp/{opaque_id}` and its exact RFC 9728 document is
 `/.well-known/oauth-protected-resource/mcp/{opaque_id}`. Revoked IDs are terminal and are never
 reused. The production MCP bearer and invocation path stays fail-closed until released Identity,
 Agent Platform, and Connectors clients expose exact-resource OAuth claims, workload exchange,

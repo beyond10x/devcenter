@@ -1,4 +1,5 @@
 import type { IncomingMessage, ServerResponse } from "node:http";
+import { Buffer } from "node:buffer";
 import type { Plugin } from "vite";
 
 interface ReviewAgent {
@@ -11,19 +12,33 @@ interface ReviewAgent {
   created_at_ms: number;
 }
 
+interface ReviewPublication {
+  publication_id: string;
+  tenant_id: string;
+  owner_subject: string;
+  profile_id: string;
+  active_revision: number;
+  toolset_digest: string;
+  state: "active" | "suspended";
+  created_at_ms: number;
+  updated_at_ms: number;
+}
+
 let connected = false;
 let nextAgent = 3;
-let publicationState: "active" | "suspended" = "active";
-const publication = {
+let nextPublication = 2;
+const initialPublication: ReviewPublication = {
   publication_id: "pub_review_7mz4v2",
   tenant_id: "review-tenant",
   owner_subject: "review-engineer",
   profile_id: "profile-release-operations",
   active_revision: 4,
   toolset_digest: "41dc0e9963dd312bb656d0907b91990a16f57e8465886407476776ca08284f57",
+  state: "active",
   created_at_ms: 1_788_260_000_000,
   updated_at_ms: 1_788_260_000_000,
 };
+const publications: ReviewPublication[] = [initialPublication];
 const agents: ReviewAgent[] = [
   {
     id: "agent-release",
@@ -57,7 +72,8 @@ async function readJson(request: IncomingMessage): Promise<Record<string, unknow
   let body = "";
   for await (const chunk of request as AsyncIterable<unknown>) {
     if (typeof chunk === "string") body += chunk;
-    else if (chunk instanceof Uint8Array) body += decoder.decode(chunk, { stream: true });
+    else if (chunk instanceof Uint8Array || Buffer.isBuffer(chunk))
+      body += decoder.decode(chunk, { stream: true });
     else throw new TypeError("unsupported request body chunk");
   }
   body += decoder.decode();
@@ -142,44 +158,85 @@ export function reviewApi(): Plugin {
             return;
           }
           if (path === "/api/mcp/publications" && method === "GET") {
-            sendJson(response, 200, [{ ...publication, state: publicationState }]);
+            sendJson(response, 200, publications);
             return;
           }
-          if (
-            path === `/api/mcp/publications/${publication.publication_id}` &&
-            method === "PATCH"
-          ) {
+          if (path === "/api/mcp/publications" && method === "POST") {
+            const submitted = await readJson(request);
+            if (typeof submitted.profile_id !== "string" || !submitted.profile_id.trim()) {
+              sendJson(response, 422, { code: "capability_profile_id_invalid" });
+              return;
+            }
+            const now = Date.now();
+            const created: ReviewPublication = {
+              ...initialPublication,
+              publication_id: `pub_review_created_${String(nextPublication++)}`,
+              profile_id: submitted.profile_id.trim(),
+              active_revision: 1,
+              state: "active",
+              created_at_ms: now,
+              updated_at_ms: now,
+            };
+            publications.unshift(created);
+            sendJson(response, 201, created);
+            return;
+          }
+          const publicationMatch = path.match(/^\/api\/mcp\/publications\/([^/]+)$/);
+          if (publicationMatch && method === "PATCH") {
+            const current = publications.find(
+              (publication) => publication.publication_id === publicationMatch[1],
+            );
+            if (!current) {
+              sendJson(response, 404, { code: "publication_not_found" });
+              return;
+            }
             const submitted = await readJson(request);
             if (submitted.state === "active" || submitted.state === "suspended") {
-              publicationState = submitted.state;
-              sendJson(response, 200, { ...publication, state: publicationState });
+              current.state = submitted.state;
+              current.updated_at_ms = Date.now();
+              sendJson(response, 200, current);
             } else {
               sendJson(response, 503, { code: "identity_publication_revocation_unavailable" });
             }
             return;
           }
-          if (
-            path === `/api/mcp/publications/${publication.publication_id}/clients` &&
-            method === "GET"
-          ) {
-            sendJson(response, 200, [
-              {
-                authorization_id: "authorization-review-codex",
-                publication_id: publication.publication_id,
-                subject: "review-engineer",
-                client_id: "codex-cli",
-                display_name: "Codex CLI",
-                state: "active",
-                first_used_at_ms: 1_788_260_000_000,
-                last_used_at_ms: 1_788_260_600_000,
-              },
-            ]);
+          const clientsMatch = path.match(/^\/api\/mcp\/publications\/([^/]+)\/clients$/);
+          if (clientsMatch && method === "GET") {
+            const current = publications.find(
+              (publication) => publication.publication_id === clientsMatch[1],
+            );
+            if (!current) {
+              sendJson(response, 404, { code: "publication_not_found" });
+              return;
+            }
+            sendJson(
+              response,
+              200,
+              current.publication_id === initialPublication.publication_id
+                ? [
+                    {
+                      authorization_id: "authorization-review-codex",
+                      publication_id: current.publication_id,
+                      subject: "review-engineer",
+                      client_id: "codex-cli",
+                      display_name: "Codex CLI",
+                      state: "active",
+                      first_used_at_ms: 1_788_260_000_000,
+                      last_used_at_ms: 1_788_260_600_000,
+                    },
+                  ]
+                : [],
+            );
             return;
           }
-          if (
-            path === `/api/mcp/publications/${publication.publication_id}/approvals` &&
-            method === "GET"
-          ) {
+          const approvalsMatch = path.match(/^\/api\/mcp\/publications\/([^/]+)\/approvals$/);
+          if (approvalsMatch && method === "GET") {
+            if (
+              !publications.some((publication) => publication.publication_id === approvalsMatch[1])
+            ) {
+              sendJson(response, 404, { code: "publication_not_found" });
+              return;
+            }
             sendJson(response, 200, []);
             return;
           }

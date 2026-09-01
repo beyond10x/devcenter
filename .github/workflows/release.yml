@@ -18,11 +18,7 @@ jobs:
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
       - name: Match every release version
-        run: |
-          cargo_version=$(sed -n 's/^version = "\([^"]*\)"/\1/p' Cargo.toml | head -1)
-          chart_version=$(sed -n 's/^version: //p' deploy/charts/devcenter/Chart.yaml)
-          test "$cargo_version" = "${GITHUB_REF_NAME}"
-          test "$chart_version" = "${GITHUB_REF_NAME}"
+        run: bash ci/check-version-consistency.sh "${GITHUB_REF_NAME}"
 
   images:
     needs: validate-version

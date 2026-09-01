@@ -120,10 +120,9 @@ spec:
             {{- end }}
           {{- end }}
           securityContext: {allowPrivilegeEscalation: false, readOnlyRootFilesystem: true, capabilities: {drop: ["ALL"]}}
-          {{- if eq $name "secrets" }}
-          readinessProbe: {httpGet: {path: /health/ready, port: http}}
-          livenessProbe: {httpGet: {path: /health/live, port: http}}
-          {{- end }}
+          readinessProbe: {{ toYaml $component.readinessProbe | nindent 12 }}
+          livenessProbe: {{ toYaml $component.livenessProbe | nindent 12 }}
+          resources: {{ toYaml $component.resources | nindent 12 }}
       {{- if or $component.configFiles $component.persistence.enabled $component.volumes (and (eq $name "connectors") $.Values.connectorsCatalogBundle.enabled) (and (eq $name "connectors") (index $.Values.components "secrets").enabled) (eq $name "secrets") }}
       volumes:
         {{- if $component.configFiles }}

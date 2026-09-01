@@ -2,6 +2,13 @@
 
 ## Unreleased
 
+- Repair PostgreSQL publication persistence, make terminal revocation atomic, and exercise the
+  complete store contract against PostgreSQL in CI.
+- Require hosted database configuration and add resource and health contracts for every composed
+  chart workload.
+- Hide publication existence until MCP authentication, accept standard OAuth callback parameters,
+  and align the browser, OpenAPI, review mode, container example, and release-version checks.
+
 ## 0.4.1 - 2026-09-01
 
 - Replace native release archives and the repeated tag gate with concurrent native-runner

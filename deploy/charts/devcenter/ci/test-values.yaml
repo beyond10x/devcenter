@@ -5,6 +5,8 @@ devcenter:
   image:
     repository: registry.example.invalid/devcenter
     digest: sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa
+  database:
+    existingSecret: example-devcenter-database
 components:
   identity:
     enabled: true
@@ -47,6 +49,21 @@ components:
       repository: registry.example.invalid/agent-platform
       digest: sha256:dddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddd
     args: [serve, --listen, 0.0.0.0:8090]
+  aep-service:
+    enabled: true
+    image:
+      repository: registry.example.invalid/aep-service
+      digest: sha256:1111111111111111111111111111111111111111111111111111111111111111
+  workflow:
+    enabled: true
+    image:
+      repository: registry.example.invalid/workflow
+      digest: sha256:2222222222222222222222222222222222222222222222222222222222222222
+  llmgw:
+    enabled: true
+    image:
+      repository: registry.example.invalid/llmgw
+      digest: sha256:3333333333333333333333333333333333333333333333333333333333333333
 secrets:
   database:
     existingSecret: example-secrets-database

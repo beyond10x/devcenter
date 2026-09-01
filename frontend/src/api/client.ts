@@ -6,48 +6,11 @@ export type ClaudeOAuthStart = components["schemas"]["ClaudeOAuthStart"];
 export type Agent = components["schemas"]["Agent"];
 export type Task = components["schemas"]["Task"];
 export type CreateAgent = components["schemas"]["CreateAgent"];
-export interface IdentityProvider {
-  id: string;
-  display_name: string;
-}
-export type PublicationState = "active" | "suspended" | "revoked";
-export interface Publication {
-  publication_id: string;
-  tenant_id: string;
-  owner_subject: string;
-  profile_id: string;
-  active_revision: number;
-  toolset_digest: string;
-  state: PublicationState;
-  created_at_ms: number;
-  updated_at_ms: number;
-}
-export interface ClientAuthorization {
-  authorization_id: string;
-  publication_id: string;
-  subject: string;
-  client_id: string;
-  display_name: string;
-  state: "active" | "revoked";
-  first_used_at_ms: number;
-  last_used_at_ms: number;
-}
-export interface Approval {
-  approval_id: string;
-  publication_id: string;
-  authorization_id: string;
-  subject: string;
-  client_id: string;
-  tool_name: string;
-  operation_ref: string;
-  connection_id: string;
-  input_digest: string;
-  state: "pending" | "approved" | "denied" | "consumed" | "expired" | "outcome_unknown";
-  expires_at_ms: number;
-  audit_ref?: string | null;
-  created_at_ms: number;
-  updated_at_ms: number;
-}
+export type IdentityProvider = components["schemas"]["IdentityProvider"];
+export type PublicationState = components["schemas"]["PublicationState"];
+export type Publication = components["schemas"]["Publication"];
+export type ClientAuthorization = components["schemas"]["ClientAuthorization"];
+export type Approval = components["schemas"]["Approval"];
 
 export class ApiError extends Error {
   constructor(
@@ -142,7 +105,7 @@ const FRIENDLY_ERRORS: Record<string, string> = {
     "Identity cannot yet revoke every authorization for this publication safely.",
   identity_client_revocation_unavailable:
     "Identity cannot yet revoke this client authorization safely.",
-  authentication_required: "Your session has expired. Sign in again.",
+  identity_authentication_required: "Your session has expired. Sign in again.",
 };
 
 export function errorMessage(error: unknown): string {
