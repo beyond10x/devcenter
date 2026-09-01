@@ -1,0 +1,44 @@
+global:
+  tenantId: tenant-example
+  publicOrigin: https://devcenter.example.invalid
+
+devcenter:
+  enabled: false
+
+secretStore:
+  vault:
+    enabled: true
+    kubernetesApiCidrs: [10.0.0.1/32]
+    tls:
+      certManager:
+        enabled: true
+    seal:
+      provider: awskms
+      awsKms:
+        region: eu-west-1
+        keyId: arn:aws:kms:eu-west-1:111111111111:key/00000000-0000-0000-0000-000000000000
+    backup:
+      enabled: true
+      bucket: devcenter-example-vault-backups
+      region: eu-west-1
+      serviceAccount:
+        annotations:
+          eks.amazonaws.com/role-arn: arn:aws:iam::111111111111:role/devcenter-example-vault-backup
+      image:
+        repository: registry.example.invalid/devcenterctl
+        digest: sha256:eeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee
+
+vault:
+  server:
+    serviceAccount:
+      annotations:
+        eks.amazonaws.com/role-arn: arn:aws:iam::111111111111:role/devcenter-example-vault
+    dataStorage:
+      storageClass: standard
+    auditStorage:
+      storageClass: standard
+    extraEnvironmentVars:
+      VAULT_CACERT: /vault/userconfig/vault-tls/ca.crt
+      VAULT_TLS_SERVER_NAME: devcenter-vault
+      VAULT_AWSKMS_SEAL_REGION: eu-west-1
+      VAULT_AWSKMS_SEAL_KEY_ID: arn:aws:kms:eu-west-1:111111111111:key/00000000-0000-0000-0000-000000000000

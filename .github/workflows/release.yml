@@ -166,6 +166,7 @@ jobs:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
           echo "$GH_TOKEN" | helm registry login ghcr.io --username "$GITHUB_ACTOR" --password-stdin
+          helm dependency build deploy/charts/devcenter
           helm package deploy/charts/devcenter --destination /tmp
           helm push "/tmp/devcenter-${GITHUB_REF_NAME}.tgz" oci://ghcr.io/beyond10x/charts
           visibility=$(gh api "/orgs/beyond10x/packages/container/charts%2Fdevcenter" --jq .visibility)

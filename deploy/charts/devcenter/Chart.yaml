@@ -2,8 +2,8 @@ apiVersion: v2
 name: devcenter
 description: Generic composition for governed agents, workflows, connectors, identity, and sandboxed execution
 type: application
-version: 0.2.8
-appVersion: "0.2.8"
+version: 0.3.0
+appVersion: "0.3.0"
 home: https://github.com/beyond10x/devcenter
 sources:
   - https://github.com/beyond10x/devcenter
@@ -12,3 +12,8 @@ keywords:
   - workflows
   - connectors
   - developer-tools
+dependencies:
+  - name: vault
+    version: 0.34.1
+    repository: https://helm.releases.hashicorp.com
+    condition: secretStore.vault.enabled

@@ -2,6 +2,15 @@
 
 ## Unreleased
 
+- Package an optional, internal-only HashiCorp Vault dependency in the public chart with retained
+  Raft and audit storage, TLS, AWS KMS auto-unseal, bounded NetworkPolicies, and encrypted scheduled
+  snapshots. The dependency remains disabled unless a deployment supplies its cloud coordinates.
+- Add Rust deployment operations for idempotent KMS/IAM/S3 provisioning, Vault initialization and
+  root-token revocation, Kubernetes-auth reconciliation, exact tenant-capability verification,
+  zeroizing logical KV migration, backup, and isolated restore drills.
+- Permit the chart to render without the Devcenter application for a disposable Vault restore
+  drill, and guard rollback and first-install ordering through explicit CLI operations.
+
 ## 0.2.8 - 2026-09-01
 
 - Reduce release-to-deployment latency by publishing the private Devcenter images for native

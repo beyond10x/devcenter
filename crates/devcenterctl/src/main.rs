@@ -1,6 +1,7 @@
 use anyhow::{Context, Result, bail};
 use clap::{Args, Parser, Subcommand};
-use devcenterctl::leak;
+use devcenterctl::vault;
+use devcenterctl::{cloud, leak};
 use std::{
     path::{Path, PathBuf},
     process::{Command, Stdio},
@@ -27,6 +28,131 @@ enum Action {
     Release(ReleaseAction),
     #[command(subcommand)]
     Bundle(BundleAction),
+    #[command(subcommand)]
+    Vault(VaultAction),
+    #[command(subcommand)]
+    Infrastructure(InfrastructureAction),
+}
+
+#[derive(Debug, Subcommand)]
+enum InfrastructureAction {
+    #[command(subcommand)]
+    Aws(AwsAction),
+}
+
+#[derive(Debug, Subcommand)]
+enum AwsAction {
+    EnsureVault(AwsEnsureVault),
+}
+
+#[derive(Debug, Args)]
+struct AwsEnsureVault {
+    #[arg(long)]
+    cluster_name: String,
+    #[arg(long)]
+    region: String,
+    #[arg(long)]
+    namespace: String,
+    #[arg(long, default_value = "devcenter")]
+    release: String,
+    #[arg(long, default_value_t = 30)]
+    retention_days: i32,
+}
+
+#[derive(Debug, Subcommand)]
+enum VaultAction {
+    Initialize(VaultInitialize),
+    Backup(VaultBackup),
+    Verify(VaultVerify),
+    MigrateKv(VaultMigrate),
+    RestoreDrill(VaultRestoreDrill),
+}
+
+#[derive(Debug, Args)]
+struct VaultInitialize {
+    #[command(flatten)]
+    target: ReleaseTarget,
+    #[arg(long)]
+    tenant_id: String,
+    #[arg(long, default_value = "connectors")]
+    mount: String,
+    #[arg(long)]
+    connectors_service_account: String,
+    #[arg(long)]
+    deployer_service_account: String,
+    #[arg(long)]
+    backup_service_account: String,
+}
+
+#[derive(Debug, Args)]
+struct VaultBackup {
+    #[arg(long)]
+    address: String,
+    #[arg(long)]
+    ca_file: PathBuf,
+    #[arg(long)]
+    role: String,
+    #[arg(long)]
+    bucket: String,
+    #[arg(long, default_value = "snapshots")]
+    prefix: String,
+    #[arg(long)]
+    region: String,
+    #[arg(
+        long,
+        default_value = "/var/run/secrets/kubernetes.io/serviceaccount/token"
+    )]
+    token_file: PathBuf,
+}
+
+#[derive(Debug, Args)]
+struct VaultVerify {
+    #[command(flatten)]
+    initialize: VaultInitialize,
+}
+
+#[derive(Debug, Args)]
+struct VaultMigrate {
+    #[arg(long)]
+    source_context: Option<String>,
+    #[arg(long)]
+    source_namespace: String,
+    #[arg(long)]
+    source_release: String,
+    #[arg(long)]
+    target_context: Option<String>,
+    #[arg(long)]
+    target_namespace: String,
+    #[arg(long, default_value = "devcenter")]
+    target_release: String,
+    #[arg(long)]
+    tenant_id: String,
+    #[arg(long, default_value = "connectors")]
+    source_mount: String,
+    #[arg(long, default_value = "connectors")]
+    target_mount: String,
+    #[arg(long)]
+    deployer_service_account: String,
+    #[arg(long)]
+    yes: bool,
+}
+
+#[derive(Debug, Args)]
+struct VaultRestoreDrill {
+    #[command(flatten)]
+    target: ReleaseTarget,
+    #[arg(long)]
+    bucket: String,
+    #[arg(long, default_value = "snapshots")]
+    prefix: String,
+    #[arg(long)]
+    region: String,
+    #[arg(long, default_value = "connectors")]
+    expected_mount: String,
+    #[arg(long)]
+    backup_service_account: String,
+    #[arg(long)]
+    yes: bool,
 }
 
 #[derive(Debug, Args)]
@@ -69,6 +195,18 @@ struct HelmTarget {
     timeout: String,
     #[arg(long)]
     create_namespace: bool,
+    #[arg(long)]
+    initialize_vault: bool,
+    #[arg(long)]
+    vault_tenant_id: Option<String>,
+    #[arg(long, default_value = "connectors")]
+    vault_mount: String,
+    #[arg(long)]
+    vault_connectors_service_account: Option<String>,
+    #[arg(long)]
+    vault_deployer_service_account: Option<String>,
+    #[arg(long)]
+    vault_backup_service_account: Option<String>,
 }
 
 #[derive(Debug, Args)]
@@ -87,6 +225,8 @@ struct Rollback {
     timeout: String,
     #[arg(long)]
     yes: bool,
+    #[arg(long)]
+    allow_secret_store_removal: bool,
 }
 
 #[derive(Debug, Args)]
@@ -121,7 +261,8 @@ struct BundleValidate {
     root: PathBuf,
 }
 
-fn main() -> Result<()> {
+#[tokio::main]
+async fn main() -> Result<()> {
     match Cli::parse().command {
         Action::LeakCheck(args) => leak_check(&args),
         Action::Render(args) => render(&args),
@@ -133,6 +274,97 @@ fn main() -> Result<()> {
         Action::Mirror(args) => mirror(&args),
         Action::Release(ReleaseAction::Verify(args)) => release_verify(&args),
         Action::Bundle(BundleAction::Validate(args)) => bundle_validate(&args),
+        Action::Vault(VaultAction::Initialize(args)) => vault::initialize(&vault::Initialize {
+            target: vault::Target {
+                context: args.target.context,
+                namespace: args.target.namespace,
+                release: args.target.release,
+            },
+            tenant_id: args.tenant_id,
+            mount: args.mount,
+            connectors_service_account: args.connectors_service_account,
+            deployer_service_account: args.deployer_service_account,
+            backup_service_account: args.backup_service_account,
+        }),
+        Action::Vault(VaultAction::Backup(args)) => {
+            vault::backup(&vault::Backup {
+                address: args.address,
+                ca_file: args.ca_file,
+                role: args.role,
+                bucket: args.bucket,
+                prefix: args.prefix,
+                region: args.region,
+                token_file: args.token_file,
+            })
+            .await
+        }
+        Action::Vault(VaultAction::Verify(args)) => vault::verify(&vault::Verify {
+            initialization: vault_initialize(args.initialize),
+        }),
+        Action::Vault(VaultAction::MigrateKv(args)) => {
+            if !args.yes {
+                bail!("vault migrate-kv requires --yes and an explicit source and target");
+            }
+            vault::migrate(&vault::Migrate {
+                source: vault::Target {
+                    context: args.source_context,
+                    namespace: args.source_namespace,
+                    release: args.source_release,
+                },
+                target: vault::Target {
+                    context: args.target_context,
+                    namespace: args.target_namespace,
+                    release: args.target_release,
+                },
+                source_mount: args.source_mount,
+                target_mount: args.target_mount,
+                tenant_id: args.tenant_id,
+                deployer_service_account: args.deployer_service_account,
+            })
+        }
+        Action::Vault(VaultAction::RestoreDrill(args)) => {
+            if !args.yes {
+                bail!("vault restore-drill requires --yes and a disposable target namespace");
+            }
+            vault::restore_drill(&vault::RestoreDrill {
+                target: vault::Target {
+                    context: args.target.context,
+                    namespace: args.target.namespace,
+                    release: args.target.release,
+                },
+                bucket: args.bucket,
+                prefix: args.prefix,
+                region: args.region,
+                expected_mount: args.expected_mount,
+                backup_service_account: args.backup_service_account,
+            })
+            .await
+        }
+        Action::Infrastructure(InfrastructureAction::Aws(AwsAction::EnsureVault(args))) => {
+            cloud::ensure_vault(&cloud::EnsureVault {
+                cluster_name: args.cluster_name,
+                region: args.region,
+                namespace: args.namespace,
+                release: args.release,
+                retention_days: args.retention_days,
+            })
+            .await
+        }
+    }
+}
+
+fn vault_initialize(args: VaultInitialize) -> vault::Initialize {
+    vault::Initialize {
+        target: vault::Target {
+            context: args.target.context,
+            namespace: args.target.namespace,
+            release: args.target.release,
+        },
+        tenant_id: args.tenant_id,
+        mount: args.mount,
+        connectors_service_account: args.connectors_service_account,
+        deployer_service_account: args.deployer_service_account,
+        backup_service_account: args.backup_service_account,
     }
 }
 
@@ -203,6 +435,55 @@ fn preflight(args: &ClusterTarget) -> Result<()> {
 
 fn apply(args: &HelmTarget) -> Result<()> {
     require_file(&args.values)?;
+    let initialization = if args.initialize_vault {
+        Some(vault::Initialize {
+            target: vault::Target {
+                context: args.target.context.clone(),
+                namespace: args.target.namespace.clone(),
+                release: args.target.release.clone(),
+            },
+            tenant_id: args
+                .vault_tenant_id
+                .clone()
+                .context("--vault-tenant-id is required with --initialize-vault")?,
+            mount: args.vault_mount.clone(),
+            connectors_service_account: args
+                .vault_connectors_service_account
+                .clone()
+                .context("--vault-connectors-service-account is required")?,
+            deployer_service_account: args
+                .vault_deployer_service_account
+                .clone()
+                .context("--vault-deployer-service-account is required")?,
+            backup_service_account: args
+                .vault_backup_service_account
+                .clone()
+                .context("--vault-backup-service-account is required")?,
+        })
+    } else {
+        None
+    };
+    if let Some(initialization) = initialization {
+        let mut bootstrap = helm_apply_command(args);
+        run_streaming(&mut bootstrap)?;
+        let mut wait = kubectl(&args.target);
+        wait.args([
+            "-n",
+            &args.target.namespace,
+            "wait",
+            "--for=jsonpath={.status.phase}=Running",
+            &format!("pod/{}-vault-0", args.target.release),
+            "--timeout=10m",
+        ]);
+        run_streaming(&mut wait)?;
+        vault::initialize(&initialization)?;
+    }
+    let mut command = helm_apply_command(args);
+    command.args(["--atomic", "--wait"]);
+    run_streaming(&mut command)
+}
+
+fn helm_apply_command(args: &HelmTarget) -> Command {
     let mut command = Command::new("helm");
     command.args([
         "upgrade",
@@ -216,21 +497,14 @@ fn apply(args: &HelmTarget) -> Result<()> {
         command.arg("--create-namespace");
     }
     command.arg("--values").arg(&args.values);
-    command.args([
-        "--atomic",
-        "--wait",
-        "--timeout",
-        &args.timeout,
-        "--history-max",
-        "10",
-    ]);
+    command.args(["--timeout", &args.timeout, "--history-max", "10"]);
     if let Some(version) = &args.version {
         command.args(["--version", version]);
     }
     if let Some(context) = &args.target.context {
         command.args(["--kube-context", context]);
     }
-    run_streaming(&mut command)
+    command
 }
 
 fn status(args: &ReleaseTarget) -> Result<()> {
@@ -271,6 +545,14 @@ fn rollback(args: &Rollback) -> Result<()> {
     if !args.yes {
         bail!("rollback requires --yes and an explicit --revision");
     }
+    if vault_enabled_at_revision(&args.target, None)?
+        && !vault_enabled_at_revision(&args.target, Some(args.revision))?
+        && !args.allow_secret_store_removal
+    {
+        bail!(
+            "rollback would remove the active secret store; pass --allow-secret-store-removal only after credential migration or recovery"
+        );
+    }
     let mut command = Command::new("helm");
     command.args([
         "rollback",
@@ -286,6 +568,31 @@ fn rollback(args: &Rollback) -> Result<()> {
         command.args(["--kube-context", context]);
     }
     run_streaming(&mut command)
+}
+
+fn vault_enabled_at_revision(target: &ReleaseTarget, revision: Option<u32>) -> Result<bool> {
+    let mut command = Command::new("helm");
+    command.args([
+        "get",
+        "values",
+        &target.release,
+        "--namespace",
+        &target.namespace,
+        "--output",
+        "json",
+    ]);
+    if let Some(revision) = revision {
+        command.args(["--revision", &revision.to_string()]);
+    }
+    if let Some(context) = &target.context {
+        command.args(["--kube-context", context]);
+    }
+    let values: serde_json::Value = serde_json::from_str(&run_capture(&mut command)?)
+        .context("Helm returned invalid release values")?;
+    Ok(values
+        .pointer("/secretStore/vault/enabled")
+        .and_then(serde_json::Value::as_bool)
+        .unwrap_or(false))
 }
 
 fn mirror(args: &Mirror) -> Result<()> {
