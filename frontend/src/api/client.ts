@@ -46,6 +46,20 @@ export interface RepositoryEntry {
   kind: "blob" | "tree";
   mode: string;
 }
+export interface EngineeringArtifact {
+  id: string;
+  locator: string;
+  entity_type: string;
+  revision: number;
+  title?: string | null;
+  status?: string | null;
+  updated_at_ms: number;
+  source_revision?: string | null;
+}
+export interface EngineeringArtifactPage {
+  artifacts: EngineeringArtifact[];
+  has_more: boolean;
+}
 export interface ProjectThread {
   id: string;
   project_id: string;
@@ -128,6 +142,10 @@ export const api = {
     request<Branch[]>(`/api/projects/${encodeURIComponent(projectId)}/branches`),
   repositoryTree: (projectId: string) =>
     request<RepositoryEntry[]>(`/api/projects/${encodeURIComponent(projectId)}/tree`),
+  engineeringArtifacts: (projectId: string) =>
+    request<EngineeringArtifactPage>(
+      `/api/projects/${encodeURIComponent(projectId)}/engineering-artifacts`,
+    ),
   selectBranch: (projectId: string, branch: string) =>
     request<Project>(`/api/projects/${encodeURIComponent(projectId)}/branch`, {
       method: "POST",
@@ -214,6 +232,7 @@ const FRIENDLY_ERRORS: Record<string, string> = {
   workspace_unavailable: "Repository projects are temporarily unavailable.",
   workspace_access_refused: "Your current GitLab grant does not admit this repository.",
   workspace_snapshot_conflict: "The branch snapshot changed. Refresh the project and try again.",
+  workspace_request_refused: "The central engineering plan query was refused.",
   identity_publication_revocation_unavailable:
     "Identity cannot yet revoke every authorization for this publication safely.",
   identity_client_revocation_unavailable:

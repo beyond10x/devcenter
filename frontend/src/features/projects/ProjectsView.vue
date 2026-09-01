@@ -21,6 +21,7 @@ import {
   api,
   errorMessage,
   type Branch,
+  type EngineeringArtifact,
   type Project,
   type ProjectMessage,
   type ProjectThread,
@@ -41,6 +42,9 @@ const repositories = ref<RepositoryCandidate[]>([]);
 const project = ref<Project>();
 const branches = ref<Branch[]>([]);
 const repositoryTree = ref<RepositoryEntry[]>([]);
+const artifacts = ref<EngineeringArtifact[]>([]);
+const artifactsHaveMore = ref(false);
+const aepError = ref("");
 const threads = ref<ProjectThread[]>([]);
 const selectedThreadId = ref<string>();
 const messages = ref<ProjectMessage[]>([]);
@@ -94,11 +98,25 @@ async function load() {
       workflows.value = loadedWorkflows;
       selectedThreadId.value = loadedThreads[0]?.id;
       if (selectedThreadId.value) await loadMessages();
+      await loadEngineeringArtifacts(loadedProject.id);
     }
   } catch (caught) {
     error.value = errorMessage(caught);
   } finally {
     loading.value = false;
+  }
+}
+
+async function loadEngineeringArtifacts(id: string) {
+  aepError.value = "";
+  try {
+    const page = await api.engineeringArtifacts(id);
+    artifacts.value = page.artifacts;
+    artifactsHaveMore.value = page.has_more;
+  } catch (caught) {
+    artifacts.value = [];
+    artifactsHaveMore.value = false;
+    aepError.value = errorMessage(caught);
   }
 }
 
@@ -461,16 +479,51 @@ function shortCommit(commit?: string | null) {
       </section>
 
       <section v-else class="project-surface aep-surface">
-        <Boxes :size="30" />
-        <div>
-          <p class="eyebrow">Central engineering plan</p>
-          <h2>AEP drafts and ESS evidence</h2>
-          <p>
-            Validated reverse-engineering runs publish immutable evidence and draft planning
-            entities here. Lifecycle promotion remains an explicit decision.
+        <header class="aep-heading">
+          <Boxes :size="30" />
+          <div>
+            <p class="eyebrow">Central engineering plan</p>
+            <h2>AEP drafts and ESS evidence</h2>
+            <p>
+              Authorized entities are read from the central AEP authority and indexed to this
+              canonical project. Lifecycle promotion remains an explicit decision.
+            </p>
+          </div>
+        </header>
+        <div v-if="aepError" class="inline-state error-state" role="alert">
+          <ShieldCheck :size="19" />
+          <div>
+            <strong>AEP projection unavailable</strong>
+            <p>{{ aepError }}</p>
+          </div>
+        </div>
+        <div v-else-if="artifacts.length" class="aep-artifact-list">
+          <article v-for="artifact in artifacts" :key="artifact.id" class="aep-artifact-card">
+            <div>
+              <span class="status-pill">{{ artifact.entity_type }}</span>
+              <h3>{{ artifact.title || artifact.locator }}</h3>
+              <p>{{ artifact.locator }}</p>
+            </div>
+            <dl>
+              <div>
+                <dt>Revision</dt>
+                <dd>{{ artifact.revision }}</dd>
+              </div>
+              <div v-if="artifact.status">
+                <dt>Status</dt>
+                <dd>{{ artifact.status }}</dd>
+              </div>
+              <div v-if="artifact.source_revision">
+                <dt>Source</dt>
+                <dd>{{ shortCommit(artifact.source_revision) }}</dd>
+              </div>
+            </dl>
+          </article>
+          <p v-if="artifactsHaveMore" class="project-note">
+            More central entities exist beyond this bounded page.
           </p>
         </div>
-        <span class="status-pill neutral">No draft evidence in this session</span>
+        <span v-else class="status-pill neutral">No central artifacts indexed to this project</span>
       </section>
     </template>
   </div>

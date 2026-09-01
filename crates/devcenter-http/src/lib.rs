@@ -184,6 +184,10 @@ fn project_routes() -> Router<AppState> {
         )
         .route("/api/projects/{project_id}/tree", get(list_project_tree))
         .route(
+            "/api/projects/{project_id}/engineering-artifacts",
+            get(list_project_engineering_artifacts),
+        )
+        .route(
             "/api/projects/{project_id}/branch",
             post(select_project_branch),
         )
@@ -562,6 +566,27 @@ async fn list_project_tree(
         .await
     {
         Ok(entries) => confidential_json(entries),
+        Err(error) => workspace_error(&error),
+    }
+}
+
+async fn list_project_engineering_artifacts(
+    State(state): State<AppState>,
+    headers: HeaderMap,
+    Path(project_id): Path<String>,
+) -> Response {
+    let authenticated = match authenticate(&state, &headers, false).await {
+        Ok(authenticated) => authenticated,
+        Err(response) => return response,
+    };
+    let Some(workspace) = state.workspace.as_ref() else {
+        return unavailable("workspace_not_configured");
+    };
+    match workspace
+        .engineering_artifacts(authenticated.authorization.as_str(), &project_id)
+        .await
+    {
+        Ok(artifacts) => confidential_json(artifacts),
         Err(error) => workspace_error(&error),
     }
 }

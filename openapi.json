@@ -581,6 +581,28 @@
         }
       }
     },
+    "/api/projects/{project_id}/engineering-artifacts": {
+      "get": {
+        "operationId": "listProjectEngineeringArtifacts",
+        "parameters": [{ "$ref": "#/components/parameters/ProjectId" }],
+        "security": [{ "browserSession": [] }, { "identityBearer": [] }],
+        "responses": {
+          "200": {
+            "description": "Bounded central AEP entities indexed to this project",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/EngineeringArtifactPage"
+                }
+              }
+            }
+          },
+          "403": { "$ref": "#/components/responses/Problem" },
+          "502": { "$ref": "#/components/responses/Problem" },
+          "503": { "$ref": "#/components/responses/Problem" }
+        }
+      }
+    },
     "/api/projects/{project_id}/branch": {
       "post": {
         "operationId": "selectProjectBranch",
@@ -1124,6 +1146,39 @@
           "path": { "type": "string" },
           "kind": { "type": "string", "enum": ["blob", "tree"] },
           "mode": { "type": "string" }
+        },
+        "additionalProperties": false
+      },
+      "EngineeringArtifact": {
+        "type": "object",
+        "required": [
+          "id",
+          "locator",
+          "entity_type",
+          "revision",
+          "updated_at_ms"
+        ],
+        "properties": {
+          "id": { "type": "string" },
+          "locator": { "type": "string" },
+          "entity_type": { "type": "string" },
+          "revision": { "type": "integer" },
+          "title": { "type": ["string", "null"] },
+          "status": { "type": ["string", "null"] },
+          "updated_at_ms": { "type": "integer" },
+          "source_revision": { "type": ["string", "null"] }
+        },
+        "additionalProperties": false
+      },
+      "EngineeringArtifactPage": {
+        "type": "object",
+        "required": ["artifacts", "has_more"],
+        "properties": {
+          "artifacts": {
+            "type": "array",
+            "items": { "$ref": "#/components/schemas/EngineeringArtifact" }
+          },
+          "has_more": { "type": "boolean" }
         },
         "additionalProperties": false
       },

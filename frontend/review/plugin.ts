@@ -104,6 +104,21 @@ const reviewTree = [
     mode: "100644",
   },
 ];
+const reviewArtifacts = {
+  artifacts: [
+    {
+      id: "artifact-review-boundary",
+      locator: "ep://foundation/devcenter/design/repository-workspace-boundary",
+      entity_type: "aep.design/v1",
+      revision: 3,
+      title: "Repository workspace boundary",
+      status: "draft",
+      updated_at_ms: 1_788_260_000_000,
+      source_revision: reviewProject.pinned_commit,
+    },
+  ],
+  has_more: false,
+};
 const reviewThreads: Array<Record<string, unknown>> = [];
 const reviewMessages = new Map<string, Array<Record<string, unknown>>>();
 const reviewWorkflows = [
@@ -246,6 +261,13 @@ export function reviewApi(): Plugin {
           }
           if (path === `/api/projects/${reviewProject.id}/tree` && method === "GET") {
             sendJson(response, 200, reviewTree);
+            return;
+          }
+          if (
+            path === `/api/projects/${reviewProject.id}/engineering-artifacts` &&
+            method === "GET"
+          ) {
+            sendJson(response, 200, reviewArtifacts);
             return;
           }
           if (path === `/api/projects/${reviewProject.id}/branch` && method === "POST") {

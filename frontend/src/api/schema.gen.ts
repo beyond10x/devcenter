@@ -357,6 +357,22 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/projects/{project_id}/engineering-artifacts": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get: operations["listProjectEngineeringArtifacts"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/projects/{project_id}/branch": {
         parameters: {
             query?: never;
@@ -666,6 +682,20 @@ export interface components {
             /** @enum {string} */
             kind: "blob" | "tree";
             mode: string;
+        };
+        EngineeringArtifact: {
+            id: string;
+            locator: string;
+            entity_type: string;
+            revision: number;
+            title?: string | null;
+            status?: string | null;
+            updated_at_ms: number;
+            source_revision?: string | null;
+        };
+        EngineeringArtifactPage: {
+            artifacts: components["schemas"]["EngineeringArtifact"][];
+            has_more: boolean;
         };
         SelectBranch: {
             branch: string;
@@ -1412,6 +1442,31 @@ export interface operations {
             };
             403: components["responses"]["Problem"];
             409: components["responses"]["Problem"];
+        };
+    };
+    listProjectEngineeringArtifacts: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                project_id: components["parameters"]["ProjectId"];
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Bounded central AEP entities indexed to this project */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["EngineeringArtifactPage"];
+                };
+            };
+            403: components["responses"]["Problem"];
+            502: components["responses"]["Problem"];
+            503: components["responses"]["Problem"];
         };
     };
     selectProjectBranch: {

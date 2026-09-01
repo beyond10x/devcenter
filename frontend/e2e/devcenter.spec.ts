@@ -118,6 +118,26 @@ async function mockAuthenticatedWorkspace(page: Page) {
       });
       return;
     }
+    if (path === `/api/projects/${project.id}/engineering-artifacts`) {
+      await route.fulfill({
+        json: {
+          artifacts: [
+            {
+              id: "artifact-project-boundary",
+              locator: "ep://foundation/devcenter/design/repository-workspace-boundary",
+              entity_type: "aep.design/v1",
+              revision: 3,
+              title: "Repository workspace boundary",
+              status: "draft",
+              updated_at_ms: 1_788_260_000_000,
+              source_revision: project.pinned_commit,
+            },
+          ],
+          has_more: false,
+        },
+      });
+      return;
+    }
     if (path === `/api/projects/${project.id}/threads`) {
       await route.fulfill({ json: [] });
       return;
@@ -206,6 +226,13 @@ test("opens a visible repository as a commit-pinned project", async ({ page }, t
   await page.getByRole("button", { name: "files" }).click();
   await expect(page.getByText("README.md", { exact: true })).toBeVisible();
   await expect(page.getByText(/separate materialization step/)).toBeVisible();
+  await page.getByRole("button", { name: "aep" }).click();
+  await expect(page.getByRole("heading", { name: "Repository workspace boundary" })).toBeVisible();
+  await expect(
+    page
+      .locator(".aep-artifact-card")
+      .getByText(project.pinned_commit.slice(0, 10), { exact: true }),
+  ).toBeVisible();
   const accessibility = await new AxeBuilder({ page }).withTags(["wcag2a", "wcag2aa"]).analyze();
   expect(accessibility.violations).toEqual([]);
 });
