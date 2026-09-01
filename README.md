@@ -1,8 +1,9 @@
 # Devcenter
 
 Devcenter is a generic control surface for governed agents, workflows, connectors, and sandboxed
-execution. This repository contains the private application source and deployment CLI, plus the
-source of the public, configuration-neutral Helm chart.
+execution. This public repository contains the application source and deployment CLI, plus the
+source of the public, configuration-neutral Helm chart. The repository remains proprietary under
+the included license; application images and binary releases remain private.
 
 The repository deliberately contains no real deployment values. A deployment supplies its tenant,
 hosts, image mirrors, Identity configuration, connector catalogue bundle, storage classes, and
