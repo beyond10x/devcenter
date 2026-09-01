@@ -65,9 +65,12 @@ spec:
           {{- if or $component.configFiles $component.persistence.enabled $component.volumeMounts (and (eq $name "connectors") $.Values.connectorsCatalogBundle.enabled) }}
           volumeMounts:
             {{- if $component.configFiles }}
+            {{- range $path, $_ := $component.configFiles }}
             - name: component-config
-              mountPath: /etc/devcenter-component
+              mountPath: {{ printf "/etc/devcenter-component/%s" $path | quote }}
+              subPath: {{ $path | quote }}
               readOnly: true
+            {{- end }}
             {{- end }}
             {{- if and (eq $name "connectors") $.Values.connectorsCatalogBundle.enabled }}
             - name: connector-catalog
