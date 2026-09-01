@@ -79,6 +79,9 @@ awk '
 
 grep -q 'name: SUBSTRATE_TLS_LISTEN' "$rendered"
 grep -q 'name: WORKSPACE_SUBSTRATE_ORIGIN' "$rendered"
+grep -q 'name: volume-permissions' "$rendered"
+grep -q 'chown 65532:65532 /var/lib/substrate /var/run/substrate' "$rendered"
+grep -q 'chmod 0700 /var/lib/substrate /var/run/substrate' "$rendered"
 
 if helm template devcenter "$chart" \
   --namespace devcenter \

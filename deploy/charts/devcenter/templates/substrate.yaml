@@ -31,6 +31,23 @@ spec:
       {{- end }}
       nodeSelector: {{ toYaml .Values.substrate.nodeSelector | nindent 8 }}
       tolerations: {{ toYaml .Values.substrate.tolerations | nindent 8 }}
+      initContainers:
+        - name: volume-permissions
+          image: {{ include "devcenter.image" .Values.substrate.volumePermissions.image | quote }}
+          imagePullPolicy: {{ .Values.substrate.volumePermissions.image.pullPolicy }}
+          command:
+            - sh
+            - -ec
+            - chown 65532:65532 /var/lib/substrate /var/run/substrate && chmod 0700 /var/lib/substrate /var/run/substrate
+          volumeMounts:
+            - {name: state, mountPath: /var/lib/substrate}
+            - {name: runtime, mountPath: /var/run/substrate}
+          securityContext:
+            runAsUser: 0
+            runAsGroup: 0
+            allowPrivilegeEscalation: false
+            readOnlyRootFilesystem: true
+            capabilities: {drop: ["ALL"], add: ["CHOWN", "FOWNER"]}
       containers:
         - name: substrate
           image: {{ include "devcenter.image" .Values.substrate.image | quote }}
@@ -61,7 +78,13 @@ spec:
           readinessProbe: {tcpSocket: {port: https}}
           livenessProbe: {tcpSocket: {port: https}}
           resources: {{ toYaml .Values.substrate.resources | nindent 12 }}
-          securityContext: {allowPrivilegeEscalation: false, capabilities: {drop: ["ALL"]}}
+          securityContext:
+            runAsNonRoot: true
+            runAsUser: 65532
+            runAsGroup: 65532
+            allowPrivilegeEscalation: false
+            readOnlyRootFilesystem: true
+            capabilities: {drop: ["ALL"]}
       volumes:
         - {name: runtime, emptyDir: {}}
         - name: tls
