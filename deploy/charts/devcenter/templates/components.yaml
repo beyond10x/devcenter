@@ -1,5 +1,6 @@
 {{- range $name, $component := .Values.components }}
 {{- if $component.enabled }}
+{{- $claimName := default (printf "%s-%s" (include "devcenter.fullname" $) $name) $component.persistence.claimName }}
 ---
 apiVersion: apps/v1
 kind: Deployment
@@ -148,7 +149,7 @@ spec:
         {{- end }}
         {{- if $component.persistence.enabled }}
         - name: component-state
-          persistentVolumeClaim: {claimName: {{ include "devcenter.fullname" $ }}-{{ $name }}}
+          persistentVolumeClaim: {claimName: {{ $claimName }}}
         {{- end }}
         {{- with $component.volumes }}
         {{- toYaml . | nindent 8 }}
@@ -174,7 +175,7 @@ data:
 apiVersion: v1
 kind: PersistentVolumeClaim
 metadata:
-  name: {{ include "devcenter.fullname" $ }}-{{ $name }}
+  name: {{ $claimName }}
   labels:
     {{- include "devcenter.labels" $ | nindent 4 }}
     app.kubernetes.io/component: {{ $name }}

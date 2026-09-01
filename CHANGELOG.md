@@ -2,6 +2,13 @@
 
 ## Unreleased
 
+## 0.3.2 - 2026-09-01
+
+- Canonicalize every chart resource name so a `devcenter` release no longer produces a second
+  `devcenter` prefix on Services, ServiceAccounts, ConfigMaps, ingress, or policies.
+- Allow a transition to retain an existing persistent-claim name and ensure an explicitly selected
+  Connectors service account is also the exact subject granted Secrets workload authority.
+
 ## 0.3.1 - 2026-09-01
 
 - Let cluster bootstrap own the exact Secrets TokenReview ClusterRoleBinding when deployment uses a
