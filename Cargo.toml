@@ -10,7 +10,7 @@ members = [
 ]
 
 [workspace.package]
-version = "0.2.0"
+version = "0.2.4"
 edition = "2024"
 rust-version = "1.97"
 license = "LicenseRef-B10x-Proprietary"
@@ -22,7 +22,7 @@ devcenter-core = { path = "crates/devcenter-core" }
 devcenter-auth = { path = "crates/devcenter-auth" }
 devcenter-docs = { path = "crates/devcenter-docs" }
 devcenter-http = { path = "crates/devcenter-http" }
-identity-client = { git = "ssh://git@github.com/beyond10x/identity.git", tag = "0.3.1" }
+identity-client = { git = "ssh://git@github.com/beyond10x/identity.git", tag = "0.3.2" }
 agent-platform-client = { git = "ssh://git@github.com/beyond10x/agent-platform.git", tag = "0.3.1" }
 connectors-client = { git = "ssh://git@github.com/beyond10x/connectors.git", tag = "v0.3.1" }
 

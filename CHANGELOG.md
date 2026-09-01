@@ -1,5 +1,10 @@
 # Changelog
 
+## 0.2.4 - 2026-09-01
+
+- Fix the upstream login callback by exchanging OAuth authorization codes as standard
+  `application/x-www-form-urlencoded` data through Identity 0.3.2.
+
 ## 0.2.0 - 2026-09-01
 
 - Add generic Identity-backed authorization-code login with S256 PKCE, one-use state, and an opaque
