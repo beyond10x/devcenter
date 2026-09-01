@@ -67,7 +67,7 @@ version = "1.1.5"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "40c48f72fd53cd289104fc64099abca73db4166ad86ea0b4341abe65af83dadc"
 dependencies = [
- "windows-sys 0.48.0",
+ "windows-sys 0.61.2",
 ]
 
 [[package]]
@@ -483,7 +483,7 @@ dependencies = [
 
 [[package]]
 name = "devcenter-app"
-version = "0.4.1"
+version = "0.4.2"
 dependencies = [
  "anyhow",
  "axum",
@@ -497,7 +497,7 @@ dependencies = [
 
 [[package]]
 name = "devcenter-auth"
-version = "0.4.1"
+version = "0.4.2"
 dependencies = [
  "identity-client",
  "tokio",
@@ -505,7 +505,7 @@ dependencies = [
 
 [[package]]
 name = "devcenter-core"
-version = "0.4.1"
+version = "0.4.2"
 dependencies = [
  "devcenter-auth",
  "serde",
@@ -513,7 +513,7 @@ dependencies = [
 
 [[package]]
 name = "devcenter-http"
-version = "0.4.1"
+version = "0.4.2"
 dependencies = [
  "agent-platform-client",
  "agent-platform-core",
@@ -542,7 +542,7 @@ dependencies = [
 
 [[package]]
 name = "devcenter-mcp"
-version = "0.4.1"
+version = "0.4.2"
 dependencies = [
  "serde",
  "serde_json",
@@ -551,7 +551,7 @@ dependencies = [
 
 [[package]]
 name = "devcenter-store"
-version = "0.4.1"
+version = "0.4.2"
 dependencies = [
  "devcenter-mcp",
  "serde",
@@ -564,7 +564,7 @@ dependencies = [
 
 [[package]]
 name = "devcenter-web-assets"
-version = "0.4.1"
+version = "0.4.2"
 dependencies = [
  "mime_guess",
  "rust-embed",
@@ -572,7 +572,7 @@ dependencies = [
 
 [[package]]
 name = "devcenterctl"
-version = "0.4.1"
+version = "0.4.2"
 dependencies = [
  "anyhow",
  "clap",
