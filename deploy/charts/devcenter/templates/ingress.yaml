@@ -21,6 +21,16 @@ spec:
     - host: {{ required "ingress.host is required" .Values.ingress.host | quote }}
       http:
         paths:
+          {{- if (index .Values.components "identity").enabled }}
+          - path: /oauth
+            pathType: Prefix
+            backend:
+              service: {name: {{ include "devcenter.fullname" . }}-identity, port: {name: http}}
+          - path: /v1/access-authority
+            pathType: Prefix
+            backend:
+              service: {name: {{ include "devcenter.fullname" . }}-identity, port: {name: http}}
+          {{- end }}
           - path: /
             pathType: Prefix
             backend:

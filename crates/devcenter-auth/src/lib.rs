@@ -13,6 +13,17 @@ pub enum Authentication {
     Unconfigured,
     /// Exact bearer matching for loopback-only local development.
     DevelopmentBearer(Arc<str>),
+    /// Exact-audience session resolution through the Identity-owned client.
+    Identity(identity_client::IdentityClient),
+}
+
+/// Credential-free principal facts resolved by the configured authority.
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub struct Principal {
+    pub tenant_id: String,
+    pub subject: String,
+    pub email: Option<String>,
+    pub groups: Vec<String>,
 }
 
 impl Authentication {
@@ -26,8 +37,18 @@ impl Authentication {
         }
     }
 
+    /// Construct the production verifier for one exact Identity audience.
+    pub fn identity(origin: &str, audience: &str) -> Result<Self, ConfigurationError> {
+        identity_client::IdentityClient::new(origin, audience)
+            .map(Self::Identity)
+            .map_err(|_| ConfigurationError)
+    }
+
     /// Verify a borrowed Authorization header without exposing credential bytes in results.
-    pub fn verify(&self, authorization: Option<&str>) -> Result<(), AuthenticationError> {
+    pub async fn verify(
+        &self,
+        authorization: Option<&str>,
+    ) -> Result<Principal, AuthenticationError> {
         match self {
             Self::Unconfigured => Err(AuthenticationError::Unavailable),
             Self::DevelopmentBearer(expected) => {
@@ -35,10 +56,43 @@ impl Authentication {
                     .and_then(|value| value.strip_prefix("Bearer "))
                     .ok_or(AuthenticationError::Invalid)?;
                 if supplied == expected.as_ref() {
-                    Ok(())
+                    Ok(Principal {
+                        tenant_id: "local".to_owned(),
+                        subject: "human:developer".to_owned(),
+                        email: None,
+                        groups: vec!["member".to_owned()],
+                    })
                 } else {
                     Err(AuthenticationError::Invalid)
                 }
+            }
+            Self::Identity(client) => {
+                let authorization = authorization.ok_or(AuthenticationError::Invalid)?;
+                client
+                    .resolve_session(authorization)
+                    .await
+                    .map(|authority| Principal {
+                        tenant_id: authority.tenant_id,
+                        subject: authority.subject,
+                        email: authority.email,
+                        groups: authority.groups,
+                    })
+                    .map_err(|error| match error {
+                        identity_client::ClientError::Transport(_) => {
+                            AuthenticationError::Unavailable
+                        }
+                        _ => AuthenticationError::Invalid,
+                    })
+            }
+        }
+    }
+
+    /// Return the configured Identity client for browser login and exact-audience exchanges.
+    pub fn identity_client(&self) -> Result<&identity_client::IdentityClient, AuthenticationError> {
+        match self {
+            Self::Identity(client) => Ok(client),
+            Self::Unconfigured | Self::DevelopmentBearer(_) => {
+                Err(AuthenticationError::Unavailable)
             }
         }
     }
@@ -49,6 +103,7 @@ impl fmt::Debug for Authentication {
         match self {
             Self::Unconfigured => formatter.write_str("Unconfigured"),
             Self::DevelopmentBearer(_) => formatter.write_str("DevelopmentBearer([REDACTED])"),
+            Self::Identity(client) => formatter.debug_tuple("Identity").field(client).finish(),
         }
     }
 }
@@ -68,7 +123,7 @@ pub struct ConfigurationError;
 
 impl fmt::Display for ConfigurationError {
     fn fmt(&self, formatter: &mut fmt::Formatter<'_>) -> fmt::Result {
-        formatter.write_str("development bearer token must be non-empty")
+        formatter.write_str("authentication configuration is invalid")
     }
 }
 
@@ -78,19 +133,25 @@ impl std::error::Error for ConfigurationError {}
 mod tests {
     use super::*;
 
-    #[test]
-    fn unconfigured_and_incorrect_credentials_fail_closed() {
+    #[tokio::test]
+    async fn unconfigured_and_incorrect_credentials_fail_closed() {
         assert_eq!(
-            Authentication::Unconfigured.verify(Some("Bearer anything")),
+            Authentication::Unconfigured
+                .verify(Some("Bearer anything"))
+                .await,
             Err(AuthenticationError::Unavailable)
         );
         let verifier = Authentication::development_bearer("expected").expect("token");
-        assert_eq!(verifier.verify(None), Err(AuthenticationError::Invalid));
         assert_eq!(
-            verifier.verify(Some("Bearer incorrect")),
+            verifier.verify(None).await,
             Err(AuthenticationError::Invalid)
         );
-        assert_eq!(verifier.verify(Some("Bearer expected")), Ok(()));
+        assert_eq!(
+            verifier.verify(Some("Bearer incorrect")).await,
+            Err(AuthenticationError::Invalid)
+        );
+        let principal = verifier.verify(Some("Bearer expected")).await.unwrap();
+        assert_eq!(principal.tenant_id, "local");
         assert!(!format!("{verifier:?}").contains("expected"));
     }
 }

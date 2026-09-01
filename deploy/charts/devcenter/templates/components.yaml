@@ -9,7 +9,7 @@ metadata:
     {{- include "devcenter.labels" $ | nindent 4 }}
     app.kubernetes.io/component: {{ $name }}
 spec:
-  replicas: 1
+  replicas: {{ default 1 $component.replicas }}
   strategy: {type: Recreate}
   selector:
     matchLabels:
@@ -21,6 +21,11 @@ spec:
         {{- include "devcenter.labels" $ | nindent 8 }}
         app.kubernetes.io/component: {{ $name }}
     spec:
+      {{- if $component.serviceAccountName }}
+      serviceAccountName: {{ $component.serviceAccountName }}
+      {{- else if eq $name "connectors" }}
+      serviceAccountName: {{ include "devcenter.fullname" $ }}-connectors
+      {{- end }}
       {{- with $.Values.global.imagePullSecrets }}
       imagePullSecrets:
         {{- range . }}
@@ -40,17 +45,91 @@ spec:
         - name: {{ $name }}
           image: {{ include "devcenter.image" $component.image | quote }}
           imagePullPolicy: {{ $component.image.pullPolicy }}
+          {{- with $component.args }}
+          args: {{ toYaml . | nindent 12 }}
+          {{- end }}
           ports: [{name: http, containerPort: {{ $component.port }}, protocol: TCP}]
+          {{- with $component.env }}
+          env:
+            {{- range $key, $value := . }}
+            - name: {{ $key }}
+              value: {{ $value | quote }}
+            {{- end }}
+          {{- end }}
           {{- with $component.envFrom }}
           envFrom: {{ toYaml . | nindent 12 }}
           {{- end }}
-          {{- if and (eq $name "connectors") $.Values.connectorsCatalogBundle.enabled }}
-          volumeMounts: [{name: connector-catalog, mountPath: {{ $.Values.connectorsCatalogBundle.mountPath }}, readOnly: true}]
+          {{- if or $component.configFiles $component.persistence.enabled $component.volumeMounts (and (eq $name "connectors") $.Values.connectorsCatalogBundle.enabled) }}
+          volumeMounts:
+            {{- if $component.configFiles }}
+            - name: component-config
+              mountPath: /etc/devcenter-component
+              readOnly: true
+            {{- end }}
+            {{- if and (eq $name "connectors") $.Values.connectorsCatalogBundle.enabled }}
+            - name: connector-catalog
+              mountPath: {{ $.Values.connectorsCatalogBundle.mountPath }}
+              readOnly: true
+            {{- end }}
+            {{- if $component.persistence.enabled }}
+            - name: component-state
+              mountPath: {{ $component.persistence.mountPath }}
+            {{- end }}
+            {{- with $component.volumeMounts }}
+            {{- toYaml . | nindent 12 }}
+            {{- end }}
           {{- end }}
           securityContext: {allowPrivilegeEscalation: false, readOnlyRootFilesystem: true, capabilities: {drop: ["ALL"]}}
-      {{- if and (eq $name "connectors") $.Values.connectorsCatalogBundle.enabled }}
-      volumes: [{name: connector-catalog, emptyDir: {}}]
+      {{- if or $component.configFiles $component.persistence.enabled $component.volumes (and (eq $name "connectors") $.Values.connectorsCatalogBundle.enabled) }}
+      volumes:
+        {{- if $component.configFiles }}
+        - name: component-config
+          configMap: {name: {{ include "devcenter.fullname" $ }}-{{ $name }}-config}
+        {{- end }}
+        {{- if and (eq $name "connectors") $.Values.connectorsCatalogBundle.enabled }}
+        - name: connector-catalog
+          emptyDir: {}
+        {{- end }}
+        {{- if $component.persistence.enabled }}
+        - name: component-state
+          persistentVolumeClaim: {claimName: {{ include "devcenter.fullname" $ }}-{{ $name }}}
+        {{- end }}
+        {{- with $component.volumes }}
+        {{- toYaml . | nindent 8 }}
+        {{- end }}
       {{- end }}
+{{- if $component.configFiles }}
+---
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: {{ include "devcenter.fullname" $ }}-{{ $name }}-config
+  labels:
+    {{- include "devcenter.labels" $ | nindent 4 }}
+    app.kubernetes.io/component: {{ $name }}
+data:
+  {{- range $path, $content := $component.configFiles }}
+  {{ $path }}: |
+{{ $content | nindent 4 }}
+  {{- end }}
+{{- end }}
+{{- if $component.persistence.enabled }}
+---
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: {{ include "devcenter.fullname" $ }}-{{ $name }}
+  labels:
+    {{- include "devcenter.labels" $ | nindent 4 }}
+    app.kubernetes.io/component: {{ $name }}
+spec:
+  accessModes: [ReadWriteOnce]
+  {{- with $component.persistence.storageClass }}
+  storageClassName: {{ . }}
+  {{- end }}
+  resources:
+    requests: {storage: {{ $component.persistence.size }}}
+{{- end }}
 ---
 apiVersion: v1
 kind: Service

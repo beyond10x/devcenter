@@ -11,3 +11,15 @@ data:
   DEV_CENTER_PUBLIC_ORIGIN: {{ .Values.global.publicOrigin | quote }}
   DEV_CENTER_LISTEN: "0.0.0.0:8080"
   DEV_CENTER_INSECURE_DEV_AUTH: "false"
+  DEV_CENTER_IDENTITY_AUDIENCE: {{ .Values.devcenter.identity.audience | quote }}
+  DEV_CENTER_IDENTITY_WEB_CLIENT_ID: {{ .Values.devcenter.identity.webClientId | quote }}
+  DEV_CENTER_IDENTITY_REDIRECT_URI: {{ default (printf "%s/auth/sso/callback" (trimSuffix "/" .Values.global.publicOrigin)) .Values.devcenter.identity.redirectUri | quote }}
+  {{- if (index .Values.components "identity").enabled }}
+  DEV_CENTER_IDENTITY_ORIGIN: {{ printf "http://%s-identity.%s.svc.cluster.local:%v" (include "devcenter.fullname" .) .Release.Namespace (index .Values.components "identity").port | quote }}
+  {{- end }}
+  {{- if (index .Values.components "agent-platform").enabled }}
+  DEV_CENTER_AGENT_PLATFORM_ORIGIN: {{ printf "http://%s-agent-platform.%s.svc.cluster.local:%v" (include "devcenter.fullname" .) .Release.Namespace (index .Values.components "agent-platform").port | quote }}
+  {{- end }}
+  {{- if (index .Values.components "connectors").enabled }}
+  DEV_CENTER_CONNECTORS_API_BASE: {{ printf "http://%s-connectors.%s.svc.cluster.local:%v/api/connectors/v1" (include "devcenter.fullname" .) .Release.Namespace (index .Values.components "connectors").port | quote }}
+  {{- end }}

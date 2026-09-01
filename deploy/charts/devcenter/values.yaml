@@ -12,6 +12,11 @@ devcenter:
     pullPolicy: IfNotPresent
   service:
     port: 8080
+  envFrom: []
+  identity:
+    audience: urn:b10x:devcenter
+    webClientId: devcenter-web
+    redirectUri: ""
   resources:
     requests:
       cpu: 100m
@@ -37,32 +42,80 @@ components:
     enabled: false
     image: {repository: "", digest: "", pullPolicy: IfNotPresent}
     port: 8080
+    replicas: 1
+    serviceAccountName: ""
+    args: []
+    env: {}
     envFrom: []
+    configFiles: {}
+    volumeMounts: []
+    volumes: []
+    persistence: {enabled: false, storageClass: "", size: 1Gi, mountPath: /var/lib/identity}
   connectors:
     enabled: false
     image: {repository: "", digest: "", pullPolicy: IfNotPresent}
-    port: 8090
+    port: 8080
+    replicas: 1
+    serviceAccountName: ""
+    args: []
+    env: {}
     envFrom: []
+    configFiles: {}
+    volumeMounts: []
+    volumes: []
+    persistence: {enabled: false, storageClass: "", size: 1Gi, mountPath: /var/lib/connectors}
   aep-service:
     enabled: false
     image: {repository: "", digest: "", pullPolicy: IfNotPresent}
     port: 8080
+    replicas: 1
+    serviceAccountName: ""
+    args: []
+    env: {}
     envFrom: []
+    configFiles: {}
+    volumeMounts: []
+    volumes: []
+    persistence: {enabled: false, storageClass: "", size: 1Gi, mountPath: /var/lib/aep-service}
   agent-platform:
     enabled: false
     image: {repository: "", digest: "", pullPolicy: IfNotPresent}
-    port: 8080
+    port: 8090
+    replicas: 1
+    serviceAccountName: ""
+    args: []
+    env: {}
     envFrom: []
+    configFiles: {}
+    volumeMounts: []
+    volumes: []
+    persistence: {enabled: false, storageClass: "", size: 1Gi, mountPath: /var/lib/agent-platform}
   workflow:
     enabled: false
     image: {repository: "", digest: "", pullPolicy: IfNotPresent}
     port: 8080
+    replicas: 1
+    serviceAccountName: ""
+    args: []
+    env: {}
     envFrom: []
+    configFiles: {}
+    volumeMounts: []
+    volumes: []
+    persistence: {enabled: false, storageClass: "", size: 1Gi, mountPath: /var/lib/workflow}
   llmgw:
     enabled: false
     image: {repository: "", digest: "", pullPolicy: IfNotPresent}
     port: 8080
+    replicas: 1
+    serviceAccountName: ""
+    args: []
+    env: {}
     envFrom: []
+    configFiles: {}
+    volumeMounts: []
+    volumes: []
+    persistence: {enabled: false, storageClass: "", size: 1Gi, mountPath: /var/lib/llmgw}
 
 connectorsCatalogBundle:
   enabled: false
@@ -97,6 +150,9 @@ networkPolicy:
   # Connectors and model providers normally use external HTTPS APIs. Restrict this at the
   # infrastructure layer when the cluster exposes stable destination CIDRs or an egress proxy.
   allowExternalHttps: true
+  # Deployment-owned destinations such as a private OIDC issuer or an existing Vault service.
+  # Each entry is one ordinary NetworkPolicy egress rule.
+  extraEgress: []
 
 serviceMonitor:
   enabled: false

@@ -1,5 +1,17 @@
 # Changelog
 
+## 0.2.0 - 2026-09-01
+
+- Add generic Identity-backed authorization-code login with S256 PKCE, one-use state, and an opaque
+  secure browser session.
+- Add an explicit BFF allowlist for session facts, Claude Code connector custody, Agent Platform
+  agent management, Task submission and Task event streaming.
+- Add the first authenticated engineer dashboard and expanded embedded OpenAPI/documentation.
+- Extend the public Helm chart to compose digest-pinned Identity, Connectors and Agent Platform
+  services behind internal ingress with deployment-owned configuration and persistent state.
+- Keep application source and images private while retaining the configuration-neutral chart as
+  the only public release artifact.
+
 ## 0.1.1 - 2026-09-01
 
 - Require namespace creation to be explicitly requested by `devcenterctl apply`, allowing a

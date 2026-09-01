@@ -19,6 +19,27 @@ struct Args {
     public_origin: String,
     #[arg(long, env = "DEV_CENTER_INSECURE_DEV_AUTH", default_value_t = false)]
     insecure_dev_auth: bool,
+    /// Identity service origin used for production session resolution.
+    #[arg(long, env = "DEV_CENTER_IDENTITY_ORIGIN")]
+    identity_origin: Option<String>,
+    #[arg(
+        long,
+        env = "DEV_CENTER_IDENTITY_AUDIENCE",
+        default_value = "urn:b10x:devcenter"
+    )]
+    identity_audience: String,
+    /// Identity-registered public browser client ID.
+    #[arg(long, env = "DEV_CENTER_IDENTITY_WEB_CLIENT_ID")]
+    identity_web_client_id: Option<String>,
+    /// Exact Identity-registered browser callback URI.
+    #[arg(long, env = "DEV_CENTER_IDENTITY_REDIRECT_URI")]
+    identity_redirect_uri: Option<String>,
+    /// Internal Agent Platform origin.
+    #[arg(long, env = "DEV_CENTER_AGENT_PLATFORM_ORIGIN")]
+    agent_platform_origin: Option<String>,
+    /// Internal hosted Connectors API base.
+    #[arg(long, env = "DEV_CENTER_CONNECTORS_API_BASE")]
+    connectors_api_base: Option<String>,
     /// Environment variable containing the exact loopback-only development bearer token.
     #[arg(long, default_value = "DEV_CENTER_DEV_BEARER_TOKEN")]
     dev_token_env: String,
@@ -33,11 +54,18 @@ async fn main() -> Result<()> {
     if args.insecure_dev_auth && !is_loopback(args.listen.ip()) {
         bail!("development authentication is allowed only on a loopback listener");
     }
+    if args.identity_web_client_id.is_some() != args.identity_redirect_uri.is_some() {
+        bail!(
+            "DEV_CENTER_IDENTITY_WEB_CLIENT_ID and DEV_CENTER_IDENTITY_REDIRECT_URI must be configured together"
+        );
+    }
     let authentication = if args.insecure_dev_auth {
         let token = env::var(&args.dev_token_env).with_context(|| {
             format!("{} must contain the development token", args.dev_token_env)
         })?;
         Authentication::development_bearer(token)?
+    } else if let Some(origin) = args.identity_origin.as_deref() {
+        Authentication::identity(origin, &args.identity_audience)?
     } else {
         Authentication::Unconfigured
     };
@@ -50,7 +78,11 @@ async fn main() -> Result<()> {
             tenant_id: args.tenant_id,
             public_origin: args.public_origin,
             authentication,
-        }),
+            identity_web_client_id: args.identity_web_client_id,
+            identity_redirect_uri: args.identity_redirect_uri,
+            agent_platform_origin: args.agent_platform_origin,
+            connectors_api_base: args.connectors_api_base,
+        })?,
     )
     .with_graceful_shutdown(shutdown())
     .await

@@ -1,12 +1,54 @@
 {
   "openapi": "3.1.0",
-  "info": {"title": "Devcenter API", "version": "0.1.0"},
+  "info": {
+    "title": "Devcenter API",
+    "version": "0.2.0",
+    "description": "Authenticated browser/BFF surface for identity, connector custody, agents, and tasks."
+  },
   "paths": {
+    "/auth/sso/start": {"get": {"operationId": "startBrowserLogin", "responses": {"307": {"description": "Redirect to the configured identity provider"}, "503": {"$ref": "#/components/responses/Unavailable"}}}},
+    "/auth/sso/callback": {"get": {"operationId": "finishBrowserLogin", "parameters": [{"name": "code", "in": "query", "schema": {"type": "string"}}, {"name": "state", "in": "query", "schema": {"type": "string"}}], "responses": {"303": {"description": "Opaque browser session established"}, "400": {"$ref": "#/components/responses/Problem"}, "401": {"$ref": "#/components/responses/Problem"}}}},
+    "/api/session": {"get": {"operationId": "getSession", "security": [{"browserSession": []}, {"identityBearer": []}], "responses": {"200": {"description": "Current principal", "content": {"application/json": {"schema": {"$ref": "#/components/schemas/Session"}}}}, "401": {"$ref": "#/components/responses/Problem"}}}},
+    "/api/connectors/claude-code": {
+      "get": {"operationId": "getClaudeCodeConnection", "security": [{"browserSession": []}, {"identityBearer": []}], "responses": {"200": {"description": "Connection status", "content": {"application/json": {"schema": {"$ref": "#/components/schemas/ConnectionStatus"}}}}, "401": {"$ref": "#/components/responses/Problem"}}},
+      "put": {"operationId": "connectClaudeCode", "security": [{"browserSession": []}, {"identityBearer": []}], "requestBody": {"required": true, "content": {"application/json": {"schema": {"$ref": "#/components/schemas/ConnectClaudeCode"}}}}, "responses": {"200": {"description": "Credential accepted into connector custody", "content": {"application/json": {"schema": {"$ref": "#/components/schemas/ConnectionStatus"}}}}, "401": {"$ref": "#/components/responses/Problem"}, "403": {"$ref": "#/components/responses/Problem"}}},
+      "delete": {"operationId": "disconnectClaudeCode", "security": [{"browserSession": []}, {"identityBearer": []}], "responses": {"200": {"description": "Connection removed"}, "401": {"$ref": "#/components/responses/Problem"}, "403": {"$ref": "#/components/responses/Problem"}}}
+    },
+    "/api/agents": {
+      "get": {"operationId": "listAgents", "security": [{"browserSession": []}, {"identityBearer": []}], "responses": {"200": {"description": "Tenant-scoped agents", "content": {"application/json": {"schema": {"type": "array", "items": {"$ref": "#/components/schemas/Agent"}}}}}, "401": {"$ref": "#/components/responses/Problem"}}},
+      "post": {"operationId": "createManagedAgent", "security": [{"browserSession": []}, {"identityBearer": []}], "requestBody": {"required": true, "content": {"application/json": {"schema": {"$ref": "#/components/schemas/CreateAgent"}}}}, "responses": {"201": {"description": "Agent created with an active first revision", "content": {"application/json": {"schema": {"$ref": "#/components/schemas/Agent"}}}}, "401": {"$ref": "#/components/responses/Problem"}, "403": {"$ref": "#/components/responses/Problem"}}}
+    },
+    "/api/agents/{agent_id}/tasks": {"post": {"operationId": "submitAgentTask", "security": [{"browserSession": []}, {"identityBearer": []}], "parameters": [{"$ref": "#/components/parameters/AgentId"}], "requestBody": {"required": true, "content": {"application/json": {"schema": {"$ref": "#/components/schemas/SubmitTask"}}}}, "responses": {"202": {"description": "Task accepted", "content": {"application/json": {"schema": {"$ref": "#/components/schemas/Task"}}}}, "401": {"$ref": "#/components/responses/Problem"}, "403": {"$ref": "#/components/responses/Problem"}}}},
+    "/api/tasks/{task_id}": {"get": {"operationId": "getTask", "security": [{"browserSession": []}, {"identityBearer": []}], "parameters": [{"$ref": "#/components/parameters/TaskId"}], "responses": {"200": {"description": "Task state", "content": {"application/json": {"schema": {"$ref": "#/components/schemas/Task"}}}}, "401": {"$ref": "#/components/responses/Problem"}}}},
+    "/api/tasks/{task_id}/events": {"get": {"operationId": "streamTaskEvents", "security": [{"browserSession": []}, {"identityBearer": []}], "parameters": [{"$ref": "#/components/parameters/TaskId"}], "responses": {"200": {"description": "Ordered, attempt-bound task event stream", "content": {"text/event-stream": {"schema": {"type": "string"}}}}, "401": {"$ref": "#/components/responses/Problem"}}}},
     "/healthz": {"get": {"operationId": "health", "responses": {"200": {"description": "Process is alive"}}}},
-    "/readyz": {"get": {"operationId": "readiness", "responses": {"200": {"description": "Configuration is ready"}}}},
+    "/readyz": {"get": {"operationId": "readiness", "responses": {"200": {"description": "Required service clients are configured"}, "503": {"description": "Configuration is incomplete"}}}},
     "/metrics": {"get": {"operationId": "metrics", "responses": {"200": {"description": "Prometheus metrics"}}}},
     "/openapi.json": {"get": {"operationId": "openapi", "responses": {"200": {"description": "This document"}}}},
-    "/mcp": {"post": {"operationId": "mcp", "security": [{"identityBearer": []}], "responses": {"200": {"description": "MCP JSON-RPC response"}, "401": {"description": "Authentication required"}, "503": {"description": "Identity verifier is not configured"}}}}
+    "/mcp": {"post": {"operationId": "mcp", "security": [{"browserSession": []}, {"identityBearer": []}], "responses": {"200": {"description": "MCP JSON-RPC response"}, "401": {"$ref": "#/components/responses/Problem"}}}}
   },
-  "components": {"securitySchemes": {"identityBearer": {"type": "http", "scheme": "bearer"}}}
+  "components": {
+    "securitySchemes": {
+      "browserSession": {"type": "apiKey", "in": "cookie", "name": "__Host-devcenter_session"},
+      "identityBearer": {"type": "http", "scheme": "bearer"}
+    },
+    "parameters": {
+      "AgentId": {"name": "agent_id", "in": "path", "required": true, "schema": {"type": "string"}},
+      "TaskId": {"name": "task_id", "in": "path", "required": true, "schema": {"type": "string"}}
+    },
+    "responses": {
+      "Problem": {"description": "Request refused", "content": {"application/json": {"schema": {"$ref": "#/components/schemas/Problem"}}}},
+      "Unavailable": {"description": "A required inner service is unavailable", "content": {"application/json": {"schema": {"$ref": "#/components/schemas/Problem"}}}}
+    },
+    "schemas": {
+      "Problem": {"type": "object", "required": ["code"], "properties": {"code": {"type": "string"}}, "additionalProperties": false},
+      "Session": {"type": "object", "required": ["tenant_id", "subject", "groups"], "properties": {"tenant_id": {"type": "string"}, "subject": {"type": "string"}, "email": {"type": ["string", "null"]}, "groups": {"type": "array", "items": {"type": "string"}}}, "additionalProperties": false},
+      "ConnectionStatus": {"type": "object", "required": ["provider", "connected"], "properties": {"provider": {"const": "claude-code"}, "connected": {"type": "boolean"}}, "additionalProperties": false},
+      "ConnectClaudeCode": {"type": "object", "required": ["credential"], "properties": {"credential": {"type": "string", "format": "password", "writeOnly": true, "maxLength": 65536}}, "additionalProperties": false},
+      "CreateAgent": {"type": "object", "required": ["name", "instructions", "model"], "properties": {"name": {"type": "string"}, "instructions": {"type": "string"}, "model": {"type": "string"}}, "additionalProperties": false},
+      "Agent": {"type": "object", "required": ["id", "tenant_id", "name", "latest_revision", "created_by", "created_at_ms"], "properties": {"id": {"type": "string"}, "tenant_id": {"type": "string"}, "name": {"type": "string"}, "active_revision": {"type": ["integer", "null"]}, "latest_revision": {"type": "integer"}, "created_by": {"type": "string"}, "created_at_ms": {"type": "integer"}}},
+      "SubmitTask": {"type": "object", "required": ["prompt", "idempotency_key"], "properties": {"prompt": {"type": "string"}, "idempotency_key": {"type": "string"}}, "additionalProperties": false},
+      "Task": {"type": "object", "required": ["id", "agent_id", "status", "attempt_id"], "properties": {"id": {"type": "string"}, "agent_id": {"type": "string"}, "status": {"type": "string"}, "attempt_id": {"type": "string"}, "output": {"type": ["string", "null"]}}}
+    }
+  }
 }

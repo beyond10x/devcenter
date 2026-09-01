@@ -23,12 +23,13 @@
     "networkPolicy": {
       "type": "object",
       "additionalProperties": false,
-      "required": ["enabled", "ingressNamespaceSelector", "ingressPodSelector", "allowExternalHttps"],
+      "required": ["enabled", "ingressNamespaceSelector", "ingressPodSelector", "allowExternalHttps", "extraEgress"],
       "properties": {
         "enabled": {"type": "boolean"},
         "ingressNamespaceSelector": {"type": "object"},
         "ingressPodSelector": {"type": "object"},
-        "allowExternalHttps": {"type": "boolean"}
+        "allowExternalHttps": {"type": "boolean"},
+        "extraEgress": {"type": "array", "items": {"type": "object"}}
       }
     },
     "serviceMonitor": {"type": "object"}

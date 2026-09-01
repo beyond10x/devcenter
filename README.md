@@ -23,6 +23,23 @@ Protected routes fail closed until an Identity verifier is configured. For loopb
 development, also set `DEV_CENTER_INSECURE_DEV_AUTH=true` and a non-empty
 `DEV_CENTER_DEV_BEARER_TOKEN`.
 
+In a production posture, set the Identity origin and exact web callback, plus the private inner
+service origins:
+
+```console
+DEV_CENTER_IDENTITY_ORIGIN=https://identity.example.test \
+DEV_CENTER_IDENTITY_AUDIENCE=urn:b10x:devcenter \
+DEV_CENTER_IDENTITY_WEB_CLIENT_ID=devcenter-web \
+DEV_CENTER_IDENTITY_REDIRECT_URI=https://devcenter.example.test/auth/sso/callback \
+DEV_CENTER_AGENT_PLATFORM_ORIGIN=https://agents.example.test \
+DEV_CENTER_CONNECTORS_API_BASE=https://connectors.example.test/api/connectors/v1 \
+cargo run --locked -p devcenter-app
+```
+
+The browser receives only an opaque, Secure, HttpOnly session cookie. Subscription credentials are
+forwarded once into Connectors custody; Agent Platform receives an attempt-bound lease and Harness
+redeems it only at the provider request boundary.
+
 ## Deployment CLI
 
 `devcenterctl` verifies and renders a pinned OCI chart, checks a cluster, performs atomic Helm

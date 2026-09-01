@@ -5,12 +5,57 @@
   <meta name="viewport" content="width=device-width,initial-scale=1">
   <title>Devcenter</title>
   <style>
-    :root{font-family:Inter,ui-sans-serif,system-ui;color:#18202b;background:#f4f0e8}body{margin:0}main{max-width:68rem;margin:auto;padding:5rem 2rem}.eyebrow{letter-spacing:.12em;text-transform:uppercase;color:#44625a;font-weight:700}.hero{font-size:clamp(3rem,8vw,7rem);line-height:.9;margin:1rem 0;max-width:10ch}.lede{font-size:1.25rem;max-width:44rem;line-height:1.6}.actions{display:flex;gap:1rem;margin-top:2rem;flex-wrap:wrap}a{padding:.9rem 1.2rem;border:1px solid #18202b;color:inherit;text-decoration:none;border-radius:999px}a.primary{background:#18202b;color:#fff}.grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(15rem,1fr));gap:1rem;margin-top:5rem}.card{background:#fff9;border:1px solid #18202b22;border-radius:1rem;padding:1.4rem}.card h2{margin-top:0}</style>
+    :root{font-family:Inter,ui-sans-serif,system-ui;color:#17212b;background:#f2efe8;line-height:1.5}*{box-sizing:border-box}body{margin:0}button,input,textarea,select{font:inherit}button{cursor:pointer}.shell{max-width:76rem;margin:auto;padding:2rem}.top{display:flex;justify-content:space-between;align-items:center;gap:1rem}.mark{font-weight:800;letter-spacing:-.03em;font-size:1.4rem}.muted{color:#5b6873}.hero{padding:5rem 0 3rem;max-width:48rem}.eyebrow{letter-spacing:.12em;text-transform:uppercase;color:#3d6559;font-weight:750;font-size:.78rem}.hero h1{font-size:clamp(3.1rem,8vw,6.8rem);line-height:.88;letter-spacing:-.065em;margin:.8rem 0 1.4rem}.hero p{font-size:1.2rem;max-width:39rem}.button{display:inline-flex;border:1px solid #17212b;border-radius:999px;padding:.72rem 1rem;background:transparent;color:inherit;text-decoration:none;font-weight:700}.button.primary{background:#17212b;color:#fff}.button.danger{border-color:#9a3d32;color:#842d24}.grid{display:grid;grid-template-columns:minmax(18rem,1fr) minmax(22rem,2fr);gap:1rem}.card{background:#fff;border:1px solid #17212b20;border-radius:1.1rem;padding:1.35rem;box-shadow:0 1rem 2.5rem #17212b08}.card h2,.card h3{margin-top:0}.stack{display:grid;gap:.8rem}.row{display:flex;align-items:center;justify-content:space-between;gap:1rem;flex-wrap:wrap}label{font-weight:700;font-size:.9rem}input,textarea,select{width:100%;border:1px solid #17212b35;border-radius:.7rem;padding:.72rem;background:#fbfaf7}textarea{min-height:7rem;resize:vertical}.status{display:inline-flex;align-items:center;gap:.45rem;font-size:.88rem}.dot{width:.65rem;height:.65rem;border-radius:50%;background:#a3493e}.dot.ok{background:#29775f}.agent{border-top:1px solid #17212b18;padding:1rem 0}.agent:first-child{border-top:0}.agent-name{font-weight:800}.result{white-space:pre-wrap;background:#15202a;color:#e7f0ec;border-radius:.8rem;padding:1rem;min-height:5rem;max-height:24rem;overflow:auto}.hidden{display:none!important}.notice{padding:.8rem;border-radius:.7rem;background:#f7e8c8}.error{background:#f8dcd8;color:#76251d}.session{font-size:.88rem}.docs{color:inherit} @media(max-width:760px){.shell{padding:1.1rem}.hero{padding-top:3rem}.grid{grid-template-columns:1fr}}
+  </style>
 </head>
-<body><main>
-  <div class="eyebrow">Governed engineering agents</div>
-  <h1 class="hero">One place to direct the work.</h1>
-  <p class="lede">Devcenter composes agents, workflows, connectors, and isolated execution behind one authenticated, inspectable surface.</p>
-  <div class="actions"><a class="primary" href="/auth/claude/start">Connect Claude</a><a href="/auth/sso/start">Continue with SSO</a><a href="/docs/">Read the docs</a></div>
-  <section class="grid"><article class="card"><h2>Agents</h2><p>Create governed agents and submit durable tasks.</p></article><article class="card"><h2>Workflows</h2><p>Draft, publish, and observe reusable automation.</p></article><article class="card"><h2>Connectors</h2><p>Grant curated capabilities without exposing raw credentials.</p></article></section>
-</main></body></html>
+<body><main class="shell">
+  <header class="top"><div class="mark">Devcenter</div><div class="row"><span id="session" class="session muted"></span><a class="docs" href="/docs/">API docs</a></div></header>
+  <section id="landing" class="hero">
+    <div class="eyebrow">Governed engineering agents</div>
+    <h1>Direct the work.</h1>
+    <p>Connect your model subscription, create an agent, and submit work through one authenticated surface.</p>
+    <a class="button primary" href="/auth/sso/start">Sign in</a>
+  </section>
+  <div id="message" class="notice hidden" role="status"></div>
+  <section id="workspace" class="grid hidden">
+    <aside class="stack">
+      <article class="card stack">
+        <div class="row"><h2>Claude Code</h2><span class="status"><span id="claude-dot" class="dot"></span><span id="claude-label">Checking</span></span></div>
+        <p class="muted">Use your own subscription for tasks started as you. The credential is sent directly into connector custody.</p>
+        <form id="connect-form" class="stack">
+          <div><label for="credential">Subscription credential</label><input id="credential" name="credential" type="password" autocomplete="off" required></div>
+          <button class="button primary" type="submit">Connect Claude</button>
+        </form>
+        <button id="disconnect" class="button danger hidden" type="button">Disconnect</button>
+      </article>
+      <article class="card stack">
+        <h2>New agent</h2>
+        <form id="agent-form" class="stack">
+          <div><label for="agent-name">Name</label><input id="agent-name" required maxlength="160" placeholder="Release assistant"></div>
+          <div><label for="instructions">Instructions</label><textarea id="instructions" required placeholder="You help prepare safe, reviewable releases."></textarea></div>
+          <div><label for="model">Model</label><input id="model" required value="claude-opus-4-1"></div>
+          <button class="button primary" type="submit">Create agent</button>
+        </form>
+      </article>
+    </aside>
+    <article class="card">
+      <div class="row"><h2>Your agents</h2><button id="refresh" class="button" type="button">Refresh</button></div>
+      <div id="agents" class="muted">Loading agents…</div>
+    </article>
+  </section>
+</main>
+<script>
+const $=id=>document.getElementById(id);const message=$('message');
+function tell(text,error=false){message.textContent=text;message.className='notice'+(error?' error':'');}
+function clearMessage(){message.className='notice hidden';message.textContent='';}
+async function api(path,options={}){const response=await fetch(path,{credentials:'same-origin',headers:{'content-type':'application/json',...(options.headers||{})},...options});if(!response.ok){let code=`HTTP ${response.status}`;try{code=(await response.json()).code||code}catch{}throw new Error(code)}return response.status===204?null:response.json()}
+async function loadClaude(){try{const status=await api('/api/connectors/claude-code');$('claude-dot').classList.toggle('ok',status.connected);$('claude-label').textContent=status.connected?'Connected':'Not connected';$('connect-form').classList.toggle('hidden',status.connected);$('disconnect').classList.toggle('hidden',!status.connected)}catch(error){tell(`Claude status: ${error.message}`,true)}}
+function renderAgents(agents){const root=$('agents');root.className='';root.replaceChildren();if(!agents.length){root.className='muted';root.textContent='No agents yet. Create the first one from the form.';return}for(const agent of agents){const article=document.createElement('section');article.className='agent stack';const heading=document.createElement('div');heading.className='row';const name=document.createElement('span');name.className='agent-name';name.textContent=agent.name;const revision=document.createElement('span');revision.className='muted';revision.textContent=`revision ${agent.active_revision??'inactive'}`;heading.append(name,revision);const form=document.createElement('form');form.className='stack';const prompt=document.createElement('textarea');prompt.required=true;prompt.placeholder='Describe the task for this agent…';const submit=document.createElement('button');submit.className='button primary';submit.type='submit';submit.textContent='Run task';const output=document.createElement('pre');output.className='result hidden';form.append(prompt,submit);form.addEventListener('submit',async event=>{event.preventDefault();clearMessage();submit.disabled=true;output.textContent='';output.classList.remove('hidden');try{const task=await api(`/api/agents/${encodeURIComponent(agent.id)}/tasks`,{method:'POST',body:JSON.stringify({prompt:prompt.value,idempotency_key:crypto.randomUUID()})});output.textContent='Task accepted. Waiting for output…\n';streamTask(task.id,output,submit)}catch(error){output.textContent=`Task refused: ${error.message}`;submit.disabled=false}});article.append(heading,form,output);root.append(article)}}
+function streamTask(taskId,output,button){const events=new EventSource(`/api/tasks/${encodeURIComponent(taskId)}/events`);events.addEventListener('task',event=>{try{const envelope=JSON.parse(event.data);const update=envelope.event||{};if(update.kind==='text_delta'){if(output.textContent.startsWith('Task accepted.'))output.textContent='';output.textContent+=update.text}else if(update.kind==='succeeded'){output.textContent=update.output;events.close();button.disabled=false}else if(update.kind==='failed'){output.textContent+=`\nFailed: ${update.failure?.message||'unknown failure'}`;events.close();button.disabled=false}}catch{output.textContent+='\nInvalid event received.'}});events.onerror=()=>{if(events.readyState===EventSource.CLOSED){button.disabled=false}else{output.textContent+='\nStream interrupted; reconnecting…'}}}
+async function loadAgents(){try{renderAgents(await api('/api/agents'))}catch(error){tell(`Agents: ${error.message}`,true)}}
+$('connect-form').addEventListener('submit',async event=>{event.preventDefault();clearMessage();const field=$('credential');try{await api('/api/connectors/claude-code',{method:'PUT',body:JSON.stringify({credential:field.value})});field.value='';tell('Claude Code is connected.');await loadClaude()}catch(error){field.value='';tell(`Connection failed: ${error.message}`,true)}});
+$('disconnect').addEventListener('click',async()=>{clearMessage();try{await api('/api/connectors/claude-code',{method:'DELETE'});tell('Claude Code was disconnected.');await loadClaude()}catch(error){tell(`Disconnect failed: ${error.message}`,true)}});
+$('agent-form').addEventListener('submit',async event=>{event.preventDefault();clearMessage();try{await api('/api/agents',{method:'POST',body:JSON.stringify({name:$('agent-name').value,instructions:$('instructions').value,model:$('model').value})});event.target.reset();$('model').value='claude-opus-4-1';tell('Agent created and activated.');await loadAgents()}catch(error){tell(`Agent creation failed: ${error.message}`,true)}});
+$('refresh').addEventListener('click',loadAgents);
+(async()=>{try{const session=await api('/api/session');$('session').textContent=session.email||session.subject;$('landing').classList.add('hidden');$('workspace').classList.remove('hidden');await Promise.all([loadClaude(),loadAgents()])}catch{$('landing').classList.remove('hidden')}})();
+</script></body></html>

@@ -33,6 +33,9 @@ spec:
           imagePullPolicy: {{ .Values.devcenter.image.pullPolicy }}
           envFrom:
             - configMapRef: {name: {{ include "devcenter.fullname" . }}}
+            {{- with .Values.devcenter.envFrom }}
+            {{- toYaml . | nindent 12 }}
+            {{- end }}
           ports:
             - {name: http, containerPort: 8080, protocol: TCP}
           readinessProbe: {httpGet: {path: /readyz, port: http}}

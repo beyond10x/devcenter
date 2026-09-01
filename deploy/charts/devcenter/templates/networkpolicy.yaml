@@ -62,4 +62,7 @@ spec:
       ports:
         - {protocol: TCP, port: 443}
     {{- end }}
+    {{- with .Values.networkPolicy.extraEgress }}
+{{ toYaml . | nindent 4 }}
+    {{- end }}
 {{- end }}
