@@ -8,6 +8,7 @@ devcenter:
 components:
   identity:
     enabled: true
+    podSecurityContext: {fsGroup: 65532, fsGroupChangePolicy: OnRootMismatch}
     image:
       repository: registry.example.invalid/identity
       digest: sha256:bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb

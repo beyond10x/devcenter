@@ -21,6 +21,9 @@ spec:
         {{- include "devcenter.labels" $ | nindent 8 }}
         app.kubernetes.io/component: {{ $name }}
     spec:
+      {{- with $component.podSecurityContext }}
+      securityContext: {{ toYaml . | nindent 8 }}
+      {{- end }}
       {{- if $component.serviceAccountName }}
       serviceAccountName: {{ $component.serviceAccountName }}
       {{- else if eq $name "connectors" }}
