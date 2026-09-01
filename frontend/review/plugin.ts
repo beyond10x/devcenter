@@ -59,6 +59,85 @@ const agents: ReviewAgent[] = [
     created_at_ms: 1_769_904_000_000,
   },
 ];
+const reviewProject = {
+  id: "project-review-devcenter",
+  forge_instance_ref: "connection:gitlab:review",
+  project_ref: "1042",
+  path_with_namespace: "foundation/devcenter",
+  name: "devcenter",
+  default_branch: "trunk",
+  selected_branch: "trunk",
+  pinned_commit: "6d17f3812ca53ef7aacb4cb973bcbb2ddc93be12",
+  web_url: "https://gitlab.example.test/foundation/devcenter",
+};
+const reviewBranches = [
+  { name: "trunk", commit: reviewProject.pinned_commit, provider_default: true, protected: true },
+  {
+    name: "feature/projects",
+    commit: "ec214cbd24300df85427c2016af0f4218909a932",
+    provider_default: false,
+    protected: false,
+  },
+];
+const reviewTree = [
+  { object_id: "tree-crates", name: "crates", path: "crates", kind: "tree", mode: "040000" },
+  {
+    object_id: "blob-agents",
+    name: "AGENTS.md",
+    path: "AGENTS.md",
+    kind: "blob",
+    mode: "100644",
+  },
+  {
+    object_id: "blob-cargo",
+    name: "Cargo.toml",
+    path: "Cargo.toml",
+    kind: "blob",
+    mode: "100644",
+  },
+  {
+    object_id: "blob-readme",
+    name: "README.md",
+    path: "README.md",
+    kind: "blob",
+    mode: "100644",
+  },
+];
+const reviewArtifacts = {
+  artifacts: [
+    {
+      id: "artifact-review-boundary",
+      locator: "ep://foundation/devcenter/design/repository-workspace-boundary",
+      entity_type: "aep.design/v1",
+      revision: 3,
+      title: "Repository workspace boundary",
+      status: "draft",
+      updated_at_ms: 1_788_260_000_000,
+      source_revision: reviewProject.pinned_commit,
+    },
+  ],
+  has_more: false,
+};
+const reviewThreads: Array<Record<string, unknown>> = [];
+const reviewMessages = new Map<string, Array<Record<string, unknown>>>();
+const reviewWorkflows = [
+  {
+    id: "review.code/v1",
+    name: "Code review",
+    description: "Commit-pinned correctness and maintainability findings with file citations.",
+  },
+  {
+    id: "review.security/v1",
+    name: "Security review",
+    description: "Commit-pinned security findings with typed severity and evidence.",
+  },
+  {
+    id: "reverse.aep-ess/v1",
+    name: "Reverse AEP + ESS",
+    description:
+      "Evidence-backed draft planning entities and a current-state system specification.",
+  },
+];
 
 function sendJson(response: ServerResponse, status: number, value: unknown) {
   response.statusCode = status;
@@ -141,6 +220,123 @@ export function reviewApi(): Plugin {
           }
           if (path === "/api/agents" && method === "GET") {
             sendJson(response, 200, agents);
+            return;
+          }
+          if (path === "/api/repositories" && method === "GET") {
+            sendJson(response, 200, [
+              {
+                forge_instance_ref: "connection:gitlab:review",
+                project_ref: "1042",
+                path_with_namespace: "foundation/devcenter",
+                name: "devcenter",
+                default_branch: "trunk",
+                visibility: "private",
+                web_url: reviewProject.web_url,
+                opened_project_id: reviewProject.id,
+              },
+              {
+                forge_instance_ref: "connection:gitlab:review",
+                project_ref: "2081",
+                path_with_namespace: "foundation/workflow",
+                name: "workflow",
+                default_branch: "stable",
+                visibility: "private",
+                web_url: "https://gitlab.example.test/foundation/workflow",
+              },
+            ]);
+            return;
+          }
+          if (path === "/api/projects" && method === "POST") {
+            sendJson(response, 200, reviewProject);
+            return;
+          }
+          if (path === `/api/projects/${reviewProject.id}` && method === "GET") {
+            sendJson(response, 200, reviewProject);
+            return;
+          }
+          if (path === `/api/projects/${reviewProject.id}/branches` && method === "GET") {
+            sendJson(response, 200, reviewBranches);
+            return;
+          }
+          if (path === `/api/projects/${reviewProject.id}/tree` && method === "GET") {
+            sendJson(response, 200, reviewTree);
+            return;
+          }
+          if (
+            path === `/api/projects/${reviewProject.id}/engineering-artifacts` &&
+            method === "GET"
+          ) {
+            sendJson(response, 200, reviewArtifacts);
+            return;
+          }
+          if (path === `/api/projects/${reviewProject.id}/branch` && method === "POST") {
+            const submitted = await readJson(request);
+            const branch = reviewBranches.find((candidate) => candidate.name === submitted.branch);
+            if (!branch) {
+              sendJson(response, 404, { code: "workspace_resource_not_found" });
+              return;
+            }
+            reviewProject.selected_branch = branch.name;
+            reviewProject.pinned_commit = branch.commit;
+            sendJson(response, 200, reviewProject);
+            return;
+          }
+          if (path === `/api/projects/${reviewProject.id}/threads` && method === "GET") {
+            sendJson(response, 200, reviewThreads);
+            return;
+          }
+          if (path === `/api/projects/${reviewProject.id}/threads` && method === "POST") {
+            const submitted = await readJson(request);
+            const thread = {
+              id: `thread-review-${String(reviewThreads.length + 1)}`,
+              project_id: reviewProject.id,
+              branch: submitted.branch,
+              pinned_commit: submitted.pinned_commit,
+              title: submitted.title,
+              created_at_ms: Date.now(),
+            };
+            reviewThreads.unshift(thread);
+            reviewMessages.set(thread.id, []);
+            sendJson(response, 200, thread);
+            return;
+          }
+          const messageMatch = path.match(/^\/api\/threads\/([^/]+)\/messages$/);
+          if (messageMatch && method === "GET") {
+            sendJson(response, 200, reviewMessages.get(messageMatch[1]) ?? []);
+            return;
+          }
+          if (messageMatch && method === "POST") {
+            const submitted = await readJson(request);
+            const threadId = messageMatch[1];
+            const current = reviewMessages.get(threadId) ?? [];
+            const message = {
+              sequence: current.length + 1,
+              role: "user",
+              content: submitted.content,
+              branch: reviewProject.selected_branch,
+              commit: reviewProject.pinned_commit,
+              created_at_ms: Date.now(),
+            };
+            current.push(message);
+            reviewMessages.set(threadId, current);
+            sendJson(response, 200, message);
+            return;
+          }
+          if (path === `/api/projects/${reviewProject.id}/workflows` && method === "GET") {
+            sendJson(response, 200, reviewWorkflows);
+            return;
+          }
+          if (path === `/api/projects/${reviewProject.id}/workflow-runs` && method === "POST") {
+            const submitted = await readJson(request);
+            sendJson(response, 200, {
+              id: `run-review-${String(Date.now())}`,
+              definition_id: submitted.definition_id,
+              project_id: reviewProject.id,
+              branch: submitted.branch,
+              commit: submitted.commit,
+              state: "accepted",
+              created_at_ms: Date.now(),
+            });
             return;
           }
           if (path === "/api/agents" && method === "POST") {

@@ -2,7 +2,7 @@
   "openapi": "3.1.0",
   "info": {
     "title": "Devcenter API",
-    "version": "0.4.1",
+    "version": "0.4.2",
     "description": "Authenticated browser/BFF surface for identity, connector custody, agents, and tasks."
   },
   "paths": {
@@ -470,6 +470,299 @@
         }
       }
     },
+    "/api/repositories": {
+      "get": {
+        "operationId": "listRepositories",
+        "security": [{ "browserSession": [] }, { "identityBearer": [] }],
+        "responses": {
+          "200": {
+            "description": "Repositories visible through current Connector Grants",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "array",
+                  "items": {
+                    "$ref": "#/components/schemas/RepositoryCandidate"
+                  }
+                }
+              }
+            }
+          },
+          "401": { "$ref": "#/components/responses/Problem" },
+          "503": { "$ref": "#/components/responses/Unavailable" }
+        }
+      }
+    },
+    "/api/projects": {
+      "post": {
+        "operationId": "openRepositoryProject",
+        "security": [{ "browserSession": [] }, { "identityBearer": [] }],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": { "$ref": "#/components/schemas/OpenProject" }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Canonical project opened after live revalidation",
+            "content": {
+              "application/json": {
+                "schema": { "$ref": "#/components/schemas/Project" }
+              }
+            }
+          },
+          "403": { "$ref": "#/components/responses/Problem" },
+          "422": { "$ref": "#/components/responses/Problem" }
+        }
+      }
+    },
+    "/api/projects/{project_id}": {
+      "get": {
+        "operationId": "getRepositoryProject",
+        "parameters": [{ "$ref": "#/components/parameters/ProjectId" }],
+        "security": [{ "browserSession": [] }, { "identityBearer": [] }],
+        "responses": {
+          "200": {
+            "description": "Current accessible project",
+            "content": {
+              "application/json": {
+                "schema": { "$ref": "#/components/schemas/Project" }
+              }
+            }
+          },
+          "403": { "$ref": "#/components/responses/Problem" },
+          "404": { "$ref": "#/components/responses/Problem" }
+        }
+      }
+    },
+    "/api/projects/{project_id}/branches": {
+      "get": {
+        "operationId": "listProjectBranches",
+        "parameters": [{ "$ref": "#/components/parameters/ProjectId" }],
+        "security": [{ "browserSession": [] }, { "identityBearer": [] }],
+        "responses": {
+          "200": {
+            "description": "Currently visible branch heads",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "array",
+                  "items": { "$ref": "#/components/schemas/Branch" }
+                }
+              }
+            }
+          },
+          "403": { "$ref": "#/components/responses/Problem" }
+        }
+      }
+    },
+    "/api/projects/{project_id}/tree": {
+      "get": {
+        "operationId": "listProjectTree",
+        "parameters": [{ "$ref": "#/components/parameters/ProjectId" }],
+        "security": [{ "browserSession": [] }, { "identityBearer": [] }],
+        "responses": {
+          "200": {
+            "description": "Read-only root entries at the exact pinned commit",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "array",
+                  "items": { "$ref": "#/components/schemas/RepositoryEntry" }
+                }
+              }
+            }
+          },
+          "403": { "$ref": "#/components/responses/Problem" },
+          "409": { "$ref": "#/components/responses/Problem" }
+        }
+      }
+    },
+    "/api/projects/{project_id}/engineering-artifacts": {
+      "get": {
+        "operationId": "listProjectEngineeringArtifacts",
+        "parameters": [{ "$ref": "#/components/parameters/ProjectId" }],
+        "security": [{ "browserSession": [] }, { "identityBearer": [] }],
+        "responses": {
+          "200": {
+            "description": "Bounded central AEP entities indexed to this project",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/EngineeringArtifactPage"
+                }
+              }
+            }
+          },
+          "403": { "$ref": "#/components/responses/Problem" },
+          "502": { "$ref": "#/components/responses/Problem" },
+          "503": { "$ref": "#/components/responses/Problem" }
+        }
+      }
+    },
+    "/api/projects/{project_id}/branch": {
+      "post": {
+        "operationId": "selectProjectBranch",
+        "parameters": [{ "$ref": "#/components/parameters/ProjectId" }],
+        "security": [{ "browserSession": [] }, { "identityBearer": [] }],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": { "$ref": "#/components/schemas/SelectBranch" }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Explicitly refreshed project snapshot",
+            "content": {
+              "application/json": {
+                "schema": { "$ref": "#/components/schemas/Project" }
+              }
+            }
+          },
+          "404": { "$ref": "#/components/responses/Problem" },
+          "409": { "$ref": "#/components/responses/Problem" }
+        }
+      }
+    },
+    "/api/projects/{project_id}/threads": {
+      "get": {
+        "operationId": "listProjectThreads",
+        "parameters": [{ "$ref": "#/components/parameters/ProjectId" }],
+        "security": [{ "browserSession": [] }, { "identityBearer": [] }],
+        "responses": {
+          "200": {
+            "description": "Personal project threads",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "array",
+                  "items": { "$ref": "#/components/schemas/ProjectThread" }
+                }
+              }
+            }
+          }
+        }
+      },
+      "post": {
+        "operationId": "createProjectThread",
+        "parameters": [{ "$ref": "#/components/parameters/ProjectId" }],
+        "security": [{ "browserSession": [] }, { "identityBearer": [] }],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": { "$ref": "#/components/schemas/CreateProjectThread" }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Personal branch-bound thread",
+            "content": {
+              "application/json": {
+                "schema": { "$ref": "#/components/schemas/ProjectThread" }
+              }
+            }
+          },
+          "409": { "$ref": "#/components/responses/Problem" }
+        }
+      }
+    },
+    "/api/threads/{thread_id}/messages": {
+      "get": {
+        "operationId": "listThreadMessages",
+        "parameters": [{ "$ref": "#/components/parameters/ThreadId" }],
+        "security": [{ "browserSession": [] }, { "identityBearer": [] }],
+        "responses": {
+          "200": {
+            "description": "Personal durable messages",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "array",
+                  "items": { "$ref": "#/components/schemas/ProjectMessage" }
+                }
+              }
+            }
+          }
+        }
+      },
+      "post": {
+        "operationId": "createThreadMessage",
+        "parameters": [{ "$ref": "#/components/parameters/ThreadId" }],
+        "security": [{ "browserSession": [] }, { "identityBearer": [] }],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": { "$ref": "#/components/schemas/CreateProjectMessage" }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Commit-attributed user message",
+            "content": {
+              "application/json": {
+                "schema": { "$ref": "#/components/schemas/ProjectMessage" }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/projects/{project_id}/workflows": {
+      "get": {
+        "operationId": "listProjectWorkflows",
+        "parameters": [{ "$ref": "#/components/parameters/ProjectId" }],
+        "security": [{ "browserSession": [] }, { "identityBearer": [] }],
+        "responses": {
+          "200": {
+            "description": "Enabled immutable workflow definitions",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "array",
+                  "items": { "$ref": "#/components/schemas/WorkflowDefinition" }
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/projects/{project_id}/workflow-runs": {
+      "post": {
+        "operationId": "startProjectWorkflow",
+        "parameters": [{ "$ref": "#/components/parameters/ProjectId" }],
+        "security": [{ "browserSession": [] }, { "identityBearer": [] }],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": { "$ref": "#/components/schemas/StartWorkflow" }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Exact-snapshot workflow run admitted idempotently",
+            "content": {
+              "application/json": {
+                "schema": { "$ref": "#/components/schemas/WorkflowRun" }
+              }
+            }
+          },
+          "409": { "$ref": "#/components/responses/Problem" }
+        }
+      }
+    },
     "/healthz": {
       "get": {
         "operationId": "health",
@@ -569,6 +862,18 @@
       },
       "PublicationId": {
         "name": "publication_id",
+        "in": "path",
+        "required": true,
+        "schema": { "type": "string", "maxLength": 128 }
+      },
+      "ProjectId": {
+        "name": "project_id",
+        "in": "path",
+        "required": true,
+        "schema": { "type": "string", "maxLength": 128 }
+      },
+      "ThreadId": {
+        "name": "thread_id",
         "in": "path",
         "required": true,
         "schema": { "type": "string", "maxLength": 128 }
@@ -761,6 +1066,226 @@
             "writeOnly": true,
             "maxLength": 12288
           }
+        },
+        "additionalProperties": false
+      },
+      "RepositoryCandidate": {
+        "type": "object",
+        "required": [
+          "forge_instance_ref",
+          "project_ref",
+          "path_with_namespace",
+          "name",
+          "visibility",
+          "web_url"
+        ],
+        "properties": {
+          "forge_instance_ref": { "type": "string" },
+          "project_ref": { "type": "string" },
+          "path_with_namespace": { "type": "string" },
+          "name": { "type": "string" },
+          "default_branch": { "type": ["string", "null"] },
+          "visibility": { "type": "string" },
+          "web_url": { "type": "string" },
+          "opened_project_id": { "type": ["string", "null"] }
+        },
+        "additionalProperties": false
+      },
+      "OpenProject": {
+        "type": "object",
+        "required": ["forge_instance_ref", "project_ref"],
+        "properties": {
+          "forge_instance_ref": { "type": "string" },
+          "project_ref": { "type": "string" }
+        },
+        "additionalProperties": false
+      },
+      "Project": {
+        "type": "object",
+        "required": [
+          "id",
+          "forge_instance_ref",
+          "project_ref",
+          "path_with_namespace",
+          "name",
+          "selected_branch",
+          "web_url"
+        ],
+        "properties": {
+          "id": { "type": "string" },
+          "forge_instance_ref": { "type": "string" },
+          "project_ref": { "type": "string" },
+          "path_with_namespace": { "type": "string" },
+          "name": { "type": "string" },
+          "default_branch": { "type": ["string", "null"] },
+          "selected_branch": { "type": "string" },
+          "pinned_commit": { "type": ["string", "null"] },
+          "web_url": { "type": "string" }
+        },
+        "additionalProperties": false
+      },
+      "Branch": {
+        "type": "object",
+        "required": ["name", "commit", "provider_default", "protected"],
+        "properties": {
+          "name": { "type": "string" },
+          "commit": { "type": "string" },
+          "provider_default": { "type": "boolean" },
+          "protected": { "type": "boolean" }
+        },
+        "additionalProperties": false
+      },
+      "RepositoryEntry": {
+        "type": "object",
+        "required": ["object_id", "name", "path", "kind", "mode"],
+        "properties": {
+          "object_id": { "type": "string" },
+          "name": { "type": "string" },
+          "path": { "type": "string" },
+          "kind": { "type": "string", "enum": ["blob", "tree"] },
+          "mode": { "type": "string" }
+        },
+        "additionalProperties": false
+      },
+      "EngineeringArtifact": {
+        "type": "object",
+        "required": [
+          "id",
+          "locator",
+          "entity_type",
+          "revision",
+          "updated_at_ms"
+        ],
+        "properties": {
+          "id": { "type": "string" },
+          "locator": { "type": "string" },
+          "entity_type": { "type": "string" },
+          "revision": { "type": "integer" },
+          "title": { "type": ["string", "null"] },
+          "status": { "type": ["string", "null"] },
+          "updated_at_ms": { "type": "integer" },
+          "source_revision": { "type": ["string", "null"] }
+        },
+        "additionalProperties": false
+      },
+      "EngineeringArtifactPage": {
+        "type": "object",
+        "required": ["artifacts", "has_more"],
+        "properties": {
+          "artifacts": {
+            "type": "array",
+            "items": { "$ref": "#/components/schemas/EngineeringArtifact" }
+          },
+          "has_more": { "type": "boolean" }
+        },
+        "additionalProperties": false
+      },
+      "SelectBranch": {
+        "type": "object",
+        "required": ["branch"],
+        "properties": { "branch": { "type": "string" } },
+        "additionalProperties": false
+      },
+      "ProjectThread": {
+        "type": "object",
+        "required": [
+          "id",
+          "project_id",
+          "branch",
+          "pinned_commit",
+          "title",
+          "created_at_ms"
+        ],
+        "properties": {
+          "id": { "type": "string" },
+          "project_id": { "type": "string" },
+          "branch": { "type": "string" },
+          "pinned_commit": { "type": "string" },
+          "title": { "type": "string" },
+          "created_at_ms": { "type": "integer" }
+        },
+        "additionalProperties": false
+      },
+      "CreateProjectThread": {
+        "type": "object",
+        "required": ["branch", "pinned_commit", "title"],
+        "properties": {
+          "branch": { "type": "string" },
+          "pinned_commit": { "type": "string" },
+          "title": { "type": "string" }
+        },
+        "additionalProperties": false
+      },
+      "ProjectMessage": {
+        "type": "object",
+        "required": [
+          "sequence",
+          "role",
+          "content",
+          "branch",
+          "commit",
+          "created_at_ms"
+        ],
+        "properties": {
+          "sequence": { "type": "integer" },
+          "role": { "type": "string", "enum": ["user", "assistant", "system"] },
+          "content": { "type": "string" },
+          "branch": { "type": "string" },
+          "commit": { "type": "string" },
+          "created_at_ms": { "type": "integer" }
+        },
+        "additionalProperties": false
+      },
+      "CreateProjectMessage": {
+        "type": "object",
+        "required": ["content"],
+        "properties": { "content": { "type": "string" } },
+        "additionalProperties": false
+      },
+      "WorkflowDefinition": {
+        "type": "object",
+        "required": ["id", "name", "description"],
+        "properties": {
+          "id": { "type": "string" },
+          "name": { "type": "string" },
+          "description": { "type": "string" }
+        },
+        "additionalProperties": false
+      },
+      "StartWorkflow": {
+        "type": "object",
+        "required": ["definition_id", "branch", "commit", "idempotency_key"],
+        "properties": {
+          "definition_id": { "type": "string" },
+          "branch": { "type": "string" },
+          "commit": { "type": "string" },
+          "idempotency_key": { "type": "string" }
+        },
+        "additionalProperties": false
+      },
+      "WorkflowRun": {
+        "type": "object",
+        "required": [
+          "id",
+          "definition_id",
+          "project_id",
+          "branch",
+          "commit",
+          "state",
+          "created_at_ms"
+        ],
+        "properties": {
+          "id": { "type": "string" },
+          "definition_id": { "type": "string" },
+          "project_id": { "type": "string" },
+          "branch": { "type": "string" },
+          "commit": { "type": "string" },
+          "state": {
+            "type": "string",
+            "enum": ["accepted", "running", "succeeded", "failed", "refused"]
+          },
+          "failure_code": { "type": ["string", "null"] },
+          "created_at_ms": { "type": "integer" }
         },
         "additionalProperties": false
       },

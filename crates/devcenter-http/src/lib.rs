@@ -23,10 +23,12 @@ use devcenter_auth::{AuthenticationError, Principal};
 use devcenter_core::{Config, IdentityProvider};
 use devcenter_mcp::{Outcome as McpOutcome, Request as McpRequest, Toolset};
 use devcenter_store::{PublicationState, Store, StoreError};
-use serde::Deserialize;
+use serde::{Deserialize, Serialize};
 use serde_json::{Value, json};
 use sha2::{Digest, Sha256};
 use url::Url;
+use workspace_client::{ClientError as WorkspaceError, WorkspaceClient};
+use workspace_core::{CreateMessage, CreateThread, OpenProject, SelectBranch, StartWorkflow};
 use zeroize::Zeroizing;
 
 const SESSION_COOKIE: &str = "__Host-devcenter_session";
@@ -41,6 +43,7 @@ struct AppState {
     config: Arc<Config>,
     agent_platform: Option<AgentPlatformClient>,
     connectors: Option<HostedClient>,
+    workspace: Option<WorkspaceClient>,
     pending_logins: Arc<Mutex<BTreeMap<String, PendingLogin>>>,
     publications: Store,
 }
@@ -84,10 +87,17 @@ pub fn router_with_store(
         .map(HostedClient::new)
         .transpose()
         .map_err(|_| ConfigurationError)?;
+    let workspace = config
+        .workspace_origin
+        .as_deref()
+        .map(WorkspaceClient::new)
+        .transpose()
+        .map_err(|_| ConfigurationError)?;
     let state = AppState {
         config: Arc::new(config),
         agent_platform,
         connectors,
+        workspace,
         pending_logins: Arc::new(Mutex::new(BTreeMap::new())),
         publications,
     };
@@ -96,6 +106,8 @@ pub fn router_with_store(
         .route("/agents", get(app))
         .route("/agents/{agent_id}", get(app))
         .route("/connections", get(app))
+        .route("/projects", get(app))
+        .route("/projects/{project_id}", get(app))
         .route("/profiles", get(app))
         .route("/publications", get(app))
         .route("/docs", get(app))
@@ -118,6 +130,7 @@ pub fn router_with_store(
         .route("/auth/logout", post(logout))
         .route("/api/auth/providers", get(identity_providers))
         .route("/api/session", get(session))
+        .merge(project_routes())
         .route(
             "/api/mcp/publications",
             get(list_publications).post(create_publication),
@@ -158,6 +171,42 @@ pub fn router_with_store(
         .route("/api/tasks/{task_id}/events", get(task_events))
         .route("/mcp/{publication_id}", post(mcp))
         .with_state(state))
+}
+
+fn project_routes() -> Router<AppState> {
+    Router::new()
+        .route("/api/repositories", get(list_repositories))
+        .route("/api/projects", post(open_repository_project))
+        .route("/api/projects/{project_id}", get(get_repository_project))
+        .route(
+            "/api/projects/{project_id}/branches",
+            get(list_project_branches),
+        )
+        .route("/api/projects/{project_id}/tree", get(list_project_tree))
+        .route(
+            "/api/projects/{project_id}/engineering-artifacts",
+            get(list_project_engineering_artifacts),
+        )
+        .route(
+            "/api/projects/{project_id}/branch",
+            post(select_project_branch),
+        )
+        .route(
+            "/api/projects/{project_id}/threads",
+            get(list_project_threads).post(create_project_thread),
+        )
+        .route(
+            "/api/threads/{thread_id}/messages",
+            get(list_thread_messages).post(create_thread_message),
+        )
+        .route(
+            "/api/projects/{project_id}/workflows",
+            get(list_project_workflows),
+        )
+        .route(
+            "/api/projects/{project_id}/workflow-runs",
+            post(start_project_workflow),
+        )
 }
 
 async fn app() -> Response {
@@ -220,6 +269,7 @@ async fn ready(State(state): State<AppState>) -> Response {
         && state.config.authentication.identity_client().is_ok()
         && state.agent_platform.is_some()
         && state.connectors.is_some()
+        && state.workspace.is_some()
         && state.publications.ready().await.is_ok();
     let status = if ready {
         StatusCode::OK
@@ -417,6 +467,279 @@ async fn session(State(state): State<AppState>, headers: HeaderMap) -> Response 
         "groups": authenticated.principal.groups
     }))
     .into_response()
+}
+
+async fn list_repositories(State(state): State<AppState>, headers: HeaderMap) -> Response {
+    let authenticated = match authenticate(&state, &headers, false).await {
+        Ok(authenticated) => authenticated,
+        Err(response) => return response,
+    };
+    let Some(workspace) = state.workspace.as_ref() else {
+        return unavailable("workspace_not_configured");
+    };
+    match workspace
+        .repositories(authenticated.authorization.as_str())
+        .await
+    {
+        Ok(repositories) => confidential_json(repositories),
+        Err(error) => workspace_error(&error),
+    }
+}
+
+async fn open_repository_project(
+    State(state): State<AppState>,
+    headers: HeaderMap,
+    Json(input): Json<OpenProject>,
+) -> Response {
+    let authenticated = match authenticate(&state, &headers, true).await {
+        Ok(authenticated) => authenticated,
+        Err(response) => return response,
+    };
+    let Some(workspace) = state.workspace.as_ref() else {
+        return unavailable("workspace_not_configured");
+    };
+    match workspace
+        .open_project(authenticated.authorization.as_str(), &input)
+        .await
+    {
+        Ok(project) => confidential_json(project),
+        Err(error) => workspace_error(&error),
+    }
+}
+
+async fn get_repository_project(
+    State(state): State<AppState>,
+    headers: HeaderMap,
+    Path(project_id): Path<String>,
+) -> Response {
+    let authenticated = match authenticate(&state, &headers, false).await {
+        Ok(authenticated) => authenticated,
+        Err(response) => return response,
+    };
+    let Some(workspace) = state.workspace.as_ref() else {
+        return unavailable("workspace_not_configured");
+    };
+    match workspace
+        .project(authenticated.authorization.as_str(), &project_id)
+        .await
+    {
+        Ok(project) => confidential_json(project),
+        Err(error) => workspace_error(&error),
+    }
+}
+
+async fn list_project_branches(
+    State(state): State<AppState>,
+    headers: HeaderMap,
+    Path(project_id): Path<String>,
+) -> Response {
+    let authenticated = match authenticate(&state, &headers, false).await {
+        Ok(authenticated) => authenticated,
+        Err(response) => return response,
+    };
+    let Some(workspace) = state.workspace.as_ref() else {
+        return unavailable("workspace_not_configured");
+    };
+    match workspace
+        .branches(authenticated.authorization.as_str(), &project_id)
+        .await
+    {
+        Ok(branches) => confidential_json(branches),
+        Err(error) => workspace_error(&error),
+    }
+}
+
+async fn list_project_tree(
+    State(state): State<AppState>,
+    headers: HeaderMap,
+    Path(project_id): Path<String>,
+) -> Response {
+    let authenticated = match authenticate(&state, &headers, false).await {
+        Ok(authenticated) => authenticated,
+        Err(response) => return response,
+    };
+    let Some(workspace) = state.workspace.as_ref() else {
+        return unavailable("workspace_not_configured");
+    };
+    match workspace
+        .repository_tree(authenticated.authorization.as_str(), &project_id)
+        .await
+    {
+        Ok(entries) => confidential_json(entries),
+        Err(error) => workspace_error(&error),
+    }
+}
+
+async fn list_project_engineering_artifacts(
+    State(state): State<AppState>,
+    headers: HeaderMap,
+    Path(project_id): Path<String>,
+) -> Response {
+    let authenticated = match authenticate(&state, &headers, false).await {
+        Ok(authenticated) => authenticated,
+        Err(response) => return response,
+    };
+    let Some(workspace) = state.workspace.as_ref() else {
+        return unavailable("workspace_not_configured");
+    };
+    match workspace
+        .engineering_artifacts(authenticated.authorization.as_str(), &project_id)
+        .await
+    {
+        Ok(artifacts) => confidential_json(artifacts),
+        Err(error) => workspace_error(&error),
+    }
+}
+
+async fn select_project_branch(
+    State(state): State<AppState>,
+    headers: HeaderMap,
+    Path(project_id): Path<String>,
+    Json(input): Json<SelectBranch>,
+) -> Response {
+    let authenticated = match authenticate(&state, &headers, true).await {
+        Ok(authenticated) => authenticated,
+        Err(response) => return response,
+    };
+    let Some(workspace) = state.workspace.as_ref() else {
+        return unavailable("workspace_not_configured");
+    };
+    match workspace
+        .select_branch(authenticated.authorization.as_str(), &project_id, &input)
+        .await
+    {
+        Ok(project) => confidential_json(project),
+        Err(error) => workspace_error(&error),
+    }
+}
+
+async fn list_project_threads(
+    State(state): State<AppState>,
+    headers: HeaderMap,
+    Path(project_id): Path<String>,
+) -> Response {
+    let authenticated = match authenticate(&state, &headers, false).await {
+        Ok(authenticated) => authenticated,
+        Err(response) => return response,
+    };
+    let Some(workspace) = state.workspace.as_ref() else {
+        return unavailable("workspace_not_configured");
+    };
+    match workspace
+        .threads(authenticated.authorization.as_str(), &project_id)
+        .await
+    {
+        Ok(threads) => confidential_json(threads),
+        Err(error) => workspace_error(&error),
+    }
+}
+
+async fn create_project_thread(
+    State(state): State<AppState>,
+    headers: HeaderMap,
+    Path(project_id): Path<String>,
+    Json(input): Json<CreateThread>,
+) -> Response {
+    let authenticated = match authenticate(&state, &headers, true).await {
+        Ok(authenticated) => authenticated,
+        Err(response) => return response,
+    };
+    let Some(workspace) = state.workspace.as_ref() else {
+        return unavailable("workspace_not_configured");
+    };
+    match workspace
+        .create_thread(authenticated.authorization.as_str(), &project_id, &input)
+        .await
+    {
+        Ok(thread) => confidential_json(thread),
+        Err(error) => workspace_error(&error),
+    }
+}
+
+async fn list_thread_messages(
+    State(state): State<AppState>,
+    headers: HeaderMap,
+    Path(thread_id): Path<String>,
+) -> Response {
+    let authenticated = match authenticate(&state, &headers, false).await {
+        Ok(authenticated) => authenticated,
+        Err(response) => return response,
+    };
+    let Some(workspace) = state.workspace.as_ref() else {
+        return unavailable("workspace_not_configured");
+    };
+    match workspace
+        .messages(authenticated.authorization.as_str(), &thread_id)
+        .await
+    {
+        Ok(messages) => confidential_json(messages),
+        Err(error) => workspace_error(&error),
+    }
+}
+
+async fn create_thread_message(
+    State(state): State<AppState>,
+    headers: HeaderMap,
+    Path(thread_id): Path<String>,
+    Json(input): Json<CreateMessage>,
+) -> Response {
+    let authenticated = match authenticate(&state, &headers, true).await {
+        Ok(authenticated) => authenticated,
+        Err(response) => return response,
+    };
+    let Some(workspace) = state.workspace.as_ref() else {
+        return unavailable("workspace_not_configured");
+    };
+    match workspace
+        .create_message(authenticated.authorization.as_str(), &thread_id, &input)
+        .await
+    {
+        Ok(message) => confidential_json(message),
+        Err(error) => workspace_error(&error),
+    }
+}
+
+async fn list_project_workflows(
+    State(state): State<AppState>,
+    headers: HeaderMap,
+    Path(project_id): Path<String>,
+) -> Response {
+    let authenticated = match authenticate(&state, &headers, false).await {
+        Ok(authenticated) => authenticated,
+        Err(response) => return response,
+    };
+    let Some(workspace) = state.workspace.as_ref() else {
+        return unavailable("workspace_not_configured");
+    };
+    match workspace
+        .workflows(authenticated.authorization.as_str(), &project_id)
+        .await
+    {
+        Ok(workflows) => confidential_json(workflows),
+        Err(error) => workspace_error(&error),
+    }
+}
+
+async fn start_project_workflow(
+    State(state): State<AppState>,
+    headers: HeaderMap,
+    Path(project_id): Path<String>,
+    Json(input): Json<StartWorkflow>,
+) -> Response {
+    let authenticated = match authenticate(&state, &headers, true).await {
+        Ok(authenticated) => authenticated,
+        Err(response) => return response,
+    };
+    let Some(workspace) = state.workspace.as_ref() else {
+        return unavailable("workspace_not_configured");
+    };
+    match workspace
+        .start_workflow(authenticated.authorization.as_str(), &project_id, &input)
+        .await
+    {
+        Ok(run) => confidential_json(run),
+        Err(error) => workspace_error(&error),
+    }
 }
 
 async fn logout(State(state): State<AppState>, headers: HeaderMap) -> Response {
@@ -1240,7 +1563,30 @@ fn agent_platform_error(error: &AgentPlatformError) -> Response {
     }
 }
 
-fn confidential_json(value: Value) -> Response {
+fn workspace_error(error: &WorkspaceError) -> Response {
+    match error {
+        WorkspaceError::Refused(401) => {
+            problem(StatusCode::UNAUTHORIZED, "workspace_authentication_refused")
+        }
+        WorkspaceError::Refused(403) => problem(StatusCode::FORBIDDEN, "workspace_access_refused"),
+        WorkspaceError::Refused(404) => {
+            problem(StatusCode::NOT_FOUND, "workspace_resource_not_found")
+        }
+        WorkspaceError::Refused(409) => {
+            problem(StatusCode::CONFLICT, "workspace_snapshot_conflict")
+        }
+        WorkspaceError::Refused(422) => problem(
+            StatusCode::UNPROCESSABLE_ENTITY,
+            "workspace_request_invalid",
+        ),
+        WorkspaceError::Refused(_) => problem(StatusCode::BAD_GATEWAY, "workspace_request_refused"),
+        WorkspaceError::Configuration | WorkspaceError::Transport => {
+            unavailable("workspace_unavailable")
+        }
+    }
+}
+
+fn confidential_json<T: Serialize>(value: T) -> Response {
     let mut response = Json(value).into_response();
     response
         .headers_mut()
@@ -1324,6 +1670,7 @@ mod tests {
             database_url: "sqlite::memory:".into(),
             agent_platform_origin: None,
             connectors_api_base: None,
+            workspace_origin: None,
         })
         .unwrap()
     }
@@ -1561,6 +1908,7 @@ mod tests {
             database_url: "sqlite::memory:".into(),
             agent_platform_origin: None,
             connectors_api_base: None,
+            workspace_origin: None,
         };
         router_with_store(config, store).unwrap()
     }

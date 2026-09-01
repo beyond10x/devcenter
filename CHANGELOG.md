@@ -2,12 +2,18 @@
 
 ## Unreleased
 
+## 0.4.2 - 2026-09-01
+
 - Repair PostgreSQL publication persistence, make terminal revocation atomic, and exercise the
   complete store contract against PostgreSQL in CI.
 - Require hosted database configuration and add resource and health contracts for every composed
   chart workload.
 - Hide publication existence until MCP authentication, accept standard OAuth callback parameters,
   and align the browser, OpenAPI, review mode, container example, and release-version checks.
+- Add repository project browsing, snapshot-bound agent conversations, workflow launching, and
+  central AEP artifact navigation without guessing the forge's configured default branch.
+- Deploy Substrate as a persistent HTTPS service with explicit Identity trust, server identity,
+  and certificate mounts, and connect Workspace through its released authenticated SDK contract.
 
 ## 0.4.1 - 2026-09-01
 

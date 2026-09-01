@@ -24,3 +24,6 @@ data:
   {{- if (index .Values.components "connectors").enabled }}
   DEV_CENTER_CONNECTORS_API_BASE: {{ printf "http://%s-connectors.%s.svc.cluster.local:%v/api/connectors/v1" (include "devcenter.fullname" .) .Release.Namespace (index .Values.components "connectors").port | quote }}
   {{- end }}
+  {{- if (index .Values.components "workspace").enabled }}
+  DEV_CENTER_WORKSPACE_ORIGIN: {{ printf "http://%s-workspace.%s.svc.cluster.local:%v" (include "devcenter.fullname" .) .Release.Namespace (index .Values.components "workspace").port | quote }}
+  {{- end }}

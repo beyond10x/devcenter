@@ -12,7 +12,7 @@ members = [
 ]
 
 [workspace.package]
-version = "0.4.1"
+version = "0.4.2"
 edition = "2024"
 rust-version = "1.97"
 license = "LicenseRef-B10x-Proprietary"
@@ -30,6 +30,8 @@ identity-client = { git = "ssh://git@github.com/beyond10x/identity.git", tag = "
 agent-platform-client = { git = "ssh://git@github.com/beyond10x/agent-platform.git", tag = "0.3.1" }
 agent-platform-core = { git = "ssh://git@github.com/beyond10x/agent-platform.git", tag = "0.3.1" }
 connectors-client = { git = "ssh://git@github.com/beyond10x/connectors.git", tag = "v0.3.2" }
+workspace-client = { git = "ssh://git@github.com/beyond10x/workspace.git", rev = "8cbab51f170d7bf0398ae2ccce2497a8f536d3fb" }
+workspace-core = { git = "ssh://git@github.com/beyond10x/workspace.git", rev = "8cbab51f170d7bf0398ae2ccce2497a8f536d3fb" }
 
 anyhow = "1"
 axum = "0.8"

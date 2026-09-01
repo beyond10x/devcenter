@@ -61,6 +61,25 @@ do
   ' "$rendered"
 done
 
+awk '
+  /^kind: StatefulSet$/ { statefulset = 1; name = ""; ready = 0; live = 0; resources = 0; next }
+  statefulset && name == "" && /^  name: / { name = $2; next }
+  statefulset && /readinessProbe:/ { ready = 1 }
+  statefulset && /livenessProbe:/ { live = 1 }
+  statefulset && /resources:/ { resources = 1 }
+  /^---$/ {
+    if (statefulset && name == "devcenter-substrate" && ready && live && resources) found = 1
+    statefulset = 0
+  }
+  END {
+    if (statefulset && name == "devcenter-substrate" && ready && live && resources) found = 1
+    exit(found ? 0 : 1)
+  }
+' "$rendered"
+
+grep -q 'name: SUBSTRATE_TLS_LISTEN' "$rendered"
+grep -q 'name: WORKSPACE_SUBSTRATE_ORIGIN' "$rendered"
+
 if helm template devcenter "$chart" \
   --namespace devcenter \
   --values "$values" \

@@ -3,6 +3,7 @@ import {
   Bot,
   BookOpen,
   Cable,
+  FolderGit2,
   LogOut,
   PanelLeftClose,
   PanelLeftOpen,
@@ -17,6 +18,7 @@ const navigationOpen = ref(false);
 const reviewMode = import.meta.env.MODE === "review";
 
 const navigation = [
+  { to: "/projects", label: "Projects", icon: FolderGit2 },
   { to: "/agents", label: "Agents", icon: Bot },
   { to: "/connections", label: "Connections", icon: Cable },
   { to: "/publications", label: "MCP publications", icon: RadioTower },

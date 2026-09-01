@@ -53,7 +53,10 @@ components:
     enabled: true
     image:
       repository: registry.example.invalid/aep-service
-      digest: sha256:1111111111111111111111111111111111111111111111111111111111111111
+      digest: sha256:acacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacac
+    args: [serve, --bind, 0.0.0.0:8080, --realm, engineering, --workspace, central, --schema, engineering, --definitions, /definitions, --definition-digest, aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa]
+    env:
+      AEP_DATABASE_URL: "postgresql://example.invalid/aep"
   workflow:
     enabled: true
     image:
@@ -64,6 +67,25 @@ components:
     image:
       repository: registry.example.invalid/llmgw
       digest: sha256:3333333333333333333333333333333333333333333333333333333333333333
+  workspace:
+    enabled: true
+    image:
+      repository: registry.example.invalid/workspace
+      digest: sha256:abababababababababababababababababababababababababababababababab
+    env:
+      WORKSPACE_DATABASE_URL: "sqlite::memory:"
+      WORKSPACE_PROJECT_AGENT_MODEL: "default"
+      WORKSPACE_AEP_REALM: "engineering"
+      WORKSPACE_AEP_WORKSPACE: "central"
+substrate:
+  enabled: true
+  image:
+    repository: registry.example.invalid/substrate
+    digest: sha256:cdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcd
+  tls:
+    existingSecret: example-substrate-tls
+  hostedIdentity:
+    origin: https://identity.example.invalid
 secrets:
   database:
     existingSecret: example-secrets-database

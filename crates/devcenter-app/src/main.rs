@@ -51,6 +51,9 @@ struct Args {
     /// Internal hosted Connectors API base.
     #[arg(long, env = "DEV_CENTER_CONNECTORS_API_BASE")]
     connectors_api_base: Option<String>,
+    /// Internal Workspace service origin.
+    #[arg(long, env = "DEV_CENTER_WORKSPACE_ORIGIN")]
+    workspace_origin: Option<String>,
     /// Environment variable containing the exact loopback-only development bearer token.
     #[arg(long, default_value = "DEV_CENTER_DEV_BEARER_TOKEN")]
     dev_token_env: String,
@@ -117,6 +120,7 @@ async fn main() -> Result<()> {
             database_url: args.database_url,
             agent_platform_origin: args.agent_platform_origin,
             connectors_api_base: args.connectors_api_base,
+            workspace_origin: args.workspace_origin,
         })?,
     )
     .with_graceful_shutdown(shutdown())

@@ -1,4 +1,6 @@
 {{- if .Values.substrate.enabled }}
+{{- $tlsSecret := required "substrate.tls.existingSecret is required" .Values.substrate.tls.existingSecret }}
+{{- $_ := required "substrate.hostedIdentity.origin is required" .Values.substrate.hostedIdentity.origin }}
 apiVersion: apps/v1
 kind: StatefulSet
 metadata:
@@ -33,10 +35,47 @@ spec:
         - name: substrate
           image: {{ include "devcenter.image" .Values.substrate.image | quote }}
           imagePullPolicy: {{ .Values.substrate.image.pullPolicy }}
-          ports: [{name: http, containerPort: {{ .Values.substrate.port }}}]
-          volumeMounts: [{name: state, mountPath: /var/lib/substrate}]
+          args:
+            - --socket
+            - /var/run/substrate/substrate.sock
+            - --state
+            - /var/lib/substrate/state.sqlite
+            - --workspaces
+            - /var/lib/substrate/workspaces
+            - --deployment
+            - {{ .Values.substrate.deployment | quote }}
+          env:
+            - {name: SUBSTRATE_TLS_LISTEN, value: {{ printf "0.0.0.0:%v" .Values.substrate.port | quote }}}
+            - {name: SUBSTRATE_TLS_CERTIFICATE_CHAIN, value: /etc/substrate/tls/tls.crt}
+            - {name: SUBSTRATE_TLS_PRIVATE_KEY, value: /etc/substrate/tls/tls.key}
+            - {name: SUBSTRATE_HOSTED_IDENTITY_ORIGIN, value: {{ .Values.substrate.hostedIdentity.origin | quote }}}
+            - {name: SUBSTRATE_HOSTED_IDENTITY_CA_BUNDLE, value: {{ ternary "/etc/substrate/identity/ca.crt" .Values.substrate.hostedIdentity.caBundle.path (not (empty .Values.substrate.hostedIdentity.caBundle.existingSecret)) | quote }}}
+          ports: [{name: https, containerPort: {{ .Values.substrate.port }}}]
+          volumeMounts:
+            - {name: state, mountPath: /var/lib/substrate}
+            - {name: runtime, mountPath: /var/run/substrate}
+            - {name: tls, mountPath: /etc/substrate/tls, readOnly: true}
+            {{- if .Values.substrate.hostedIdentity.caBundle.existingSecret }}
+            - {name: identity-ca, mountPath: /etc/substrate/identity, readOnly: true}
+            {{- end }}
+          readinessProbe: {tcpSocket: {port: https}}
+          livenessProbe: {tcpSocket: {port: https}}
           resources: {{ toYaml .Values.substrate.resources | nindent 12 }}
           securityContext: {allowPrivilegeEscalation: false, capabilities: {drop: ["ALL"]}}
+      volumes:
+        - {name: runtime, emptyDir: {}}
+        - name: tls
+          secret:
+            secretName: {{ $tlsSecret }}
+            items:
+              - {key: {{ .Values.substrate.tls.certificateKey }}, path: tls.crt}
+              - {key: {{ .Values.substrate.tls.privateKeyKey }}, path: tls.key}
+        {{- if .Values.substrate.hostedIdentity.caBundle.existingSecret }}
+        - name: identity-ca
+          secret:
+            secretName: {{ .Values.substrate.hostedIdentity.caBundle.existingSecret }}
+            items: [{key: {{ .Values.substrate.hostedIdentity.caBundle.key }}, path: ca.crt}]
+        {{- end }}
   volumeClaimTemplates:
     - metadata: {name: state}
       spec:
@@ -58,5 +97,5 @@ spec:
   selector:
     app.kubernetes.io/instance: {{ .Release.Name }}
     app.kubernetes.io/component: substrate
-  ports: [{name: http, port: {{ .Values.substrate.port }}, targetPort: http}]
+  ports: [{name: https, port: {{ .Values.substrate.port }}, targetPort: https}]
 {{- end }}
