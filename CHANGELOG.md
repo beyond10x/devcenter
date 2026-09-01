@@ -2,6 +2,8 @@
 
 ## Unreleased
 
+## 0.4.1 - 2026-09-01
+
 - Replace native release archives and the repeated tag gate with concurrent native-runner
   `linux/amd64` and `linux/arm64` container builds, signed multi-arch manifests, and the OCI chart.
 

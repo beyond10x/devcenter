@@ -1404,7 +1404,7 @@ mod tests {
         assert_eq!(response.status(), StatusCode::NOT_FOUND);
 
         let contract: Value = serde_json::from_str(devcenter_web_assets::OPENAPI).unwrap();
-        assert_eq!(contract["info"]["version"], "0.4.0");
+        assert_eq!(contract["info"]["version"], "0.4.1");
         assert!(contract["paths"]["/api/connectors/claude-code/oauth/start"].is_object());
         assert!(contract["paths"]["/api/connectors/claude-code/oauth/complete"].is_object());
     }
