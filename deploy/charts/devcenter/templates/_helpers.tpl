@@ -6,6 +6,15 @@
 {{- printf "%s-%s" .Release.Name (include "devcenter.name" .) | trunc 63 | trimSuffix "-" }}
 {{- end }}
 
+{{- define "devcenter.workloadName" -}}
+{{- $name := include "devcenter.name" . -}}
+{{- if contains $name .Release.Name -}}
+{{- .Release.Name | trunc 63 | trimSuffix "-" -}}
+{{- else -}}
+{{- include "devcenter.fullname" . -}}
+{{- end -}}
+{{- end }}
+
 {{- define "devcenter.labels" -}}
 app.kubernetes.io/name: {{ include "devcenter.name" . }}
 app.kubernetes.io/instance: {{ .Release.Name }}

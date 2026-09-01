@@ -2,6 +2,12 @@
 
 ## Unreleased
 
+## 0.2.7 - 2026-09-01
+
+- Collapse repeated release/chart names for Deployment and pod workload names, so a `devcenter`
+  release creates `devcenter` and `devcenter-<component>` workloads while retaining stable Service,
+  configuration, service-account, and persistence resource names.
+
 ## 0.2.6 - 2026-09-01
 
 - Default new agents to `claude-opus-5`, matching the current user-subscription model without

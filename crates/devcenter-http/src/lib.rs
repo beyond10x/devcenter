@@ -945,7 +945,7 @@ mod tests {
         assert_eq!(devcenter_docs::APP_HTML.matches("claude-opus-5").count(), 2);
         assert!(!devcenter_docs::APP_HTML.contains("claude-opus-4-1"));
         let contract: Value = serde_json::from_str(devcenter_docs::OPENAPI).unwrap();
-        assert_eq!(contract["info"]["version"], "0.2.6");
+        assert_eq!(contract["info"]["version"], "0.2.7");
         assert!(contract["paths"]["/api/connectors/claude-code/oauth/start"].is_object());
         assert!(contract["paths"]["/api/connectors/claude-code/oauth/complete"].is_object());
     }

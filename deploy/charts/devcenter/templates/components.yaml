@@ -4,7 +4,7 @@
 apiVersion: apps/v1
 kind: Deployment
 metadata:
-  name: {{ include "devcenter.fullname" $ }}-{{ $name }}
+  name: {{ include "devcenter.workloadName" $ }}-{{ $name }}
   labels:
     {{- include "devcenter.labels" $ | nindent 4 }}
     app.kubernetes.io/component: {{ $name }}
