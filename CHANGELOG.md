@@ -2,6 +2,20 @@
 
 ## Unreleased
 
+## 0.4.0 - 2026-09-01
+
+- Add provider-neutral Identity entry with opaque configured-provider selection, explicit browser
+  logout semantics, and immutable agent revisions that can retain a capability profile.
+- Add durable SQLite and PostgreSQL persistence for MCP publications, immutable revisions, client
+  authorizations, and exact-input approval retries with CAS and terminal revocation semantics.
+- Add Streamable HTTP MCP support for protocol versions `2025-11-25` and `2025-06-18`, including
+  deterministic direct-tool projection, effect annotations, path-specific OAuth resource metadata,
+  and stable publication endpoints.
+- Add the Vue publication control surface, Codex and Claude Code setup guidance, configured Identity
+  provider selection, and Secret-referenced hosted database configuration in the Helm chart.
+- Keep production publication mutation and MCP invocation fail closed until Identity, Connectors,
+  and Agent Platform expose the required resource-bound exchange, grant, approval, and profile APIs.
+
 ## 0.3.4 - 2026-09-01
 
 - Replace the inline browser page with a dedicated Vue 3 and TypeScript application for Identity

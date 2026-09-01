@@ -1,6 +1,17 @@
 //! Product-neutral Devcenter configuration and domain vocabulary.
 
 use devcenter_auth::Authentication;
+use serde::{Deserialize, Serialize};
+
+/// Deployment-configured, provider-neutral login choice.
+#[derive(Clone, Debug, Deserialize, Serialize, PartialEq, Eq)]
+#[serde(deny_unknown_fields)]
+pub struct IdentityProvider {
+    /// Opaque Identity-owned provider identifier.
+    pub id: String,
+    /// Credential-free label suitable for the provider chooser.
+    pub display_name: String,
+}
 
 /// Process configuration derived exclusively from deployment state.
 #[derive(Clone, Debug)]
@@ -15,6 +26,10 @@ pub struct Config {
     pub identity_web_client_id: Option<String>,
     /// Exact registered callback URI for the browser authorization-code flow.
     pub identity_redirect_uri: Option<String>,
+    /// Identity provider choices. Empty preserves legacy Identity-owned selection.
+    pub identity_providers: Vec<IdentityProvider>,
+    /// `SQLite` URL for local use or `PostgreSQL` URL injected from a hosted Secret.
+    pub database_url: String,
     /// Internal Agent Platform origin. Absence disables the agent journey fail-closed.
     pub agent_platform_origin: Option<String>,
     /// Internal hosted Connectors API base. Absence disables credential connection fail-closed.

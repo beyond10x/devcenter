@@ -6,6 +6,48 @@ export type ClaudeOAuthStart = components["schemas"]["ClaudeOAuthStart"];
 export type Agent = components["schemas"]["Agent"];
 export type Task = components["schemas"]["Task"];
 export type CreateAgent = components["schemas"]["CreateAgent"];
+export interface IdentityProvider {
+  id: string;
+  display_name: string;
+}
+export type PublicationState = "active" | "suspended" | "revoked";
+export interface Publication {
+  publication_id: string;
+  tenant_id: string;
+  owner_subject: string;
+  profile_id: string;
+  active_revision: number;
+  toolset_digest: string;
+  state: PublicationState;
+  created_at_ms: number;
+  updated_at_ms: number;
+}
+export interface ClientAuthorization {
+  authorization_id: string;
+  publication_id: string;
+  subject: string;
+  client_id: string;
+  display_name: string;
+  state: "active" | "revoked";
+  first_used_at_ms: number;
+  last_used_at_ms: number;
+}
+export interface Approval {
+  approval_id: string;
+  publication_id: string;
+  authorization_id: string;
+  subject: string;
+  client_id: string;
+  tool_name: string;
+  operation_ref: string;
+  connection_id: string;
+  input_digest: string;
+  state: "pending" | "approved" | "denied" | "consumed" | "expired" | "outcome_unknown";
+  expires_at_ms: number;
+  audit_ref?: string | null;
+  created_at_ms: number;
+  updated_at_ms: number;
+}
 
 export class ApiError extends Error {
   constructor(
@@ -43,6 +85,30 @@ async function request<T>(path: string, init: RequestInit = {}): Promise<T> {
 
 export const api = {
   session: () => request<Session>("/api/session"),
+  identityProviders: () => request<IdentityProvider[]>("/api/auth/providers"),
+  logout: () => request<undefined>("/auth/logout", { method: "POST" }),
+  publications: () => request<Publication[]>("/api/mcp/publications"),
+  publishProfile: (profileId: string) =>
+    request<Publication>("/api/mcp/publications", {
+      method: "POST",
+      body: JSON.stringify({ profile_id: profileId }),
+    }),
+  changePublicationState: (publicationId: string, state: PublicationState) =>
+    request<Publication>(`/api/mcp/publications/${encodeURIComponent(publicationId)}`, {
+      method: "PATCH",
+      body: JSON.stringify({ state }),
+    }),
+  publicationClients: (publicationId: string) =>
+    request<ClientAuthorization[]>(
+      `/api/mcp/publications/${encodeURIComponent(publicationId)}/clients`,
+    ),
+  revokePublicationClient: (publicationId: string, authorizationId: string) =>
+    request<undefined>(
+      `/api/mcp/publications/${encodeURIComponent(publicationId)}/clients/${encodeURIComponent(authorizationId)}`,
+      { method: "DELETE" },
+    ),
+  publicationApprovals: (publicationId: string) =>
+    request<Approval[]>(`/api/mcp/publications/${encodeURIComponent(publicationId)}/approvals`),
   connection: () => request<ConnectionStatus>("/api/connectors/claude-code"),
   startOAuth: () =>
     request<ClaudeOAuthStart>("/api/connectors/claude-code/oauth/start", { method: "POST" }),
@@ -70,6 +136,12 @@ const FRIENDLY_ERRORS: Record<string, string> = {
   claude_connection_start_refused: "Claude authorization could not be started.",
   claude_connection_refused: "The authorization code was refused or expired.",
   claude_connection_code_invalid: "Enter the complete one-time authorization code.",
+  agent_platform_capability_profiles_unavailable:
+    "Capability profile publication is waiting for the released Agent Platform profile client.",
+  identity_publication_revocation_unavailable:
+    "Identity cannot yet revoke every authorization for this publication safely.",
+  identity_client_revocation_unavailable:
+    "Identity cannot yet revoke this client authorization safely.",
   authentication_required: "Your session has expired. Sign in again.",
 };
 

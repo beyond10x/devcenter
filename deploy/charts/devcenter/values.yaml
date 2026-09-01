@@ -20,6 +20,12 @@ devcenter:
     audience: urn:b10x:devcenter
     webClientId: devcenter-web
     redirectUri: ""
+    # Opaque Identity-owned provider IDs. Empty preserves Identity's existing provider flow.
+    providers: []
+  database:
+    # Hosted deployments inject a PostgreSQL URL. Local execution defaults to SQLite.
+    existingSecret: ""
+    databaseUrlKey: database-url
   resources:
     requests:
       cpu: 100m

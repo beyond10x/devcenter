@@ -37,7 +37,8 @@ process-local sample data, and contacts no Identity, Connector, model provider, 
 
 Protected routes fail closed until an Identity verifier is configured. For loopback-only MCP
 development, also set `DEV_CENTER_INSECURE_DEV_AUTH=true` and a non-empty
-`DEV_CENTER_DEV_BEARER_TOKEN`.
+`DEV_CENTER_DEV_BEARER_TOKEN`. Local publication records use `devcenter.sqlite`; override
+`DEV_CENTER_DATABASE_URL` with another SQLite URL when isolation is useful.
 
 In a production posture, set the Identity origin and exact web callback, plus the private inner
 service origins:
@@ -47,6 +48,8 @@ DEV_CENTER_IDENTITY_ORIGIN=https://identity.example.test \
 DEV_CENTER_IDENTITY_AUDIENCE=urn:b10x:devcenter \
 DEV_CENTER_IDENTITY_WEB_CLIENT_ID=devcenter-web \
 DEV_CENTER_IDENTITY_REDIRECT_URI=https://devcenter.example.test/auth/sso/callback \
+DEV_CENTER_IDENTITY_PROVIDERS='[{"id":"provider-a","display_name":"Provider A"}]' \
+DEV_CENTER_DATABASE_URL=postgresql://... \
 DEV_CENTER_AGENT_PLATFORM_ORIGIN=https://agents.example.test \
 DEV_CENTER_CONNECTORS_API_BASE=https://connectors.example.test/api/connectors/v1 \
 cargo run --locked -p devcenter-app
@@ -57,6 +60,20 @@ Connector-owned OAuth2 PKCE flow: Devcenter retains only an opaque flow id in br
 the user authorizes, and Connectors owns provider exchange, refresh, and credential custody. Agent
 Platform receives an attempt-bound lease and Harness redeems it only at the provider request
 boundary. Identity remains provider- and service-agnostic throughout.
+
+`DEV_CENTER_IDENTITY_PROVIDERS` contains only opaque Identity-owned IDs and display labels. With
+zero entries, Identity keeps its existing selection behavior; with one, `/auth/sso/start` remains a
+single-click flow; with several, Devcenter requires an explicit choice. It never uses email for
+account linking.
+
+The MCP publication store supports SQLite and PostgreSQL and owns only credential-free publication,
+immutable revision, client metadata, pending approval, and audit-reference records. Hosted values
+inject the PostgreSQL URL from `devcenter.database.existingSecret`; it is never rendered into a
+ConfigMap. A publication URL is `/mcp/{opaque_id}` and its exact RFC 9728 document is
+`/.well-known/oauth-protected-resource/mcp/{opaque_id}`. Revoked IDs are terminal and are never
+reused. The production MCP bearer and invocation path stays fail-closed until released Identity,
+Agent Platform, and Connectors clients expose exact-resource OAuth claims, workload exchange,
+capability-profile retrieval, grant re-evaluation, and one-time approval issuance.
 
 ## Deployment CLI
 

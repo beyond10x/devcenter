@@ -2,57 +2,796 @@
   "openapi": "3.1.0",
   "info": {
     "title": "Devcenter API",
-    "version": "0.3.4",
+    "version": "0.4.0",
     "description": "Authenticated browser/BFF surface for identity, connector custody, agents, and tasks."
   },
   "paths": {
-    "/auth/sso/start": {"get": {"operationId": "startBrowserLogin", "responses": {"307": {"description": "Redirect to the configured identity provider"}, "503": {"$ref": "#/components/responses/Unavailable"}}}},
-    "/auth/sso/callback": {"get": {"operationId": "finishBrowserLogin", "parameters": [{"name": "code", "in": "query", "schema": {"type": "string"}}, {"name": "state", "in": "query", "schema": {"type": "string"}}], "responses": {"303": {"description": "Opaque browser session established"}, "400": {"$ref": "#/components/responses/Problem"}, "401": {"$ref": "#/components/responses/Problem"}}}},
-    "/api/session": {"get": {"operationId": "getSession", "security": [{"browserSession": []}, {"identityBearer": []}], "responses": {"200": {"description": "Current principal", "content": {"application/json": {"schema": {"$ref": "#/components/schemas/Session"}}}}, "401": {"$ref": "#/components/responses/Problem"}}}},
+    "/auth/sso/start": {
+      "get": {
+        "operationId": "startBrowserLogin",
+        "parameters": [
+          {
+            "name": "provider",
+            "in": "query",
+            "description": "Opaque configured Identity provider ID",
+            "schema": { "type": "string" }
+          }
+        ],
+        "responses": {
+          "307": {
+            "description": "Redirect to the configured identity provider"
+          },
+          "400": { "$ref": "#/components/responses/Problem" },
+          "503": { "$ref": "#/components/responses/Unavailable" }
+        }
+      }
+    },
+    "/auth/sso/callback": {
+      "get": {
+        "operationId": "finishBrowserLogin",
+        "parameters": [
+          { "name": "code", "in": "query", "schema": { "type": "string" } },
+          { "name": "state", "in": "query", "schema": { "type": "string" } }
+        ],
+        "responses": {
+          "303": { "description": "Opaque browser session established" },
+          "400": { "$ref": "#/components/responses/Problem" },
+          "401": { "$ref": "#/components/responses/Problem" }
+        }
+      }
+    },
+    "/auth/logout": {
+      "post": {
+        "operationId": "logoutBrowserSession",
+        "security": [{ "browserSession": [] }],
+        "responses": {
+          "204": {
+            "description": "Browser session cookie cleared; persistent MCP authorizations are unchanged"
+          },
+          "403": { "$ref": "#/components/responses/Problem" }
+        }
+      }
+    },
+    "/api/auth/providers": {
+      "get": {
+        "operationId": "listIdentityProviders",
+        "responses": {
+          "200": {
+            "description": "Deployment-configured provider choices",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "array",
+                  "items": { "$ref": "#/components/schemas/IdentityProvider" }
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/session": {
+      "get": {
+        "operationId": "getSession",
+        "security": [{ "browserSession": [] }, { "identityBearer": [] }],
+        "responses": {
+          "200": {
+            "description": "Current principal",
+            "content": {
+              "application/json": {
+                "schema": { "$ref": "#/components/schemas/Session" }
+              }
+            }
+          },
+          "401": { "$ref": "#/components/responses/Problem" }
+        }
+      }
+    },
     "/api/connectors/claude-code": {
-      "get": {"operationId": "getClaudeCodeConnection", "security": [{"browserSession": []}, {"identityBearer": []}], "responses": {"200": {"description": "Connection status", "content": {"application/json": {"schema": {"$ref": "#/components/schemas/ConnectionStatus"}}}}, "401": {"$ref": "#/components/responses/Problem"}}},
-      "put": {"deprecated": true, "operationId": "connectClaudeCodeWithCredential", "security": [{"browserSession": []}, {"identityBearer": []}], "requestBody": {"required": true, "content": {"application/json": {"schema": {"$ref": "#/components/schemas/ConnectClaudeCode"}}}}, "responses": {"200": {"description": "Compatibility credential accepted into connector custody", "content": {"application/json": {"schema": {"$ref": "#/components/schemas/ConnectionStatus"}}}}, "401": {"$ref": "#/components/responses/Problem"}, "403": {"$ref": "#/components/responses/Problem"}}},
-      "delete": {"operationId": "disconnectClaudeCode", "security": [{"browserSession": []}, {"identityBearer": []}], "responses": {"200": {"description": "Connection removed"}, "401": {"$ref": "#/components/responses/Problem"}, "403": {"$ref": "#/components/responses/Problem"}}}
+      "get": {
+        "operationId": "getClaudeCodeConnection",
+        "security": [{ "browserSession": [] }, { "identityBearer": [] }],
+        "responses": {
+          "200": {
+            "description": "Connection status",
+            "content": {
+              "application/json": {
+                "schema": { "$ref": "#/components/schemas/ConnectionStatus" }
+              }
+            }
+          },
+          "401": { "$ref": "#/components/responses/Problem" }
+        }
+      },
+      "put": {
+        "deprecated": true,
+        "operationId": "connectClaudeCodeWithCredential",
+        "security": [{ "browserSession": [] }, { "identityBearer": [] }],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": { "$ref": "#/components/schemas/ConnectClaudeCode" }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Compatibility credential accepted into connector custody",
+            "content": {
+              "application/json": {
+                "schema": { "$ref": "#/components/schemas/ConnectionStatus" }
+              }
+            }
+          },
+          "401": { "$ref": "#/components/responses/Problem" },
+          "403": { "$ref": "#/components/responses/Problem" }
+        }
+      },
+      "delete": {
+        "operationId": "disconnectClaudeCode",
+        "security": [{ "browserSession": [] }, { "identityBearer": [] }],
+        "responses": {
+          "200": { "description": "Connection removed" },
+          "401": { "$ref": "#/components/responses/Problem" },
+          "403": { "$ref": "#/components/responses/Problem" }
+        }
+      }
     },
-    "/api/connectors/claude-code/oauth/start": {"post": {"operationId": "startClaudeCodeOAuth", "security": [{"browserSession": []}, {"identityBearer": []}], "responses": {"200": {"description": "Bounded provider authorization step", "headers": {"Cache-Control": {"schema": {"const": "no-store"}}}, "content": {"application/json": {"schema": {"$ref": "#/components/schemas/ClaudeOAuthStart"}}}}, "401": {"$ref": "#/components/responses/Problem"}, "403": {"$ref": "#/components/responses/Problem"}, "503": {"$ref": "#/components/responses/Unavailable"}}}},
-    "/api/connectors/claude-code/oauth/complete": {"post": {"operationId": "completeClaudeCodeOAuth", "security": [{"browserSession": []}, {"identityBearer": []}], "requestBody": {"required": true, "content": {"application/json": {"schema": {"$ref": "#/components/schemas/CompleteClaudeOAuth"}}}}, "responses": {"200": {"description": "Provider credentials accepted into connector custody", "headers": {"Cache-Control": {"schema": {"const": "no-store"}}}, "content": {"application/json": {"schema": {"$ref": "#/components/schemas/ConnectionStatus"}}}}, "401": {"$ref": "#/components/responses/Problem"}, "403": {"$ref": "#/components/responses/Problem"}, "422": {"$ref": "#/components/responses/Problem"}, "503": {"$ref": "#/components/responses/Unavailable"}}}},
+    "/api/connectors/claude-code/oauth/start": {
+      "post": {
+        "operationId": "startClaudeCodeOAuth",
+        "security": [{ "browserSession": [] }, { "identityBearer": [] }],
+        "responses": {
+          "200": {
+            "description": "Bounded provider authorization step",
+            "headers": {
+              "Cache-Control": { "schema": { "const": "no-store" } }
+            },
+            "content": {
+              "application/json": {
+                "schema": { "$ref": "#/components/schemas/ClaudeOAuthStart" }
+              }
+            }
+          },
+          "401": { "$ref": "#/components/responses/Problem" },
+          "403": { "$ref": "#/components/responses/Problem" },
+          "503": { "$ref": "#/components/responses/Unavailable" }
+        }
+      }
+    },
+    "/api/connectors/claude-code/oauth/complete": {
+      "post": {
+        "operationId": "completeClaudeCodeOAuth",
+        "security": [{ "browserSession": [] }, { "identityBearer": [] }],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": { "$ref": "#/components/schemas/CompleteClaudeOAuth" }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Provider credentials accepted into connector custody",
+            "headers": {
+              "Cache-Control": { "schema": { "const": "no-store" } }
+            },
+            "content": {
+              "application/json": {
+                "schema": { "$ref": "#/components/schemas/ConnectionStatus" }
+              }
+            }
+          },
+          "401": { "$ref": "#/components/responses/Problem" },
+          "403": { "$ref": "#/components/responses/Problem" },
+          "422": { "$ref": "#/components/responses/Problem" },
+          "503": { "$ref": "#/components/responses/Unavailable" }
+        }
+      }
+    },
     "/api/agents": {
-      "get": {"operationId": "listAgents", "security": [{"browserSession": []}, {"identityBearer": []}], "responses": {"200": {"description": "Tenant-scoped agents", "content": {"application/json": {"schema": {"type": "array", "items": {"$ref": "#/components/schemas/Agent"}}}}}, "401": {"$ref": "#/components/responses/Problem"}}},
-      "post": {"operationId": "createManagedAgent", "security": [{"browserSession": []}, {"identityBearer": []}], "requestBody": {"required": true, "content": {"application/json": {"schema": {"$ref": "#/components/schemas/CreateAgent"}}}}, "responses": {"201": {"description": "Agent created with an active first revision", "content": {"application/json": {"schema": {"$ref": "#/components/schemas/Agent"}}}}, "401": {"$ref": "#/components/responses/Problem"}, "403": {"$ref": "#/components/responses/Problem"}}}
+      "get": {
+        "operationId": "listAgents",
+        "security": [{ "browserSession": [] }, { "identityBearer": [] }],
+        "responses": {
+          "200": {
+            "description": "Tenant-scoped agents",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "array",
+                  "items": { "$ref": "#/components/schemas/Agent" }
+                }
+              }
+            }
+          },
+          "401": { "$ref": "#/components/responses/Problem" }
+        }
+      },
+      "post": {
+        "operationId": "createManagedAgent",
+        "security": [{ "browserSession": [] }, { "identityBearer": [] }],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": { "$ref": "#/components/schemas/CreateAgent" }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": "Agent created with an active first revision",
+            "content": {
+              "application/json": {
+                "schema": { "$ref": "#/components/schemas/Agent" }
+              }
+            }
+          },
+          "401": { "$ref": "#/components/responses/Problem" },
+          "403": { "$ref": "#/components/responses/Problem" }
+        }
+      }
     },
-    "/api/agents/{agent_id}/tasks": {"post": {"operationId": "submitAgentTask", "security": [{"browserSession": []}, {"identityBearer": []}], "parameters": [{"$ref": "#/components/parameters/AgentId"}], "requestBody": {"required": true, "content": {"application/json": {"schema": {"$ref": "#/components/schemas/SubmitTask"}}}}, "responses": {"202": {"description": "Task accepted", "content": {"application/json": {"schema": {"$ref": "#/components/schemas/Task"}}}}, "401": {"$ref": "#/components/responses/Problem"}, "403": {"$ref": "#/components/responses/Problem"}}}},
-    "/api/tasks/{task_id}": {"get": {"operationId": "getTask", "security": [{"browserSession": []}, {"identityBearer": []}], "parameters": [{"$ref": "#/components/parameters/TaskId"}], "responses": {"200": {"description": "Task state", "content": {"application/json": {"schema": {"$ref": "#/components/schemas/Task"}}}}, "401": {"$ref": "#/components/responses/Problem"}}}},
-    "/api/tasks/{task_id}/events": {"get": {"operationId": "streamTaskEvents", "security": [{"browserSession": []}, {"identityBearer": []}], "parameters": [{"$ref": "#/components/parameters/TaskId"}], "responses": {"200": {"description": "Ordered, attempt-bound task event stream", "content": {"text/event-stream": {"schema": {"type": "string"}}}}, "401": {"$ref": "#/components/responses/Problem"}}}},
-    "/healthz": {"get": {"operationId": "health", "responses": {"200": {"description": "Process is alive"}}}},
-    "/readyz": {"get": {"operationId": "readiness", "responses": {"200": {"description": "Required service clients are configured"}, "503": {"description": "Configuration is incomplete"}}}},
-    "/metrics": {"get": {"operationId": "metrics", "responses": {"200": {"description": "Prometheus metrics"}}}},
-    "/openapi.json": {"get": {"operationId": "openapi", "responses": {"200": {"description": "This document"}}}},
-    "/mcp": {"post": {"operationId": "mcp", "security": [{"browserSession": []}, {"identityBearer": []}], "responses": {"200": {"description": "MCP JSON-RPC response"}, "401": {"$ref": "#/components/responses/Problem"}}}}
+    "/api/agents/{agent_id}/tasks": {
+      "post": {
+        "operationId": "submitAgentTask",
+        "security": [{ "browserSession": [] }, { "identityBearer": [] }],
+        "parameters": [{ "$ref": "#/components/parameters/AgentId" }],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": { "$ref": "#/components/schemas/SubmitTask" }
+            }
+          }
+        },
+        "responses": {
+          "202": {
+            "description": "Task accepted",
+            "content": {
+              "application/json": {
+                "schema": { "$ref": "#/components/schemas/Task" }
+              }
+            }
+          },
+          "401": { "$ref": "#/components/responses/Problem" },
+          "403": { "$ref": "#/components/responses/Problem" }
+        }
+      }
+    },
+    "/api/tasks/{task_id}": {
+      "get": {
+        "operationId": "getTask",
+        "security": [{ "browserSession": [] }, { "identityBearer": [] }],
+        "parameters": [{ "$ref": "#/components/parameters/TaskId" }],
+        "responses": {
+          "200": {
+            "description": "Task state",
+            "content": {
+              "application/json": {
+                "schema": { "$ref": "#/components/schemas/Task" }
+              }
+            }
+          },
+          "401": { "$ref": "#/components/responses/Problem" }
+        }
+      }
+    },
+    "/api/tasks/{task_id}/events": {
+      "get": {
+        "operationId": "streamTaskEvents",
+        "security": [{ "browserSession": [] }, { "identityBearer": [] }],
+        "parameters": [{ "$ref": "#/components/parameters/TaskId" }],
+        "responses": {
+          "200": {
+            "description": "Ordered, attempt-bound task event stream",
+            "content": {
+              "text/event-stream": { "schema": { "type": "string" } }
+            }
+          },
+          "401": { "$ref": "#/components/responses/Problem" }
+        }
+      }
+    },
+    "/api/mcp/publications": {
+      "get": {
+        "operationId": "listMcpPublications",
+        "security": [{ "browserSession": [] }, { "identityBearer": [] }],
+        "responses": {
+          "200": {
+            "description": "Publications owned by the stable internal subject",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "array",
+                  "items": { "$ref": "#/components/schemas/Publication" }
+                }
+              }
+            }
+          },
+          "401": { "$ref": "#/components/responses/Problem" }
+        }
+      },
+      "post": {
+        "operationId": "publishCapabilityProfile",
+        "security": [{ "browserSession": [] }, { "identityBearer": [] }],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "required": ["profile_id"],
+                "properties": { "profile_id": { "type": "string" } },
+                "additionalProperties": false
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": "Immutable profile revision published",
+            "content": {
+              "application/json": {
+                "schema": { "$ref": "#/components/schemas/Publication" }
+              }
+            }
+          },
+          "503": { "$ref": "#/components/responses/Unavailable" }
+        }
+      }
+    },
+    "/api/mcp/publications/{publication_id}": {
+      "get": {
+        "operationId": "getMcpPublication",
+        "security": [{ "browserSession": [] }, { "identityBearer": [] }],
+        "parameters": [{ "$ref": "#/components/parameters/PublicationId" }],
+        "responses": {
+          "200": {
+            "description": "Owned publication",
+            "content": {
+              "application/json": {
+                "schema": { "$ref": "#/components/schemas/Publication" }
+              }
+            }
+          },
+          "404": { "$ref": "#/components/responses/Problem" }
+        }
+      },
+      "patch": {
+        "operationId": "changeMcpPublicationState",
+        "security": [{ "browserSession": [] }, { "identityBearer": [] }],
+        "parameters": [{ "$ref": "#/components/parameters/PublicationId" }],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "required": ["state"],
+                "properties": {
+                  "state": { "$ref": "#/components/schemas/PublicationState" }
+                },
+                "additionalProperties": false
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Publication state changed",
+            "content": {
+              "application/json": {
+                "schema": { "$ref": "#/components/schemas/Publication" }
+              }
+            }
+          },
+          "409": { "$ref": "#/components/responses/Problem" }
+        }
+      }
+    },
+    "/api/mcp/publications/{publication_id}/clients": {
+      "get": {
+        "operationId": "listMcpClientAuthorizations",
+        "security": [{ "browserSession": [] }, { "identityBearer": [] }],
+        "parameters": [{ "$ref": "#/components/parameters/PublicationId" }],
+        "responses": {
+          "200": {
+            "description": "Credential-free OAuth client authorizations",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "array",
+                  "items": {
+                    "$ref": "#/components/schemas/ClientAuthorization"
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/mcp/publications/{publication_id}/clients/{authorization_id}": {
+      "delete": {
+        "operationId": "revokeMcpClientAuthorization",
+        "security": [{ "browserSession": [] }, { "identityBearer": [] }],
+        "parameters": [
+          { "$ref": "#/components/parameters/PublicationId" },
+          {
+            "name": "authorization_id",
+            "in": "path",
+            "required": true,
+            "schema": { "type": "string" }
+          }
+        ],
+        "responses": {
+          "204": { "description": "One client authorization revoked" },
+          "503": { "$ref": "#/components/responses/Unavailable" }
+        }
+      }
+    },
+    "/api/mcp/publications/{publication_id}/approvals": {
+      "get": {
+        "operationId": "listMcpApprovals",
+        "security": [{ "browserSession": [] }, { "identityBearer": [] }],
+        "parameters": [{ "$ref": "#/components/parameters/PublicationId" }],
+        "responses": {
+          "200": {
+            "description": "Pending exact-input approvals",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "array",
+                  "items": { "$ref": "#/components/schemas/Approval" }
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/healthz": {
+      "get": {
+        "operationId": "health",
+        "responses": { "200": { "description": "Process is alive" } }
+      }
+    },
+    "/readyz": {
+      "get": {
+        "operationId": "readiness",
+        "responses": {
+          "200": { "description": "Required service clients are configured" },
+          "503": { "description": "Configuration is incomplete" }
+        }
+      }
+    },
+    "/metrics": {
+      "get": {
+        "operationId": "metrics",
+        "responses": { "200": { "description": "Prometheus metrics" } }
+      }
+    },
+    "/openapi.json": {
+      "get": {
+        "operationId": "openapi",
+        "responses": { "200": { "description": "This document" } }
+      }
+    },
+    "/.well-known/oauth-protected-resource/mcp/{publication_id}": {
+      "get": {
+        "operationId": "mcpProtectedResourceMetadata",
+        "parameters": [{ "$ref": "#/components/parameters/PublicationId" }],
+        "responses": {
+          "200": {
+            "description": "RFC 9728 metadata for the exact publication resource"
+          },
+          "404": { "description": "Malformed publication ID" }
+        }
+      }
+    },
+    "/mcp/{publication_id}": {
+      "post": {
+        "operationId": "mcp",
+        "parameters": [{ "$ref": "#/components/parameters/PublicationId" }],
+        "security": [{ "mcpBearer": ["mcp.tools.call"] }],
+        "responses": {
+          "200": { "description": "MCP Streamable HTTP JSON-RPC response" },
+          "202": { "description": "MCP notification accepted" },
+          "401": { "$ref": "#/components/responses/Problem" },
+          "403": { "$ref": "#/components/responses/Problem" }
+        }
+      }
+    }
   },
   "components": {
     "securitySchemes": {
-      "browserSession": {"type": "apiKey", "in": "cookie", "name": "__Host-devcenter_session"},
-      "identityBearer": {"type": "http", "scheme": "bearer"}
+      "browserSession": {
+        "type": "apiKey",
+        "in": "cookie",
+        "name": "__Host-devcenter_session"
+      },
+      "identityBearer": { "type": "http", "scheme": "bearer" },
+      "mcpBearer": {
+        "type": "oauth2",
+        "flows": {
+          "authorizationCode": {
+            "authorizationUrl": "/identity/oauth/authorize",
+            "tokenUrl": "/identity/oauth/token",
+            "scopes": {
+              "mcp.tools.call": "Invoke tools in one exact publication"
+            }
+          }
+        }
+      }
     },
     "parameters": {
-      "AgentId": {"name": "agent_id", "in": "path", "required": true, "schema": {"type": "string"}},
-      "TaskId": {"name": "task_id", "in": "path", "required": true, "schema": {"type": "string"}}
+      "AgentId": {
+        "name": "agent_id",
+        "in": "path",
+        "required": true,
+        "schema": { "type": "string" }
+      },
+      "TaskId": {
+        "name": "task_id",
+        "in": "path",
+        "required": true,
+        "schema": { "type": "string" }
+      },
+      "PublicationId": {
+        "name": "publication_id",
+        "in": "path",
+        "required": true,
+        "schema": { "type": "string", "maxLength": 128 }
+      }
     },
     "responses": {
-      "Problem": {"description": "Request refused", "content": {"application/json": {"schema": {"$ref": "#/components/schemas/Problem"}}}},
-      "Unavailable": {"description": "A required inner service is unavailable", "content": {"application/json": {"schema": {"$ref": "#/components/schemas/Problem"}}}}
+      "Problem": {
+        "description": "Request refused",
+        "content": {
+          "application/json": {
+            "schema": { "$ref": "#/components/schemas/Problem" }
+          }
+        }
+      },
+      "Unavailable": {
+        "description": "A required inner service is unavailable",
+        "content": {
+          "application/json": {
+            "schema": { "$ref": "#/components/schemas/Problem" }
+          }
+        }
+      }
     },
     "schemas": {
-      "Problem": {"type": "object", "required": ["code"], "properties": {"code": {"type": "string"}}, "additionalProperties": false},
-      "Session": {"type": "object", "required": ["tenant_id", "subject", "groups"], "properties": {"tenant_id": {"type": "string"}, "subject": {"type": "string"}, "email": {"type": ["string", "null"]}, "groups": {"type": "array", "items": {"type": "string"}}}, "additionalProperties": false},
-      "ConnectionStatus": {"type": "object", "required": ["provider", "connected"], "properties": {"provider": {"const": "claude-code"}, "connected": {"type": "boolean"}}, "additionalProperties": false},
-      "ConnectClaudeCode": {"type": "object", "required": ["credential"], "properties": {"credential": {"type": "string", "format": "password", "writeOnly": true, "maxLength": 65536}}, "additionalProperties": false},
-      "ClaudeOAuthStart": {"type": "object", "required": ["authorization_url", "flow_id", "expires_at"], "properties": {"authorization_url": {"type": "string", "format": "uri"}, "flow_id": {"type": "string", "maxLength": 512}, "expires_at": {"type": "integer"}}, "additionalProperties": false},
-      "CompleteClaudeOAuth": {"type": "object", "required": ["flow_id", "code"], "properties": {"flow_id": {"type": "string", "maxLength": 512}, "code": {"type": "string", "format": "password", "writeOnly": true, "maxLength": 12288}}, "additionalProperties": false},
-      "CreateAgent": {"type": "object", "required": ["name", "instructions", "model"], "properties": {"name": {"type": "string"}, "instructions": {"type": "string"}, "model": {"type": "string"}}, "additionalProperties": false},
-      "Agent": {"type": "object", "required": ["id", "tenant_id", "name", "latest_revision", "created_by", "created_at_ms"], "properties": {"id": {"type": "string"}, "tenant_id": {"type": "string"}, "name": {"type": "string"}, "active_revision": {"type": ["integer", "null"]}, "latest_revision": {"type": "integer"}, "created_by": {"type": "string"}, "created_at_ms": {"type": "integer"}}},
-      "SubmitTask": {"type": "object", "required": ["prompt", "idempotency_key"], "properties": {"prompt": {"type": "string"}, "idempotency_key": {"type": "string"}}, "additionalProperties": false},
-      "Task": {"type": "object", "required": ["id", "agent_id", "status", "attempt_id"], "properties": {"id": {"type": "string"}, "agent_id": {"type": "string"}, "status": {"type": "string"}, "attempt_id": {"type": "string"}, "output": {"type": ["string", "null"]}}}
+      "Problem": {
+        "type": "object",
+        "required": ["code"],
+        "properties": { "code": { "type": "string" } },
+        "additionalProperties": false
+      },
+      "Session": {
+        "type": "object",
+        "required": ["tenant_id", "subject", "groups"],
+        "properties": {
+          "tenant_id": { "type": "string" },
+          "subject": { "type": "string" },
+          "email": { "type": ["string", "null"] },
+          "groups": { "type": "array", "items": { "type": "string" } }
+        },
+        "additionalProperties": false
+      },
+      "IdentityProvider": {
+        "type": "object",
+        "required": ["id", "display_name"],
+        "properties": {
+          "id": { "type": "string" },
+          "display_name": { "type": "string" }
+        },
+        "additionalProperties": false
+      },
+      "PublicationState": {
+        "type": "string",
+        "enum": ["active", "suspended", "revoked"]
+      },
+      "Publication": {
+        "type": "object",
+        "required": [
+          "publication_id",
+          "tenant_id",
+          "owner_subject",
+          "profile_id",
+          "active_revision",
+          "toolset_digest",
+          "state",
+          "created_at_ms",
+          "updated_at_ms"
+        ],
+        "properties": {
+          "publication_id": { "type": "string" },
+          "tenant_id": { "type": "string" },
+          "owner_subject": { "type": "string" },
+          "profile_id": { "type": "string" },
+          "active_revision": { "type": "integer" },
+          "toolset_digest": { "type": "string" },
+          "state": { "$ref": "#/components/schemas/PublicationState" },
+          "created_at_ms": { "type": "integer" },
+          "updated_at_ms": { "type": "integer" }
+        },
+        "additionalProperties": false
+      },
+      "ClientAuthorization": {
+        "type": "object",
+        "required": [
+          "authorization_id",
+          "publication_id",
+          "subject",
+          "client_id",
+          "display_name",
+          "state",
+          "first_used_at_ms",
+          "last_used_at_ms"
+        ],
+        "properties": {
+          "authorization_id": { "type": "string" },
+          "publication_id": { "type": "string" },
+          "subject": { "type": "string" },
+          "client_id": { "type": "string" },
+          "display_name": { "type": "string" },
+          "state": { "type": "string", "enum": ["active", "revoked"] },
+          "first_used_at_ms": { "type": "integer" },
+          "last_used_at_ms": { "type": "integer" }
+        },
+        "additionalProperties": false
+      },
+      "Approval": {
+        "type": "object",
+        "required": [
+          "approval_id",
+          "publication_id",
+          "authorization_id",
+          "subject",
+          "client_id",
+          "tool_name",
+          "operation_ref",
+          "connection_id",
+          "input_digest",
+          "state",
+          "expires_at_ms",
+          "created_at_ms",
+          "updated_at_ms"
+        ],
+        "properties": {
+          "approval_id": { "type": "string" },
+          "publication_id": { "type": "string" },
+          "authorization_id": { "type": "string" },
+          "subject": { "type": "string" },
+          "client_id": { "type": "string" },
+          "tool_name": { "type": "string" },
+          "operation_ref": { "type": "string" },
+          "connection_id": { "type": "string" },
+          "input_digest": { "type": "string" },
+          "state": {
+            "type": "string",
+            "enum": [
+              "pending",
+              "approved",
+              "denied",
+              "consumed",
+              "expired",
+              "outcome_unknown"
+            ]
+          },
+          "expires_at_ms": { "type": "integer" },
+          "audit_ref": { "type": ["string", "null"] },
+          "created_at_ms": { "type": "integer" },
+          "updated_at_ms": { "type": "integer" }
+        },
+        "additionalProperties": false
+      },
+      "ConnectionStatus": {
+        "type": "object",
+        "required": ["provider", "connected"],
+        "properties": {
+          "provider": { "const": "claude-code" },
+          "connected": { "type": "boolean" }
+        },
+        "additionalProperties": false
+      },
+      "ConnectClaudeCode": {
+        "type": "object",
+        "required": ["credential"],
+        "properties": {
+          "credential": {
+            "type": "string",
+            "format": "password",
+            "writeOnly": true,
+            "maxLength": 65536
+          }
+        },
+        "additionalProperties": false
+      },
+      "ClaudeOAuthStart": {
+        "type": "object",
+        "required": ["authorization_url", "flow_id", "expires_at"],
+        "properties": {
+          "authorization_url": { "type": "string", "format": "uri" },
+          "flow_id": { "type": "string", "maxLength": 512 },
+          "expires_at": { "type": "integer" }
+        },
+        "additionalProperties": false
+      },
+      "CompleteClaudeOAuth": {
+        "type": "object",
+        "required": ["flow_id", "code"],
+        "properties": {
+          "flow_id": { "type": "string", "maxLength": 512 },
+          "code": {
+            "type": "string",
+            "format": "password",
+            "writeOnly": true,
+            "maxLength": 12288
+          }
+        },
+        "additionalProperties": false
+      },
+      "CreateAgent": {
+        "type": "object",
+        "required": ["name", "instructions", "model"],
+        "properties": {
+          "name": { "type": "string" },
+          "instructions": { "type": "string" },
+          "model": { "type": "string" },
+          "capability_profile_id": {
+            "type": "string",
+            "description": "Existing immutable capability profile assigned to the first agent revision"
+          }
+        },
+        "additionalProperties": false
+      },
+      "Agent": {
+        "type": "object",
+        "required": [
+          "id",
+          "tenant_id",
+          "name",
+          "latest_revision",
+          "created_by",
+          "created_at_ms"
+        ],
+        "properties": {
+          "id": { "type": "string" },
+          "tenant_id": { "type": "string" },
+          "name": { "type": "string" },
+          "active_revision": { "type": ["integer", "null"] },
+          "latest_revision": { "type": "integer" },
+          "created_by": { "type": "string" },
+          "created_at_ms": { "type": "integer" }
+        }
+      },
+      "SubmitTask": {
+        "type": "object",
+        "required": ["prompt", "idempotency_key"],
+        "properties": {
+          "prompt": { "type": "string" },
+          "idempotency_key": { "type": "string" }
+        },
+        "additionalProperties": false
+      },
+      "Task": {
+        "type": "object",
+        "required": ["id", "agent_id", "status", "attempt_id"],
+        "properties": {
+          "id": { "type": "string" },
+          "agent_id": { "type": "string" },
+          "status": { "type": "string" },
+          "attempt_id": { "type": "string" },
+          "output": { "type": ["string", "null"] }
+        }
+      }
     }
   }
 }

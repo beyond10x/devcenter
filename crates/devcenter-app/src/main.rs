@@ -2,6 +2,7 @@ use anyhow::{Context, Result, bail};
 use clap::Parser;
 use devcenter_auth::Authentication;
 use devcenter_core::Config;
+use devcenter_core::IdentityProvider;
 use devcenter_http::router;
 use std::{
     env,
@@ -34,6 +35,16 @@ struct Args {
     /// Exact Identity-registered browser callback URI.
     #[arg(long, env = "DEV_CENTER_IDENTITY_REDIRECT_URI")]
     identity_redirect_uri: Option<String>,
+    /// JSON array of opaque Identity provider IDs and display names.
+    #[arg(long, env = "DEV_CENTER_IDENTITY_PROVIDERS", default_value = "[]")]
+    identity_providers: String,
+    /// `SQLite` locally; hosted deployments inject a `PostgreSQL` URL through a Secret.
+    #[arg(
+        long,
+        env = "DEV_CENTER_DATABASE_URL",
+        default_value = "sqlite://devcenter.sqlite?mode=rwc"
+    )]
+    database_url: String,
     /// Internal Agent Platform origin.
     #[arg(long, env = "DEV_CENTER_AGENT_PLATFORM_ORIGIN")]
     agent_platform_origin: Option<String>,
@@ -59,6 +70,28 @@ async fn main() -> Result<()> {
             "DEV_CENTER_IDENTITY_WEB_CLIENT_ID and DEV_CENTER_IDENTITY_REDIRECT_URI must be configured together"
         );
     }
+    let identity_providers: Vec<IdentityProvider> = serde_json::from_str(&args.identity_providers)
+        .context("DEV_CENTER_IDENTITY_PROVIDERS must be a JSON array")?;
+    for provider in &identity_providers {
+        if provider.id.is_empty()
+            || provider.id.len() > 128
+            || !provider
+                .id
+                .bytes()
+                .all(|byte| byte.is_ascii_alphanumeric() || matches!(byte, b'_' | b'-' | b'.'))
+            || provider.display_name.trim().is_empty()
+            || provider.display_name.len() > 160
+        {
+            bail!("DEV_CENTER_IDENTITY_PROVIDERS contains an invalid provider");
+        }
+    }
+    let unique_provider_ids = identity_providers
+        .iter()
+        .map(|provider| provider.id.as_str())
+        .collect::<std::collections::BTreeSet<_>>();
+    if unique_provider_ids.len() != identity_providers.len() {
+        bail!("DEV_CENTER_IDENTITY_PROVIDERS contains duplicate IDs");
+    }
     let authentication = if args.insecure_dev_auth {
         let token = env::var(&args.dev_token_env).with_context(|| {
             format!("{} must contain the development token", args.dev_token_env)
@@ -80,6 +113,8 @@ async fn main() -> Result<()> {
             authentication,
             identity_web_client_id: args.identity_web_client_id,
             identity_redirect_uri: args.identity_redirect_uri,
+            identity_providers,
+            database_url: args.database_url,
             agent_platform_origin: args.agent_platform_origin,
             connectors_api_base: args.connectors_api_base,
         })?,

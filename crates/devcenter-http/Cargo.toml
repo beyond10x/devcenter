@@ -9,11 +9,14 @@ publish.workspace = true
 
 [dependencies]
 agent-platform-client.workspace = true
+agent-platform-core.workspace = true
 axum.workspace = true
 base64.workspace = true
 connectors-client.workspace = true
 devcenter-auth.workspace = true
 devcenter-core.workspace = true
+devcenter-mcp.workspace = true
+devcenter-store.workspace = true
 devcenter-web-assets.workspace = true
 getrandom.workspace = true
 identity-client.workspace = true

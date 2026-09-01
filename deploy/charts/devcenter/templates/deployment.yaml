@@ -41,6 +41,14 @@ spec:
             {{- with .Values.devcenter.envFrom }}
             {{- toYaml . | nindent 12 }}
             {{- end }}
+          {{- with .Values.devcenter.database.existingSecret }}
+          env:
+            - name: DEV_CENTER_DATABASE_URL
+              valueFrom:
+                secretKeyRef:
+                  name: {{ . | quote }}
+                  key: {{ $.Values.devcenter.database.databaseUrlKey | quote }}
+          {{- end }}
           ports:
             - {name: http, containerPort: 8080, protocol: TCP}
           readinessProbe: {httpGet: {path: /readyz, port: http}}

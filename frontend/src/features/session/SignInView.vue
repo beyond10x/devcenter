@@ -1,5 +1,12 @@
 <script setup lang="ts">
 import { ArrowRight, Blocks, KeyRound, ShieldCheck } from "@lucide/vue";
+import { useWorkspaceStore } from "@/stores/workspace";
+
+const workspace = useWorkspaceStore();
+
+function providerLogin(id: string) {
+  return `/auth/sso/start?provider=${encodeURIComponent(id)}`;
+}
 </script>
 
 <template>
@@ -21,8 +28,21 @@ import { ArrowRight, Blocks, KeyRound, ShieldCheck } from "@lucide/vue";
           authenticated control surface.
         </p>
         <div class="hero-actions">
-          <a class="button primary large" href="/auth/sso/start">
-            Sign in through Identity <ArrowRight :size="17" />
+          <template v-if="workspace.identityProviders.length > 1">
+            <span class="provider-prompt">Choose your verified identity provider</span>
+            <a
+              v-for="provider in workspace.identityProviders"
+              :key="provider.id"
+              class="button primary large"
+              :href="providerLogin(provider.id)"
+            >
+              Continue with {{ provider.display_name }} <ArrowRight :size="17" />
+            </a>
+          </template>
+          <a v-else class="button primary large" href="/auth/sso/start">
+            Sign in through
+            {{ workspace.identityProviders[0]?.display_name ?? "Identity" }}
+            <ArrowRight :size="17" />
           </a>
           <span>Secure browser session · tenant and actor resolved server-side</span>
         </div>

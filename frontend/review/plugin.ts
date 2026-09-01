@@ -13,6 +13,17 @@ interface ReviewAgent {
 
 let connected = false;
 let nextAgent = 3;
+let publicationState: "active" | "suspended" = "active";
+const publication = {
+  publication_id: "pub_review_7mz4v2",
+  tenant_id: "review-tenant",
+  owner_subject: "review-engineer",
+  profile_id: "profile-release-operations",
+  active_revision: 4,
+  toolset_digest: "41dc0e9963dd312bb656d0907b91990a16f57e8465886407476776ca08284f57",
+  created_at_ms: 1_788_260_000_000,
+  updated_at_ms: 1_788_260_000_000,
+};
 const agents: ReviewAgent[] = [
   {
     id: "agent-release",
@@ -128,6 +139,48 @@ export function reviewApi(): Plugin {
             };
             agents.unshift(created);
             sendJson(response, 201, created);
+            return;
+          }
+          if (path === "/api/mcp/publications" && method === "GET") {
+            sendJson(response, 200, [{ ...publication, state: publicationState }]);
+            return;
+          }
+          if (
+            path === `/api/mcp/publications/${publication.publication_id}` &&
+            method === "PATCH"
+          ) {
+            const submitted = await readJson(request);
+            if (submitted.state === "active" || submitted.state === "suspended") {
+              publicationState = submitted.state;
+              sendJson(response, 200, { ...publication, state: publicationState });
+            } else {
+              sendJson(response, 503, { code: "identity_publication_revocation_unavailable" });
+            }
+            return;
+          }
+          if (
+            path === `/api/mcp/publications/${publication.publication_id}/clients` &&
+            method === "GET"
+          ) {
+            sendJson(response, 200, [
+              {
+                authorization_id: "authorization-review-codex",
+                publication_id: publication.publication_id,
+                subject: "review-engineer",
+                client_id: "codex-cli",
+                display_name: "Codex CLI",
+                state: "active",
+                first_used_at_ms: 1_788_260_000_000,
+                last_used_at_ms: 1_788_260_600_000,
+              },
+            ]);
+            return;
+          }
+          if (
+            path === `/api/mcp/publications/${publication.publication_id}/approvals` &&
+            method === "GET"
+          ) {
+            sendJson(response, 200, []);
             return;
           }
           if (path === "/api/connectors/claude-code" && method === "GET") {

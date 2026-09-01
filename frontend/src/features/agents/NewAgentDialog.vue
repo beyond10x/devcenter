@@ -10,6 +10,7 @@ const workspace = useWorkspaceStore();
 const name = ref("");
 const instructions = ref("");
 const model = ref("claude-opus-5");
+const capabilityProfileId = ref("");
 const submitting = ref(false);
 const formError = ref("");
 const nameField = ref<HTMLInputElement>();
@@ -18,6 +19,7 @@ const schema = z.object({
   name: z.string().trim().min(1, "Give the agent a name.").max(160),
   instructions: z.string().trim().min(1, "Describe how this agent should work."),
   model: z.string().trim().min(1, "Choose a model route."),
+  capability_profile_id: z.string().trim().optional(),
 });
 
 async function submit() {
@@ -26,6 +28,7 @@ async function submit() {
     name: name.value,
     instructions: instructions.value,
     model: model.value,
+    capability_profile_id: capabilityProfileId.value || undefined,
   });
   if (!parsed.success) {
     formError.value = parsed.error.issues[0]?.message ?? "Check the agent details.";
@@ -100,6 +103,16 @@ onBeforeUnmount(() => {
           <label for="agent-model">Model route</label>
           <input id="agent-model" v-model="model" placeholder="claude-opus-5" autocomplete="off" />
           <small>The route is recorded in the agent's immutable revision.</small>
+        </div>
+        <div class="field">
+          <label for="agent-profile">Capability profile <span>(optional)</span></label>
+          <input
+            id="agent-profile"
+            v-model="capabilityProfileId"
+            placeholder="Capability profile ID"
+            autocomplete="off"
+          />
+          <small>The profile is pinned to this immutable agent revision.</small>
         </div>
         <p v-if="formError" class="form-error" role="alert">{{ formError }}</p>
         <footer class="dialog-actions">
