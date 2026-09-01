@@ -2,6 +2,10 @@
 
 ## Unreleased
 
+## 0.2.6 - 2026-09-01
+
+- Default new agents to `claude-opus-5`, matching the current user-subscription model without
+  relying on Claude Code's legacy-model remapping.
 - Use the standard GitHub-hosted Intel macOS runner for x86_64 release bundles and let independent
   release targets finish when one matrix entry fails.
 

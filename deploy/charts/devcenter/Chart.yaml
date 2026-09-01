@@ -2,8 +2,8 @@ apiVersion: v2
 name: devcenter
 description: Generic composition for governed agents, workflows, connectors, identity, and sandboxed execution
 type: application
-version: 0.2.5
-appVersion: "0.2.5"
+version: 0.2.6
+appVersion: "0.2.6"
 home: https://github.com/beyond10x/devcenter
 sources:
   - https://github.com/beyond10x/devcenter
