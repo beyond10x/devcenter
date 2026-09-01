@@ -2,6 +2,11 @@
 
 ## Unreleased
 
+## 0.4.3 - 2026-09-01
+
+- Initialize Substrate state and runtime mounts as owner-only directories before starting the
+  non-root daemon.
+
 ## 0.4.2 - 2026-09-01
 
 - Repair PostgreSQL publication persistence, make terminal revocation atomic, and exercise the

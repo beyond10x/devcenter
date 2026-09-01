@@ -221,6 +221,8 @@ secrets:
 substrate:
   enabled: false
   image: {repository: "", digest: "", pullPolicy: IfNotPresent}
+  volumePermissions:
+    image: {repository: "", digest: "", pullPolicy: IfNotPresent}
   port: 8443
   deployment: hosted
   tls:

@@ -82,6 +82,10 @@ substrate:
   image:
     repository: registry.example.invalid/substrate
     digest: sha256:cdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcd
+  volumePermissions:
+    image:
+      repository: registry.example.invalid/volume-permissions
+      digest: sha256:dededededededededededededededededededededededededededededededededede
   tls:
     existingSecret: example-substrate-tls
   hostedIdentity:
