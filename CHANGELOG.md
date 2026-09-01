@@ -2,6 +2,11 @@
 
 ## Unreleased
 
+## 0.4.5 - 2026-09-01
+
+- Make Substrate TLS identity staging retry-safe and hand off child files before restricting the
+  parent directory, retaining the initializer's narrow capability set.
+
 ## 0.4.4 - 2026-09-01
 
 - Materialize Kubernetes-projected TLS identity entries as regular, owner-controlled files before
