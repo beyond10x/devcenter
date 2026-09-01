@@ -2,6 +2,11 @@
 
 ## Unreleased
 
+## 0.4.6 - 2026-09-01
+
+- Probe Connectors beneath its configured hosted base path so Kubernetes observes the same live
+  and ready endpoints exposed by the composed service.
+
 ## 0.4.5 - 2026-09-01
 
 - Make Substrate TLS identity staging retry-safe and hand off child files before restricting the

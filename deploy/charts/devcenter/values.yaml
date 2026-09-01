@@ -78,8 +78,8 @@ components:
     volumeMounts: []
     volumes: []
     persistence: {enabled: false, storageClass: "", size: 1Gi, mountPath: /var/lib/connectors}
-    readinessProbe: {httpGet: {path: /readyz, port: http}}
-    livenessProbe: {httpGet: {path: /livez, port: http}}
+    readinessProbe: {httpGet: {path: /api/connectors/v1/readyz, port: http}}
+    livenessProbe: {httpGet: {path: /api/connectors/v1/livez, port: http}}
     resources: {requests: {cpu: 100m, memory: 128Mi}, limits: {cpu: "1", memory: 512Mi}}
   secrets:
     enabled: false

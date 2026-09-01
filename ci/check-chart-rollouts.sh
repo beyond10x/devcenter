@@ -79,6 +79,8 @@ awk '
 
 grep -q 'name: SUBSTRATE_TLS_LISTEN' "$rendered"
 grep -q 'name: WORKSPACE_SUBSTRATE_ORIGIN' "$rendered"
+grep -q 'path: /api/connectors/v1/readyz' "$rendered"
+grep -q 'path: /api/connectors/v1/livez' "$rendered"
 grep -q 'name: volume-permissions' "$rendered"
 grep -q 'chown 0:0 /var/run/substrate-tls' "$rendered"
 grep -q 'chmod 0700 /var/lib/substrate /var/run/substrate /var/run/substrate-tls' "$rendered"
