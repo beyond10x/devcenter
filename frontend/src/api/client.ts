@@ -11,6 +11,65 @@ export type PublicationState = components["schemas"]["PublicationState"];
 export type Publication = components["schemas"]["Publication"];
 export type ClientAuthorization = components["schemas"]["ClientAuthorization"];
 export type Approval = components["schemas"]["Approval"];
+export interface RepositoryCandidate {
+  forge_instance_ref: string;
+  project_ref: string;
+  path_with_namespace: string;
+  name: string;
+  default_branch?: string | null;
+  visibility: string;
+  web_url: string;
+  opened_project_id?: string | null;
+}
+export interface Project {
+  id: string;
+  forge_instance_ref: string;
+  project_ref: string;
+  path_with_namespace: string;
+  name: string;
+  default_branch?: string | null;
+  selected_branch: string;
+  pinned_commit?: string | null;
+  default_branch_fallback: boolean;
+  web_url: string;
+}
+export interface Branch {
+  name: string;
+  commit: string;
+  provider_default: boolean;
+  protected: boolean;
+}
+export interface ProjectThread {
+  id: string;
+  project_id: string;
+  branch: string;
+  pinned_commit: string;
+  title: string;
+  created_at_ms: number;
+}
+export interface ProjectMessage {
+  sequence: number;
+  role: "user" | "assistant" | "system";
+  content: string;
+  branch: string;
+  commit: string;
+  created_at_ms: number;
+}
+export interface WorkflowDefinition {
+  id: string;
+  name: string;
+  description: string;
+}
+export interface WorkflowRun {
+  id: string;
+  definition_id: string;
+  project_id: string;
+  branch: string;
+  commit: string;
+  state: "accepted" | "running" | "succeeded" | "failed" | "refused";
+  failure_code?: string | null;
+  created_at_ms: number;
+}
 
 export class ApiError extends Error {
   constructor(
@@ -50,6 +109,47 @@ export const api = {
   session: () => request<Session>("/api/session"),
   identityProviders: () => request<IdentityProvider[]>("/api/auth/providers"),
   logout: () => request<undefined>("/auth/logout", { method: "POST" }),
+  repositories: () => request<RepositoryCandidate[]>("/api/repositories"),
+  openProject: (repository: Pick<RepositoryCandidate, "forge_instance_ref" | "project_ref">) =>
+    request<Project>("/api/projects", {
+      method: "POST",
+      body: JSON.stringify(repository),
+    }),
+  project: (projectId: string) =>
+    request<Project>(`/api/projects/${encodeURIComponent(projectId)}`),
+  branches: (projectId: string) =>
+    request<Branch[]>(`/api/projects/${encodeURIComponent(projectId)}/branches`),
+  selectBranch: (projectId: string, branch: string) =>
+    request<Project>(`/api/projects/${encodeURIComponent(projectId)}/branch`, {
+      method: "POST",
+      body: JSON.stringify({ branch }),
+    }),
+  threads: (projectId: string) =>
+    request<ProjectThread[]>(`/api/projects/${encodeURIComponent(projectId)}/threads`),
+  createThread: (projectId: string, branch: string, pinnedCommit: string, title: string) =>
+    request<ProjectThread>(`/api/projects/${encodeURIComponent(projectId)}/threads`, {
+      method: "POST",
+      body: JSON.stringify({ branch, pinned_commit: pinnedCommit, title }),
+    }),
+  messages: (threadId: string) =>
+    request<ProjectMessage[]>(`/api/threads/${encodeURIComponent(threadId)}/messages`),
+  createMessage: (threadId: string, content: string) =>
+    request<ProjectMessage>(`/api/threads/${encodeURIComponent(threadId)}/messages`, {
+      method: "POST",
+      body: JSON.stringify({ content }),
+    }),
+  workflows: (projectId: string) =>
+    request<WorkflowDefinition[]>(`/api/projects/${encodeURIComponent(projectId)}/workflows`),
+  startWorkflow: (projectId: string, definitionId: string, branch: string, commit: string) =>
+    request<WorkflowRun>(`/api/projects/${encodeURIComponent(projectId)}/workflow-runs`, {
+      method: "POST",
+      body: JSON.stringify({
+        definition_id: definitionId,
+        branch,
+        commit,
+        idempotency_key: crypto.randomUUID(),
+      }),
+    }),
   publications: () => request<Publication[]>("/api/mcp/publications"),
   publishProfile: (profileId: string) =>
     request<Publication>("/api/mcp/publications", {
@@ -101,6 +201,10 @@ const FRIENDLY_ERRORS: Record<string, string> = {
   claude_connection_code_invalid: "Enter the complete one-time authorization code.",
   agent_platform_capability_profiles_unavailable:
     "Capability profile publication is waiting for the released Agent Platform profile client.",
+  workspace_not_configured: "Repository projects are not configured for this environment.",
+  workspace_unavailable: "Repository projects are temporarily unavailable.",
+  workspace_access_refused: "Your current GitLab grant does not admit this repository.",
+  workspace_snapshot_conflict: "The branch snapshot changed. Refresh the project and try again.",
   identity_publication_revocation_unavailable:
     "Identity cannot yet revoke every authorization for this publication safely.",
   identity_client_revocation_unavailable:

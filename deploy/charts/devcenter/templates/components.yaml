@@ -59,7 +59,7 @@ spec:
           args: {{ toYaml . | nindent 12 }}
           {{- end }}
           ports: [{name: http, containerPort: {{ $component.port }}, protocol: TCP}]
-          {{- if or $component.env (eq $name "secrets") }}
+          {{- if or $component.env (eq $name "secrets") (eq $name "workspace") }}
           env:
             {{- range $key, $value := $component.env }}
             - name: {{ $key }}
@@ -78,6 +78,14 @@ spec:
               value: {{ $.Values.secrets.workloadAudience | quote }}
             - name: SECRETS_WORKLOAD_GRANTS_FILE
               value: /etc/secrets-workloads/grants.json
+            {{- end }}
+            {{- if eq $name "workspace" }}
+            - name: WORKSPACE_IDENTITY_ORIGIN
+              value: {{ printf "http://%s-identity.%s.svc.cluster.local:%v" (include "devcenter.fullname" $) $.Release.Namespace (index $.Values.components "identity").port | quote }}
+            - name: WORKSPACE_IDENTITY_AUDIENCE
+              value: "urn:b10x:workspace"
+            - name: WORKSPACE_CONNECTORS_API_BASE
+              value: {{ printf "http://%s-connectors.%s.svc.cluster.local:%v/api/connectors/v1" (include "devcenter.fullname" $) $.Release.Namespace (index $.Values.components "connectors").port | quote }}
             {{- end }}
           {{- end }}
           {{- with $component.envFrom }}

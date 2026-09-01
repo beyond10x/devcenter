@@ -34,4 +34,6 @@ pub struct Config {
     pub agent_platform_origin: Option<String>,
     /// Internal hosted Connectors API base. Absence disables credential connection fail-closed.
     pub connectors_api_base: Option<String>,
+    /// Internal Workspace origin. Absence disables repository projects fail-closed.
+    pub workspace_origin: Option<String>,
 }

@@ -33,6 +33,19 @@ const publication = {
   updated_at_ms: 1_788_260_000_000,
 };
 
+const project = {
+  id: "project-test",
+  forge_instance_ref: "connection:gitlab:test",
+  project_ref: "42",
+  path_with_namespace: "foundation/devcenter",
+  name: "devcenter",
+  default_branch: "main",
+  selected_branch: "main",
+  pinned_commit: "0123456789abcdef0123456789abcdef01234567",
+  default_branch_fallback: false,
+  web_url: "https://gitlab.example.test/foundation/devcenter",
+};
+
 async function mockAuthenticatedWorkspace(page: Page) {
   await page.route(/^https?:\/\/[^/]+\/api\//, async (route) => {
     const request = route.request();
@@ -54,6 +67,56 @@ async function mockAuthenticatedWorkspace(page: Page) {
     }
     if (path === "/api/agents" && request.method() === "GET") {
       await route.fulfill({ json: agents });
+      return;
+    }
+    if (path === "/api/repositories") {
+      await route.fulfill({
+        json: [
+          {
+            forge_instance_ref: project.forge_instance_ref,
+            project_ref: project.project_ref,
+            path_with_namespace: project.path_with_namespace,
+            name: project.name,
+            default_branch: "main",
+            visibility: "private",
+            web_url: project.web_url,
+            opened_project_id: project.id,
+          },
+        ],
+      });
+      return;
+    }
+    if (path === `/api/projects/${project.id}`) {
+      await route.fulfill({ json: project });
+      return;
+    }
+    if (path === `/api/projects/${project.id}/branches`) {
+      await route.fulfill({
+        json: [
+          {
+            name: "main",
+            commit: project.pinned_commit,
+            provider_default: true,
+            protected: true,
+          },
+        ],
+      });
+      return;
+    }
+    if (path === `/api/projects/${project.id}/threads`) {
+      await route.fulfill({ json: [] });
+      return;
+    }
+    if (path === `/api/projects/${project.id}/workflows`) {
+      await route.fulfill({
+        json: [
+          {
+            id: "review.code/v1",
+            name: "Code review",
+            description: "Commit-pinned findings.",
+          },
+        ],
+      });
       return;
     }
     if (path === "/api/agents" && request.method() === "POST") {
@@ -111,6 +174,20 @@ test("opens a deep-linked agent and creates a governed worker", async ({ page },
 
   await expect(page.getByRole("heading", { name: "Evidence keeper" })).toBeVisible();
   await expect(page.getByRole("status")).toContainText("created and activated");
+  const accessibility = await new AxeBuilder({ page }).withTags(["wcag2a", "wcag2aa"]).analyze();
+  expect(accessibility.violations).toEqual([]);
+});
+
+test("opens a visible repository as a commit-pinned project", async ({ page }, testInfo) => {
+  test.skip(testInfo.project.name !== "chromium", "Desktop project behavior");
+  await mockAuthenticatedWorkspace(page);
+  await page.goto("/projects");
+
+  await expect(page.getByRole("heading", { name: "Open a project" })).toBeVisible();
+  await page.getByRole("button", { name: /foundation\/devcenter/ }).click();
+  await expect(page.getByRole("heading", { name: "foundation/devcenter" })).toBeVisible();
+  await expect(page.getByText("0123456789", { exact: true })).toBeVisible();
+  await expect(page.getByRole("button", { name: "Refresh snapshot" })).toBeVisible();
   const accessibility = await new AxeBuilder({ page }).withTags(["wcag2a", "wcag2aa"]).analyze();
   expect(accessibility.violations).toEqual([]);
 });

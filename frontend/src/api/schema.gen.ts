@@ -277,6 +277,150 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/repositories": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get: operations["listRepositories"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/projects": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post: operations["openRepositoryProject"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/projects/{project_id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get: operations["getRepositoryProject"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/projects/{project_id}/branches": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get: operations["listProjectBranches"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/projects/{project_id}/branch": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post: operations["selectProjectBranch"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/projects/{project_id}/threads": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get: operations["listProjectThreads"];
+        put?: never;
+        post: operations["createProjectThread"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/threads/{thread_id}/messages": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get: operations["listThreadMessages"];
+        put?: never;
+        post: operations["createThreadMessage"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/projects/{project_id}/workflows": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get: operations["listProjectWorkflows"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/projects/{project_id}/workflow-runs": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post: operations["startProjectWorkflow"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/healthz": {
         parameters: {
             query?: never;
@@ -467,6 +611,88 @@ export interface components {
             /** Format: password */
             code: string;
         };
+        RepositoryCandidate: {
+            forge_instance_ref: string;
+            project_ref: string;
+            path_with_namespace: string;
+            name: string;
+            default_branch?: string | null;
+            visibility: string;
+            web_url: string;
+            opened_project_id?: string | null;
+        };
+        OpenProject: {
+            forge_instance_ref: string;
+            project_ref: string;
+        };
+        Project: {
+            id: string;
+            forge_instance_ref: string;
+            project_ref: string;
+            path_with_namespace: string;
+            name: string;
+            default_branch?: string | null;
+            selected_branch: string;
+            pinned_commit?: string | null;
+            default_branch_fallback: boolean;
+            web_url: string;
+        };
+        Branch: {
+            name: string;
+            commit: string;
+            provider_default: boolean;
+            protected: boolean;
+        };
+        SelectBranch: {
+            branch: string;
+        };
+        ProjectThread: {
+            id: string;
+            project_id: string;
+            branch: string;
+            pinned_commit: string;
+            title: string;
+            created_at_ms: number;
+        };
+        CreateProjectThread: {
+            branch: string;
+            pinned_commit: string;
+            title: string;
+        };
+        ProjectMessage: {
+            sequence: number;
+            /** @enum {string} */
+            role: "user" | "assistant" | "system";
+            content: string;
+            branch: string;
+            commit: string;
+            created_at_ms: number;
+        };
+        CreateProjectMessage: {
+            content: string;
+        };
+        WorkflowDefinition: {
+            id: string;
+            name: string;
+            description: string;
+        };
+        StartWorkflow: {
+            definition_id: string;
+            branch: string;
+            commit: string;
+            idempotency_key: string;
+        };
+        WorkflowRun: {
+            id: string;
+            definition_id: string;
+            project_id: string;
+            branch: string;
+            commit: string;
+            /** @enum {string} */
+            state: "accepted" | "running" | "succeeded" | "failed" | "refused";
+            failure_code?: string | null;
+            created_at_ms: number;
+        };
         CreateAgent: {
             name: string;
             instructions: string;
@@ -519,6 +745,8 @@ export interface components {
         AgentId: string;
         TaskId: string;
         PublicationId: string;
+        ProjectId: string;
+        ThreadId: string;
     };
     requestBodies: never;
     headers: never;
@@ -1041,6 +1269,275 @@ export interface operations {
                     "application/json": components["schemas"]["Approval"][];
                 };
             };
+        };
+    };
+    listRepositories: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Repositories visible through current Connector Grants */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["RepositoryCandidate"][];
+                };
+            };
+            401: components["responses"]["Problem"];
+            503: components["responses"]["Unavailable"];
+        };
+    };
+    openRepositoryProject: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["OpenProject"];
+            };
+        };
+        responses: {
+            /** @description Canonical project opened after live revalidation */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Project"];
+                };
+            };
+            403: components["responses"]["Problem"];
+            422: components["responses"]["Problem"];
+        };
+    };
+    getRepositoryProject: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                project_id: components["parameters"]["ProjectId"];
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Current accessible project */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Project"];
+                };
+            };
+            403: components["responses"]["Problem"];
+            404: components["responses"]["Problem"];
+        };
+    };
+    listProjectBranches: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                project_id: components["parameters"]["ProjectId"];
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Currently visible branch heads */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Branch"][];
+                };
+            };
+            403: components["responses"]["Problem"];
+        };
+    };
+    selectProjectBranch: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                project_id: components["parameters"]["ProjectId"];
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["SelectBranch"];
+            };
+        };
+        responses: {
+            /** @description Explicitly refreshed project snapshot */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Project"];
+                };
+            };
+            404: components["responses"]["Problem"];
+            409: components["responses"]["Problem"];
+        };
+    };
+    listProjectThreads: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                project_id: components["parameters"]["ProjectId"];
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Personal project threads */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ProjectThread"][];
+                };
+            };
+        };
+    };
+    createProjectThread: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                project_id: components["parameters"]["ProjectId"];
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["CreateProjectThread"];
+            };
+        };
+        responses: {
+            /** @description Personal branch-bound thread */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ProjectThread"];
+                };
+            };
+            409: components["responses"]["Problem"];
+        };
+    };
+    listThreadMessages: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                thread_id: components["parameters"]["ThreadId"];
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Personal durable messages */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ProjectMessage"][];
+                };
+            };
+        };
+    };
+    createThreadMessage: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                thread_id: components["parameters"]["ThreadId"];
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["CreateProjectMessage"];
+            };
+        };
+        responses: {
+            /** @description Commit-attributed user message */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ProjectMessage"];
+                };
+            };
+        };
+    };
+    listProjectWorkflows: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                project_id: components["parameters"]["ProjectId"];
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Enabled immutable workflow definitions */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["WorkflowDefinition"][];
+                };
+            };
+        };
+    };
+    startProjectWorkflow: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                project_id: components["parameters"]["ProjectId"];
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["StartWorkflow"];
+            };
+        };
+        responses: {
+            /** @description Exact-snapshot workflow run admitted idempotently */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["WorkflowRun"];
+                };
+            };
+            409: components["responses"]["Problem"];
         };
     };
     health: {

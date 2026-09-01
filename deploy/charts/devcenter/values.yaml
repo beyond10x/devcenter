@@ -149,6 +149,23 @@ components:
     readinessProbe: {tcpSocket: {port: http}}
     livenessProbe: {tcpSocket: {port: http}}
     resources: {requests: {cpu: 100m, memory: 128Mi}, limits: {cpu: "1", memory: 512Mi}}
+  workspace:
+    enabled: false
+    image: {repository: "", digest: "", pullPolicy: IfNotPresent}
+    port: 8094
+    replicas: 1
+    serviceAccountName: ""
+    podSecurityContext: {}
+    args: [--listen, 0.0.0.0:8094]
+    env: {}
+    envFrom: []
+    configFiles: {}
+    volumeMounts: []
+    volumes: []
+    persistence: {enabled: false, storageClass: "", size: 1Gi, mountPath: /var/lib/workspace}
+    readinessProbe: {httpGet: {path: /readyz, port: http}}
+    livenessProbe: {httpGet: {path: /healthz, port: http}}
+    resources: {requests: {cpu: 100m, memory: 128Mi}, limits: {cpu: "1", memory: 512Mi}}
   llmgw:
     enabled: false
     image: {repository: "", digest: "", pullPolicy: IfNotPresent}

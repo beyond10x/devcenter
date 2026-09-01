@@ -2046,3 +2046,348 @@ a {
     background-position: -100% 0;
   }
 }
+
+.project-search,
+.project-toolbar,
+.commit-chip {
+  display: flex;
+  align-items: center;
+}
+.project-search {
+  gap: 0.7rem;
+  margin-bottom: 1rem;
+  padding: 0.72rem 0.9rem;
+  background: var(--surface);
+  border: 1px solid var(--line);
+  border-radius: 0.78rem;
+}
+.project-search input {
+  min-width: 0;
+  flex: 1;
+  border: 0;
+  outline: 0;
+}
+.project-search > span:last-child {
+  color: var(--muted);
+  font-size: 0.74rem;
+  font-weight: 720;
+}
+.repository-list {
+  overflow: hidden;
+  background: var(--surface);
+  border: 1px solid var(--line);
+  border-radius: 0.9rem;
+  box-shadow: var(--shadow);
+}
+.repository-row {
+  display: grid;
+  width: 100%;
+  grid-template-columns: auto minmax(0, 1fr) auto auto;
+  align-items: center;
+  gap: 0.85rem;
+  padding: 0.9rem 1rem;
+  text-align: left;
+  background: transparent;
+  border: 0;
+  border-bottom: 1px solid var(--line);
+}
+.repository-row:last-child {
+  border-bottom: 0;
+}
+.repository-row:hover {
+  background: var(--surface-muted);
+}
+.repository-row > span:nth-child(2) {
+  display: grid;
+  gap: 0.18rem;
+}
+.repository-row small,
+.thread-rail small {
+  color: var(--muted);
+}
+.repo-icon,
+.project-card-icon {
+  display: grid;
+  place-items: center;
+  width: 2.25rem;
+  height: 2.25rem;
+  color: var(--accent);
+  background: var(--accent-soft);
+  border-radius: 0.65rem;
+}
+.empty-projects,
+.chat-empty,
+.placeholder-surface {
+  display: grid;
+  justify-items: center;
+  gap: 0.5rem;
+  padding: 3.5rem 1rem;
+  color: var(--muted);
+  text-align: center;
+}
+.empty-projects p,
+.chat-empty p,
+.placeholder-surface p {
+  max-width: 38rem;
+  margin: 0;
+}
+.project-toolbar {
+  flex-wrap: wrap;
+  gap: 0.65rem;
+  padding: 0.65rem;
+  background: var(--surface);
+  border: 1px solid var(--line);
+  border-radius: 0.8rem;
+}
+.project-toolbar label {
+  display: flex;
+  align-items: center;
+  gap: 0.4rem;
+}
+.project-toolbar select {
+  min-height: 2.1rem;
+  padding: 0 1.8rem 0 0.55rem;
+  background: var(--surface-muted);
+  border: 1px solid var(--line);
+  border-radius: 0.55rem;
+  font-weight: 700;
+}
+.project-toolbar .text-link {
+  margin-left: auto;
+}
+.commit-chip {
+  gap: 0.3rem;
+  min-height: 1.9rem;
+  padding: 0.3rem 0.55rem;
+  color: #4f5d59;
+  background: #edf1ef;
+  border-radius: 0.48rem;
+  font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+  font-size: 0.72rem;
+  font-weight: 700;
+}
+.project-tabs {
+  display: flex;
+  gap: 0.25rem;
+  margin: 1rem 0;
+  padding-bottom: 0.1rem;
+  overflow-x: auto;
+  border-bottom: 1px solid var(--line);
+}
+.project-tabs button {
+  padding: 0.65rem 0.85rem;
+  color: var(--muted);
+  background: transparent;
+  border: 0;
+  border-bottom: 2px solid transparent;
+  font-size: 0.76rem;
+  font-weight: 740;
+  text-transform: capitalize;
+}
+.project-tabs button.active {
+  color: var(--accent);
+  border-bottom-color: var(--accent);
+}
+.project-overview-grid,
+.workflow-grid {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 0.85rem;
+}
+.project-card,
+.workflow-card,
+.workflow-run,
+.project-surface,
+.thread-rail,
+.chat-console {
+  background: var(--surface);
+  border: 1px solid var(--line);
+  border-radius: 0.86rem;
+}
+.project-card {
+  display: grid;
+  gap: 0.65rem;
+  padding: 1rem;
+}
+.project-card p,
+.workflow-card p,
+.aep-surface p {
+  margin: 0;
+  color: var(--muted);
+  line-height: 1.6;
+}
+.hero-card {
+  grid-column: 1 / -1;
+  grid-template-columns: auto minmax(0, 1fr) auto;
+  align-items: center;
+}
+.hero-card h2,
+.workflow-card h2,
+.project-surface h2,
+.chat-empty h2 {
+  margin: 0 0 0.35rem;
+  font-size: 1rem;
+}
+.project-surface {
+  min-height: 22rem;
+}
+.aep-surface {
+  display: flex;
+  align-items: center;
+  gap: 1rem;
+  padding: 1.4rem;
+}
+.aep-surface .status-pill {
+  margin-left: auto;
+}
+.project-chat {
+  display: grid;
+  grid-template-columns: 15rem minmax(0, 1fr);
+  gap: 0.85rem;
+  min-height: 32rem;
+}
+.thread-rail {
+  padding: 0.75rem;
+}
+.thread-rail > div,
+.thread-rail > p {
+  padding: 0.4rem;
+}
+.thread-rail > button {
+  display: grid;
+  width: 100%;
+  grid-template-columns: auto minmax(0, 1fr);
+  gap: 0.2rem 0.45rem;
+  align-items: center;
+  padding: 0.65rem;
+  color: var(--muted);
+  text-align: left;
+  background: transparent;
+  border: 0;
+  border-radius: 0.58rem;
+}
+.thread-rail > button.active {
+  color: var(--accent-dark);
+  background: var(--accent-soft);
+}
+.thread-rail > button small {
+  grid-column: 2;
+}
+.chat-console {
+  display: flex;
+  min-width: 0;
+  flex-direction: column;
+}
+.message-stream {
+  min-height: 24rem;
+  flex: 1;
+  padding: 1rem;
+}
+.project-message {
+  max-width: 46rem;
+  margin: 0 0 0.75rem;
+  padding: 0.8rem 0.9rem;
+  background: var(--surface-muted);
+  border: 1px solid var(--line);
+  border-radius: 0.72rem;
+}
+.project-message.user {
+  margin-left: auto;
+  background: var(--accent-soft);
+  border-color: #cde4db;
+}
+.project-message.system {
+  max-width: none;
+  color: var(--muted);
+  background: #f1f3f2;
+}
+.project-message header {
+  display: flex;
+  justify-content: space-between;
+  gap: 1rem;
+  font-size: 0.7rem;
+}
+.project-message header span {
+  color: var(--muted);
+  font-family: ui-monospace, monospace;
+}
+.project-message p {
+  margin: 0.4rem 0 0;
+  white-space: pre-wrap;
+}
+.project-composer {
+  display: grid;
+  gap: 0.6rem;
+  padding: 0.8rem;
+  border-top: 1px solid var(--line);
+}
+.project-composer textarea {
+  width: 100%;
+  resize: vertical;
+  padding: 0.75rem;
+  border: 1px solid var(--line-strong);
+  border-radius: 0.65rem;
+}
+.project-composer .button {
+  justify-self: end;
+}
+.workflow-grid {
+  grid-template-columns: repeat(3, minmax(14rem, 1fr));
+}
+.workflow-card {
+  display: flex;
+  min-height: 18rem;
+  flex-direction: column;
+  gap: 0.85rem;
+  padding: 1rem;
+}
+.workflow-card > div:nth-child(2) {
+  flex: 1;
+}
+.workflow-run {
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr) auto;
+  align-items: center;
+  gap: 0.65rem;
+  grid-column: 1 / -1;
+  padding: 0.75rem;
+}
+
+@media (max-width: 900px) {
+  .project-overview-grid,
+  .workflow-grid {
+    grid-template-columns: 1fr;
+  }
+  .project-chat {
+    grid-template-columns: 1fr;
+  }
+  .thread-rail {
+    display: flex;
+    overflow-x: auto;
+  }
+  .hero-card {
+    grid-template-columns: auto minmax(0, 1fr);
+  }
+  .hero-card .button {
+    grid-column: 1 / -1;
+  }
+}
+
+@media (max-width: 600px) {
+  .repository-row {
+    grid-template-columns: auto minmax(0, 1fr) auto;
+  }
+  .repository-row .status-pill {
+    display: none;
+  }
+  .project-toolbar .text-link {
+    margin-left: 0;
+  }
+  .aep-surface {
+    align-items: flex-start;
+    flex-direction: column;
+  }
+  .aep-surface .status-pill {
+    margin-left: 0;
+  }
+}

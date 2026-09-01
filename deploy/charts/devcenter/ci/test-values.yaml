@@ -64,6 +64,13 @@ components:
     image:
       repository: registry.example.invalid/llmgw
       digest: sha256:3333333333333333333333333333333333333333333333333333333333333333
+  workspace:
+    enabled: true
+    image:
+      repository: registry.example.invalid/workspace
+      digest: sha256:abababababababababababababababababababababababababababababababab
+    env:
+      WORKSPACE_DATABASE_URL: "sqlite::memory:"
 secrets:
   database:
     existingSecret: example-secrets-database
