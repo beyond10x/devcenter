@@ -1,5 +1,10 @@
 # Changelog
 
+## Unreleased
+
+- Use the standard GitHub-hosted Intel macOS runner for x86_64 release bundles and let independent
+  release targets finish when one matrix entry fails.
+
 ## 0.2.5 - 2026-09-01
 
 - Replace the dashboard's pasted-credential journey with a Connector-owned Claude OAuth2 PKCE
