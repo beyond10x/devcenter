@@ -304,9 +304,6 @@ function shortCommit(commit?: string | null) {
         <span class="commit-chip"
           ><Braces :size="15" /> {{ shortCommit(project.pinned_commit) }}</span
         >
-        <span v-if="project.default_branch_fallback" class="status-pill neutral"
-          >GitLab default used; main absent</span
-        >
         <button
           class="button small"
           type="button"

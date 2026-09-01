@@ -1109,7 +1109,6 @@
           "path_with_namespace",
           "name",
           "selected_branch",
-          "default_branch_fallback",
           "web_url"
         ],
         "properties": {
@@ -1121,7 +1120,6 @@
           "default_branch": { "type": ["string", "null"] },
           "selected_branch": { "type": "string" },
           "pinned_commit": { "type": ["string", "null"] },
-          "default_branch_fallback": { "type": "boolean" },
           "web_url": { "type": "string" }
         },
         "additionalProperties": false

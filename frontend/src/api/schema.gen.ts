@@ -666,7 +666,6 @@ export interface components {
             default_branch?: string | null;
             selected_branch: string;
             pinned_commit?: string | null;
-            default_branch_fallback: boolean;
             web_url: string;
         };
         Branch: {

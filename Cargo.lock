@@ -67,7 +67,7 @@ version = "1.1.5"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "40c48f72fd53cd289104fc64099abca73db4166ad86ea0b4341abe65af83dadc"
 dependencies = [
- "windows-sys 0.61.2",
+ "windows-sys 0.48.0",
 ]
 
 [[package]]
@@ -3021,7 +3021,7 @@ version = "0.1.11"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "c2a7b1c03c876122aa43f3020e6c3c3ee5c05081c9a00739faf7503aeba10d22"
 dependencies = [
- "windows-sys 0.48.0",
+ "windows-sys 0.61.2",
 ]
 
 [[package]]
@@ -3187,7 +3187,7 @@ checksum = "1ebf944e87a7c253233ad6766e082e3cd714b5d03812acc24c318f549614536e"
 [[package]]
 name = "workspace-client"
 version = "0.1.0"
-source = "git+ssh://git@github.com/beyond10x/workspace.git?rev=190858117a54cc7802ef268ce0cd03281061c885#190858117a54cc7802ef268ce0cd03281061c885"
+source = "git+ssh://git@github.com/beyond10x/workspace.git?rev=8cbab51f170d7bf0398ae2ccce2497a8f536d3fb#8cbab51f170d7bf0398ae2ccce2497a8f536d3fb"
 dependencies = [
  "reqwest 0.13.4",
  "serde",
@@ -3199,7 +3199,7 @@ dependencies = [
 [[package]]
 name = "workspace-core"
 version = "0.1.0"
-source = "git+ssh://git@github.com/beyond10x/workspace.git?rev=190858117a54cc7802ef268ce0cd03281061c885#190858117a54cc7802ef268ce0cd03281061c885"
+source = "git+ssh://git@github.com/beyond10x/workspace.git?rev=8cbab51f170d7bf0398ae2ccce2497a8f536d3fb#8cbab51f170d7bf0398ae2ccce2497a8f536d3fb"
 dependencies = [
  "serde",
 ]

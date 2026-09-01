@@ -221,7 +221,26 @@ secrets:
 substrate:
   enabled: false
   image: {repository: "", digest: "", pullPolicy: IfNotPresent}
-  port: 8080
+  port: 8443
+  deployment: hosted
+  tls:
+    existingSecret: ""
+    certificateKey: tls.crt
+    privateKeyKey: tls.key
+  hostedIdentity:
+    origin: ""
+    caBundle:
+      existingSecret: ""
+      key: ca.crt
+      path: /etc/ssl/certs/ca-certificates.crt
+  client:
+    # Trust roots mounted into Workspace for the Substrate-only HTTPS client.
+    trustRoots:
+      existingSecret: ""
+      key: ca.crt
+      path: /etc/ssl/certs/ca-certificates.crt
+    # Defaults to <release>-substrate.<namespace>.svc.cluster.local.
+    serverIdentity: ""
   storage:
     className: ""
     size: 20Gi

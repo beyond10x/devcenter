@@ -86,6 +86,14 @@ spec:
               value: "urn:b10x:workspace"
             - name: WORKSPACE_CONNECTORS_API_BASE
               value: {{ printf "http://%s-connectors.%s.svc.cluster.local:%v/api/connectors/v1" (include "devcenter.fullname" $) $.Release.Namespace (index $.Values.components "connectors").port | quote }}
+            {{- if $.Values.substrate.enabled }}
+            - name: WORKSPACE_SUBSTRATE_ORIGIN
+              value: {{ printf "https://%s-substrate.%s.svc.cluster.local:%v" (include "devcenter.fullname" $) $.Release.Namespace $.Values.substrate.port | quote }}
+            - name: WORKSPACE_SUBSTRATE_SERVER_IDENTITY
+              value: {{ default (printf "%s-substrate.%s.svc.cluster.local" (include "devcenter.fullname" $) $.Release.Namespace) $.Values.substrate.client.serverIdentity | quote }}
+            - name: WORKSPACE_SUBSTRATE_CA_BUNDLE
+              value: {{ ternary "/etc/workspace/substrate/ca.crt" $.Values.substrate.client.trustRoots.path (not (empty $.Values.substrate.client.trustRoots.existingSecret)) | quote }}
+            {{- end }}
             {{- if and (index $.Values.components "agent-platform").enabled (hasKey ($component.env | default dict) "WORKSPACE_PROJECT_AGENT_MODEL") }}
             - name: WORKSPACE_AGENT_PLATFORM_ORIGIN
               value: {{ printf "http://%s-agent-platform.%s.svc.cluster.local:%v" (include "devcenter.fullname" $) $.Release.Namespace (index $.Values.components "agent-platform").port | quote }}
@@ -107,7 +115,7 @@ spec:
           {{- with $component.envFrom }}
           envFrom: {{ toYaml . | nindent 12 }}
           {{- end }}
-          {{- if or $component.configFiles $component.persistence.enabled $component.volumeMounts (and (eq $name "connectors") $.Values.connectorsCatalogBundle.enabled) (and (eq $name "connectors") (index $.Values.components "secrets").enabled) (eq $name "secrets") }}
+          {{- if or $component.configFiles $component.persistence.enabled $component.volumeMounts (and (eq $name "connectors") $.Values.connectorsCatalogBundle.enabled) (and (eq $name "connectors") (index $.Values.components "secrets").enabled) (eq $name "secrets") (and (eq $name "workspace") $.Values.substrate.enabled $.Values.substrate.client.trustRoots.existingSecret) }}
           volumeMounts:
             {{- if $component.configFiles }}
             {{- range $path, $_ := $component.configFiles }}
@@ -139,6 +147,11 @@ spec:
             - name: component-state
               mountPath: {{ $component.persistence.mountPath }}
             {{- end }}
+            {{- if and (eq $name "workspace") $.Values.substrate.enabled $.Values.substrate.client.trustRoots.existingSecret }}
+            - name: substrate-ca
+              mountPath: /etc/workspace/substrate
+              readOnly: true
+            {{- end }}
             {{- with $component.volumeMounts }}
             {{- toYaml . | nindent 12 }}
             {{- end }}
@@ -147,7 +160,7 @@ spec:
           readinessProbe: {{ toYaml $component.readinessProbe | nindent 12 }}
           livenessProbe: {{ toYaml $component.livenessProbe | nindent 12 }}
           resources: {{ toYaml $component.resources | nindent 12 }}
-      {{- if or $component.configFiles $component.persistence.enabled $component.volumes (and (eq $name "connectors") $.Values.connectorsCatalogBundle.enabled) (and (eq $name "connectors") (index $.Values.components "secrets").enabled) (eq $name "secrets") }}
+      {{- if or $component.configFiles $component.persistence.enabled $component.volumes (and (eq $name "connectors") $.Values.connectorsCatalogBundle.enabled) (and (eq $name "connectors") (index $.Values.components "secrets").enabled) (eq $name "secrets") (and (eq $name "workspace") $.Values.substrate.enabled $.Values.substrate.client.trustRoots.existingSecret) }}
       volumes:
         {{- if $component.configFiles }}
         - name: component-config
@@ -177,6 +190,12 @@ spec:
         {{- if $component.persistence.enabled }}
         - name: component-state
           persistentVolumeClaim: {claimName: {{ $claimName }}}
+        {{- end }}
+        {{- if and (eq $name "workspace") $.Values.substrate.enabled $.Values.substrate.client.trustRoots.existingSecret }}
+        - name: substrate-ca
+          secret:
+            secretName: {{ required "substrate.client.trustRoots.existingSecret is required" $.Values.substrate.client.trustRoots.existingSecret }}
+            items: [{key: {{ $.Values.substrate.client.trustRoots.key }}, path: ca.crt}]
         {{- end }}
         {{- with $component.volumes }}
         {{- toYaml . | nindent 8 }}

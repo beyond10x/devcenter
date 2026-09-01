@@ -30,8 +30,8 @@ identity-client = { git = "ssh://git@github.com/beyond10x/identity.git", tag = "
 agent-platform-client = { git = "ssh://git@github.com/beyond10x/agent-platform.git", tag = "0.3.1" }
 agent-platform-core = { git = "ssh://git@github.com/beyond10x/agent-platform.git", tag = "0.3.1" }
 connectors-client = { git = "ssh://git@github.com/beyond10x/connectors.git", tag = "v0.3.2" }
-workspace-client = { git = "ssh://git@github.com/beyond10x/workspace.git", rev = "190858117a54cc7802ef268ce0cd03281061c885" }
-workspace-core = { git = "ssh://git@github.com/beyond10x/workspace.git", rev = "190858117a54cc7802ef268ce0cd03281061c885" }
+workspace-client = { git = "ssh://git@github.com/beyond10x/workspace.git", rev = "8cbab51f170d7bf0398ae2ccce2497a8f536d3fb" }
+workspace-core = { git = "ssh://git@github.com/beyond10x/workspace.git", rev = "8cbab51f170d7bf0398ae2ccce2497a8f536d3fb" }
 
 anyhow = "1"
 axum = "0.8"

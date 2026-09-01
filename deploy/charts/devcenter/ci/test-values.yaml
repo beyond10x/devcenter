@@ -77,6 +77,15 @@ components:
       WORKSPACE_PROJECT_AGENT_MODEL: "default"
       WORKSPACE_AEP_REALM: "engineering"
       WORKSPACE_AEP_WORKSPACE: "central"
+substrate:
+  enabled: true
+  image:
+    repository: registry.example.invalid/substrate
+    digest: sha256:cdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcd
+  tls:
+    existingSecret: example-substrate-tls
+  hostedIdentity:
+    origin: https://identity.example.invalid
 secrets:
   database:
     existingSecret: example-secrets-database

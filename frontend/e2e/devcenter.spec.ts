@@ -39,10 +39,9 @@ const project = {
   project_ref: "42",
   path_with_namespace: "foundation/devcenter",
   name: "devcenter",
-  default_branch: "main",
-  selected_branch: "main",
+  default_branch: "trunk",
+  selected_branch: "trunk",
   pinned_commit: "0123456789abcdef0123456789abcdef01234567",
-  default_branch_fallback: false,
   web_url: "https://gitlab.example.test/foundation/devcenter",
 };
 
@@ -77,7 +76,7 @@ async function mockAuthenticatedWorkspace(page: Page) {
             project_ref: project.project_ref,
             path_with_namespace: project.path_with_namespace,
             name: project.name,
-            default_branch: "main",
+            default_branch: "trunk",
             visibility: "private",
             web_url: project.web_url,
             opened_project_id: project.id,
@@ -94,7 +93,7 @@ async function mockAuthenticatedWorkspace(page: Page) {
       await route.fulfill({
         json: [
           {
-            name: "main",
+            name: "trunk",
             commit: project.pinned_commit,
             provider_default: true,
             protected: true,
