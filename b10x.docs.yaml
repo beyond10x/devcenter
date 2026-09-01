@@ -11,13 +11,13 @@ schema: b10x-docs/v3
 surfaces:
 - accent: '#59d89d'
   adoption:
-    estimatedMinutes: 15
-    label: Run Devcenter locally
+    estimatedMinutes: 10
+    label: Review Devcenter locally
     mode: source-build
-    outcome: Start the public developer surface and inspect its generated API contract.
+    outcome: Explore every frontend journey with local sample data and no service credentials.
     prerequisites:
-    - Rust toolchain
-    - Node.js
+    - Node.js 22
+    - pnpm 11
     url: https://beyond10x.github.io/docs/devcenter/
   audiences:
   - evaluator
@@ -54,9 +54,9 @@ surfaces:
       include:
       - README.md
     navigation:
-      group: Services
+      group: Products
       label: Devcenter
-      order: 60
+      order: 10
       sidebar: flat
     root: .
     specifications:

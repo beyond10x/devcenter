@@ -12,8 +12,22 @@ Secret references separately.
 
 ## Run locally
 
-Build the same Linux container used by deployments. The token grants the Docker build temporary
-read access to the private Rust dependencies and is not retained in an image layer:
+The quickest public review needs no service credentials or deployment. It runs every frontend
+journey against process-local sample data and is visibly marked as review mode:
+
+```console
+npm install --global pnpm@11.25.0
+pnpm --dir frontend install --frozen-lockfile
+pnpm --dir frontend review
+```
+
+Open `http://127.0.0.1:4173`. Review mode contacts no Identity, Connector, model provider, or Agent
+Platform.
+
+### Run the full service container
+
+Build the same Linux container used by deployments. The token lets Cargo fetch the GitHub-hosted
+Rust dependencies through HTTPS and is not retained in an image layer:
 
 ```console
 DEV_CENTER_BUILD_TOKEN="$(gh auth token)"
@@ -36,10 +50,6 @@ Open `http://127.0.0.1:8080/docs/` for the embedded documentation and
 
 For frontend development, run `pnpm --dir frontend dev`; Vite proxies the allowlisted API and auth
 routes to the container on `127.0.0.1:8080`.
-
-To review every frontend journey without service credentials or a deployment, run
-`pnpm --dir frontend review` and open `http://127.0.0.1:4173`. Review mode is visibly marked, uses
-process-local sample data, and contacts no Identity, Connector, model provider, or Agent Platform.
 
 Protected routes fail closed until an Identity verifier is configured. For loopback-only MCP
 development, also set `DEV_CENTER_INSECURE_DEV_AUTH=true` and a non-empty
@@ -95,3 +105,9 @@ the same database-URL key at an externally managed PostgreSQL service. Connector
 projected token for the exact Secrets workload audience, while Secrets receives TokenReview
 authority and an exact service-account-to-tenant grant. Secret values and key bytes never appear in
 chart values or rendered ConfigMaps.
+
+<!-- b10x-docs:start -->
+## Documentation
+
+[Devcenter documentation](https://beyond10x.github.io/docs/devcenter/) · [Start](https://beyond10x.github.io/) · [Ecosystem](https://beyond10x.github.io/ecosystem/) · [Impact](https://beyond10x.github.io/changes/) · [Releases](https://beyond10x.github.io/releases/)
+<!-- b10x-docs:end -->
