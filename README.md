@@ -15,7 +15,7 @@ Secret references separately.
 The quickest public review needs no service credentials or deployment. It runs every frontend
 journey against process-local sample data and is visibly marked as review mode:
 
-```console
+```bash
 npm install --global pnpm@11.25.0
 pnpm --dir frontend install --frozen-lockfile
 pnpm --dir frontend review
@@ -29,7 +29,7 @@ Platform.
 Build the same Linux container used by deployments. The token lets Cargo fetch the GitHub-hosted
 Rust dependencies through HTTPS and is not retained in an image layer:
 
-```console
+```bash
 DEV_CENTER_BUILD_TOKEN="$(gh auth token)"
 docker build \
   --secret id=github_token,env=DEV_CENTER_BUILD_TOKEN \
@@ -38,7 +38,7 @@ docker build \
   .
 ```
 
-```console
+```bash
 docker run --rm --publish 8080:8080 \
   --env DEV_CENTER_TENANT_ID=local \
   --env DEV_CENTER_PUBLIC_ORIGIN=http://127.0.0.1:8080 \
@@ -59,7 +59,7 @@ development, also set `DEV_CENTER_INSECURE_DEV_AUTH=true` and a non-empty
 In a production posture, set the Identity origin and exact web callback, plus the private inner
 service origins:
 
-```console
+```bash
 DEV_CENTER_IDENTITY_ORIGIN=https://identity.example.test \
 DEV_CENTER_IDENTITY_AUDIENCE=urn:b10x:devcenter \
 DEV_CENTER_IDENTITY_WEB_CLIENT_ID=devcenter-web \
