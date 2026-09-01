@@ -267,9 +267,18 @@ async fn health() -> Json<Value> {
 async fn ready(State(state): State<AppState>) -> Response {
     let ready = !state.config.tenant_id.is_empty()
         && state.config.authentication.identity_client().is_ok()
-        && state.agent_platform.is_some()
-        && state.connectors.is_some()
-        && state.workspace.is_some()
+        && optional_client_ready(
+            state.config.agent_platform_origin.is_some(),
+            state.agent_platform.is_some(),
+        )
+        && optional_client_ready(
+            state.config.connectors_api_base.is_some(),
+            state.connectors.is_some(),
+        )
+        && optional_client_ready(
+            state.config.workspace_origin.is_some(),
+            state.workspace.is_some(),
+        )
         && state.publications.ready().await.is_ok();
     let status = if ready {
         StatusCode::OK
@@ -281,6 +290,10 @@ async fn ready(State(state): State<AppState>) -> Response {
         Json(json!({"status": if ready { "ready" } else { "not_ready" }})),
     )
         .into_response()
+}
+
+const fn optional_client_ready(configured: bool, initialized: bool) -> bool {
+    !configured || initialized
 }
 
 async fn metrics() -> impl IntoResponse {
@@ -1673,6 +1686,39 @@ mod tests {
             workspace_origin: None,
         })
         .unwrap()
+    }
+
+    #[tokio::test]
+    async fn readiness_allows_intentionally_disabled_optional_journeys() {
+        let authentication = devcenter_auth::Authentication::identity(
+            "https://identity.example.invalid",
+            "urn:b10x:devcenter",
+        )
+        .unwrap();
+        let response = test_router(authentication)
+            .oneshot(
+                Request::builder()
+                    .uri("/readyz")
+                    .body(Body::empty())
+                    .unwrap(),
+            )
+            .await
+            .unwrap();
+        assert_eq!(response.status(), StatusCode::OK);
+    }
+
+    #[tokio::test]
+    async fn readiness_still_requires_identity() {
+        let response = test_router(devcenter_auth::Authentication::Unconfigured)
+            .oneshot(
+                Request::builder()
+                    .uri("/readyz")
+                    .body(Body::empty())
+                    .unwrap(),
+            )
+            .await
+            .unwrap();
+        assert_eq!(response.status(), StatusCode::SERVICE_UNAVAILABLE);
     }
 
     #[tokio::test]

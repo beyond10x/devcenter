@@ -2,6 +2,11 @@
 
 ## Unreleased
 
+## 0.4.7 - 2026-09-01
+
+- Keep Identity and publication storage mandatory for readiness while allowing explicitly absent
+  optional service clients to remain disabled and fail closed at their route boundaries.
+
 ## 0.4.6 - 2026-09-01
 
 - Probe Connectors beneath its configured hosted base path so Kubernetes observes the same live
