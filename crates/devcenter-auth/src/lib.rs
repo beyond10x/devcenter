@@ -87,6 +87,21 @@ impl Authentication {
         }
     }
 
+    /// Verify a token for one exact MCP publication resource.
+    ///
+    /// Production remains unavailable until Identity's official client returns the OAuth client,
+    /// authorization, executor, and exact-resource claims required by the MCP authority flow.
+    pub async fn verify_publication(
+        &self,
+        authorization: Option<&str>,
+        _resource: &str,
+    ) -> Result<Principal, AuthenticationError> {
+        match self {
+            Self::DevelopmentBearer(_) => self.verify(authorization).await,
+            Self::Unconfigured | Self::Identity(_) => Err(AuthenticationError::Unavailable),
+        }
+    }
+
     /// Return the configured Identity client for browser login and exact-audience exchanges.
     pub fn identity_client(&self) -> Result<&identity_client::IdentityClient, AuthenticationError> {
         match self {

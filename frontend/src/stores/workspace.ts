@@ -6,6 +6,7 @@ import {
   errorMessage,
   type Agent,
   type ClaudeOAuthStart,
+  type IdentityProvider,
   type Session,
   type TaskEventEnvelope,
 } from "@/api/client";
@@ -27,6 +28,7 @@ export const useWorkspaceStore = defineStore("workspace", () => {
   const sessionState = ref<LoadState>("loading");
   const session = ref<Session>();
   const sessionError = ref("");
+  const identityProviders = ref<IdentityProvider[]>([]);
   const agentsState = ref<LoadState>("idle");
   const agents = ref<Agent[]>([]);
   const agentsError = ref("");
@@ -53,11 +55,25 @@ export const useWorkspaceStore = defineStore("workspace", () => {
     } catch (error) {
       if (error instanceof ApiError && error.status === 401) {
         sessionState.value = "idle";
+        try {
+          identityProviders.value = await api.identityProviders();
+        } catch {
+          identityProviders.value = [];
+        }
       } else {
         sessionState.value = "error";
         sessionError.value = errorMessage(error);
       }
     }
+  }
+
+  async function logout() {
+    await api.logout();
+    session.value = undefined;
+    sessionState.value = "idle";
+    agents.value = [];
+    connected.value = false;
+    identityProviders.value = await api.identityProviders().catch(() => []);
   }
 
   async function loadAgents() {
@@ -134,7 +150,12 @@ export const useWorkspaceStore = defineStore("workspace", () => {
     }
   }
 
-  async function createAgent(input: { name: string; instructions: string; model: string }) {
+  async function createAgent(input: {
+    name: string;
+    instructions: string;
+    model: string;
+    capability_profile_id?: string;
+  }) {
     const created = await api.createAgent(input);
     agents.value = [created, ...agents.value.filter((agent) => agent.id !== created.id)];
     selectedAgentId.value = created.id;
@@ -240,6 +261,7 @@ export const useWorkspaceStore = defineStore("workspace", () => {
     sessionState,
     session,
     sessionError,
+    identityProviders,
     agentsState,
     agents,
     agentsError,
@@ -251,6 +273,7 @@ export const useWorkspaceStore = defineStore("workspace", () => {
     oauthFlow,
     notice,
     bootstrap,
+    logout,
     loadAgents,
     loadConnection,
     startOAuth,

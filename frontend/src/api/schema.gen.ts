@@ -36,6 +36,38 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/auth/logout": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post: operations["logoutBrowserSession"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/auth/providers": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get: operations["listIdentityProviders"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/session": {
         parameters: {
             query?: never;
@@ -165,6 +197,86 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/mcp/publications": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get: operations["listMcpPublications"];
+        put?: never;
+        post: operations["publishCapabilityProfile"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/mcp/publications/{publication_id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get: operations["getMcpPublication"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch: operations["changeMcpPublicationState"];
+        trace?: never;
+    };
+    "/api/mcp/publications/{publication_id}/clients": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get: operations["listMcpClientAuthorizations"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/mcp/publications/{publication_id}/clients/{authorization_id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post?: never;
+        delete: operations["revokeMcpClientAuthorization"];
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/mcp/publications/{publication_id}/approvals": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get: operations["listMcpApprovals"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/healthz": {
         parameters: {
             query?: never;
@@ -229,7 +341,23 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
-    "/mcp": {
+    "/.well-known/oauth-protected-resource/mcp/{publication_id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get: operations["mcpProtectedResourceMetadata"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/mcp/{publication_id}": {
         parameters: {
             query?: never;
             header?: never;
@@ -258,6 +386,51 @@ export interface components {
             email?: string | null;
             groups: string[];
         };
+        IdentityProvider: {
+            id: string;
+            display_name: string;
+        };
+        /** @enum {string} */
+        PublicationState: "active" | "suspended" | "revoked";
+        Publication: {
+            publication_id: string;
+            tenant_id: string;
+            owner_subject: string;
+            profile_id: string;
+            active_revision: number;
+            toolset_digest: string;
+            state: components["schemas"]["PublicationState"];
+            created_at_ms: number;
+            updated_at_ms: number;
+        };
+        ClientAuthorization: {
+            authorization_id: string;
+            publication_id: string;
+            subject: string;
+            client_id: string;
+            display_name: string;
+            /** @enum {string} */
+            state: "active" | "revoked";
+            first_used_at_ms: number;
+            last_used_at_ms: number;
+        };
+        Approval: {
+            approval_id: string;
+            publication_id: string;
+            authorization_id: string;
+            subject: string;
+            client_id: string;
+            tool_name: string;
+            operation_ref: string;
+            connection_id: string;
+            input_digest: string;
+            /** @enum {string} */
+            state: "pending" | "approved" | "denied" | "consumed" | "expired" | "outcome_unknown";
+            expires_at_ms: number;
+            audit_ref?: string | null;
+            created_at_ms: number;
+            updated_at_ms: number;
+        };
         ConnectionStatus: {
             /** @constant */
             provider: "claude-code";
@@ -282,6 +455,8 @@ export interface components {
             name: string;
             instructions: string;
             model: string;
+            /** @description Existing immutable capability profile assigned to the first agent revision */
+            capability_profile_id?: string;
         };
         Agent: {
             id: string;
@@ -327,6 +502,7 @@ export interface components {
     parameters: {
         AgentId: string;
         TaskId: string;
+        PublicationId: string;
     };
     requestBodies: never;
     headers: never;
@@ -336,7 +512,10 @@ export type $defs = Record<string, never>;
 export interface operations {
     startBrowserLogin: {
         parameters: {
-            query?: never;
+            query?: {
+                /** @description Opaque configured Identity provider ID */
+                provider?: string;
+            };
             header?: never;
             path?: never;
             cookie?: never;
@@ -350,6 +529,7 @@ export interface operations {
                 };
                 content?: never;
             };
+            400: components["responses"]["Problem"];
             503: components["responses"]["Unavailable"];
         };
     };
@@ -374,6 +554,45 @@ export interface operations {
             };
             400: components["responses"]["Problem"];
             401: components["responses"]["Problem"];
+        };
+    };
+    logoutBrowserSession: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Browser session cookie cleared; persistent MCP authorizations are unchanged */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            403: components["responses"]["Problem"];
+        };
+    };
+    listIdentityProviders: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Deployment-configured provider choices */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["IdentityProvider"][];
+                };
+            };
         };
     };
     getSession: {
@@ -638,6 +857,172 @@ export interface operations {
             401: components["responses"]["Problem"];
         };
     };
+    listMcpPublications: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Publications owned by the stable internal subject */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Publication"][];
+                };
+            };
+            401: components["responses"]["Problem"];
+        };
+    };
+    publishCapabilityProfile: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": {
+                    profile_id: string;
+                };
+            };
+        };
+        responses: {
+            /** @description Immutable profile revision published */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Publication"];
+                };
+            };
+            503: components["responses"]["Unavailable"];
+        };
+    };
+    getMcpPublication: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                publication_id: components["parameters"]["PublicationId"];
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Owned publication */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Publication"];
+                };
+            };
+            404: components["responses"]["Problem"];
+        };
+    };
+    changeMcpPublicationState: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                publication_id: components["parameters"]["PublicationId"];
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": {
+                    state: components["schemas"]["PublicationState"];
+                };
+            };
+        };
+        responses: {
+            /** @description Publication state changed */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Publication"];
+                };
+            };
+            409: components["responses"]["Problem"];
+        };
+    };
+    listMcpClientAuthorizations: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                publication_id: components["parameters"]["PublicationId"];
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Credential-free OAuth client authorizations */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ClientAuthorization"][];
+                };
+            };
+        };
+    };
+    revokeMcpClientAuthorization: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                publication_id: components["parameters"]["PublicationId"];
+                authorization_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description One client authorization revoked */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            503: components["responses"]["Unavailable"];
+        };
+    };
+    listMcpApprovals: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                publication_id: components["parameters"]["PublicationId"];
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Pending exact-input approvals */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Approval"][];
+                };
+            };
+        };
+    };
     health: {
         parameters: {
             query?: never;
@@ -717,23 +1102,60 @@ export interface operations {
             };
         };
     };
-    mcp: {
+    mcpProtectedResourceMetadata: {
         parameters: {
             query?: never;
             header?: never;
-            path?: never;
+            path: {
+                publication_id: components["parameters"]["PublicationId"];
+            };
             cookie?: never;
         };
         requestBody?: never;
         responses: {
-            /** @description MCP JSON-RPC response */
+            /** @description RFC 9728 metadata for the exact publication resource */
             200: {
                 headers: {
                     [name: string]: unknown;
                 };
                 content?: never;
             };
+            /** @description Malformed publication ID */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    mcp: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                publication_id: components["parameters"]["PublicationId"];
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description MCP Streamable HTTP JSON-RPC response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description MCP notification accepted */
+            202: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
             401: components["responses"]["Problem"];
+            403: components["responses"]["Problem"];
         };
     };
 }

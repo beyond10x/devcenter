@@ -50,6 +50,32 @@ async function mockAuthenticatedWorkspace(page: Page) {
       await route.fulfill({ json: { ...agents[0], id: "agent-new", name: submitted.name } });
       return;
     }
+    if (path === "/api/mcp/publications") {
+      await route.fulfill({
+        json: [
+          {
+            publication_id: "pub-test-1",
+            tenant_id: "tenant-1",
+            owner_subject: "actor-1",
+            profile_id: "profile-release",
+            active_revision: 2,
+            toolset_digest: "0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef",
+            state: "active",
+            created_at_ms: 1_788_260_000_000,
+            updated_at_ms: 1_788_260_000_000,
+          },
+        ],
+      });
+      return;
+    }
+    if (path === "/api/mcp/publications/pub-test-1/clients") {
+      await route.fulfill({ json: [] });
+      return;
+    }
+    if (path === "/api/mcp/publications/pub-test-1/approvals") {
+      await route.fulfill({ json: [] });
+      return;
+    }
     await route.fulfill({ status: 404, json: { code: "not_found" } });
   });
 }
@@ -97,4 +123,20 @@ test("keeps connection custody understandable on a mobile viewport", async ({ pa
   await expect(page.getByRole("heading", { name: "Model access" })).toBeVisible();
   await expect(page.getByText("Credential bytes", { exact: true })).toBeVisible();
   await expect(page.getByRole("button", { name: "Connect Claude" })).toBeVisible();
+});
+
+test("shows one stable MCP endpoint and separate client setup commands", async ({
+  page,
+}, testInfo) => {
+  test.skip(testInfo.project.name !== "chromium", "Desktop publication behavior");
+  await mockAuthenticatedWorkspace(page);
+  await page.goto("/publications");
+
+  await expect(page.getByRole("heading", { name: "Publish governed tools" })).toBeVisible();
+  await expect(page.locator(".endpoint-row code")).toHaveText(/\/mcp\/pub-test-1$/);
+  await expect(page.getByText(/codex mcp add devcenter/)).toBeVisible();
+  await expect(page.getByText(/claude mcp add --transport http/)).toBeVisible();
+  await expect(page.getByText("Browser logout does not revoke it.")).toBeVisible();
+  const accessibility = await new AxeBuilder({ page }).withTags(["wcag2a", "wcag2aa"]).analyze();
+  expect(accessibility.violations).toEqual([]);
 });

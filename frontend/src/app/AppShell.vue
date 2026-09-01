@@ -1,5 +1,14 @@
 <script setup lang="ts">
-import { Bot, BookOpen, Cable, PanelLeftClose, PanelLeftOpen, X } from "@lucide/vue";
+import {
+  Bot,
+  BookOpen,
+  Cable,
+  LogOut,
+  PanelLeftClose,
+  PanelLeftOpen,
+  RadioTower,
+  X,
+} from "@lucide/vue";
 import { ref } from "vue";
 import { useWorkspaceStore } from "@/stores/workspace";
 
@@ -10,8 +19,13 @@ const reviewMode = import.meta.env.MODE === "review";
 const navigation = [
   { to: "/agents", label: "Agents", icon: Bot },
   { to: "/connections", label: "Connections", icon: Cable },
+  { to: "/publications", label: "MCP publications", icon: RadioTower },
   { to: "/docs", label: "Documentation", icon: BookOpen },
 ];
+
+async function logout() {
+  await workspace.logout();
+}
 </script>
 
 <template>
@@ -69,6 +83,9 @@ const navigation = [
             <span>Verified session</span>
           </div>
         </div>
+        <button class="sidebar-logout" type="button" @click="logout">
+          <LogOut :size="15" /> Log out browser session
+        </button>
       </div>
       <a class="sidebar-api-link" href="/openapi.json">OpenAPI 3.1 <span>↗</span></a>
     </aside>

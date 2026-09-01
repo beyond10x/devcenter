@@ -9,6 +9,7 @@ use agent_platform_client::{
     ActivateRevision, AgentId, AgentPlatformClient, ClientError as AgentPlatformError, CreateAgent,
     RevisionSpec, SubmitTask, TaskId,
 };
+use agent_platform_core::CapabilityProfileId;
 use axum::body::Body;
 use axum::extract::{Path, Query, State};
 use axum::http::{HeaderMap, HeaderValue, StatusCode, header};
@@ -19,8 +20,10 @@ use base64::Engine as _;
 use base64::engine::general_purpose::URL_SAFE_NO_PAD;
 use connectors_client::{ClientError as ConnectorsError, HostedClient};
 use devcenter_auth::{AuthenticationError, Principal};
-use devcenter_core::Config;
-use serde::{Deserialize, Serialize};
+use devcenter_core::{Config, IdentityProvider};
+use devcenter_mcp::{Outcome as McpOutcome, Request as McpRequest, Toolset};
+use devcenter_store::{PublicationState, Store, StoreError};
+use serde::Deserialize;
 use serde_json::{Value, json};
 use sha2::{Digest, Sha256};
 use url::Url;
@@ -39,6 +42,7 @@ struct AppState {
     agent_platform: Option<AgentPlatformClient>,
     connectors: Option<HostedClient>,
     pending_logins: Arc<Mutex<BTreeMap<String, PendingLogin>>>,
+    publications: Store,
 }
 
 struct PendingLogin {
@@ -59,6 +63,15 @@ impl std::error::Error for ConfigurationError {}
 
 /// Build the complete, explicit BFF allowlist.
 pub fn router(config: Config) -> Result<Router, ConfigurationError> {
+    let publications = Store::connect_lazy(&config.database_url).map_err(|_| ConfigurationError)?;
+    router_with_store(config, publications)
+}
+
+/// Build the BFF allowlist with an explicitly supplied store for conformance tests.
+pub fn router_with_store(
+    config: Config,
+    publications: Store,
+) -> Result<Router, ConfigurationError> {
     let agent_platform = config
         .agent_platform_origin
         .as_deref()
@@ -76,12 +89,15 @@ pub fn router(config: Config) -> Result<Router, ConfigurationError> {
         agent_platform,
         connectors,
         pending_logins: Arc::new(Mutex::new(BTreeMap::new())),
+        publications,
     };
     Ok(Router::new()
         .route("/", get(app))
         .route("/agents", get(app))
         .route("/agents/{agent_id}", get(app))
         .route("/connections", get(app))
+        .route("/profiles", get(app))
+        .route("/publications", get(app))
         .route("/docs", get(app))
         .route("/docs/", get(app))
         .route("/assets/{*path}", get(static_asset))
@@ -93,9 +109,35 @@ pub fn router(config: Config) -> Result<Router, ConfigurationError> {
             "/.well-known/oauth-protected-resource",
             get(resource_metadata),
         )
+        .route(
+            "/.well-known/oauth-protected-resource/mcp/{publication_id}",
+            get(publication_resource_metadata),
+        )
         .route("/auth/sso/start", get(sso_start))
         .route("/auth/sso/callback", get(sso_callback))
+        .route("/auth/logout", post(logout))
+        .route("/api/auth/providers", get(identity_providers))
         .route("/api/session", get(session))
+        .route(
+            "/api/mcp/publications",
+            get(list_publications).post(create_publication),
+        )
+        .route(
+            "/api/mcp/publications/{publication_id}",
+            get(get_publication).patch(change_publication_state),
+        )
+        .route(
+            "/api/mcp/publications/{publication_id}/clients",
+            get(list_publication_clients),
+        )
+        .route(
+            "/api/mcp/publications/{publication_id}/clients/{authorization_id}",
+            axum::routing::delete(revoke_publication_client),
+        )
+        .route(
+            "/api/mcp/publications/{publication_id}/approvals",
+            get(list_publication_approvals),
+        )
         .route(
             "/api/connectors/claude-code",
             get(claude_status)
@@ -114,7 +156,7 @@ pub fn router(config: Config) -> Result<Router, ConfigurationError> {
         .route("/api/agents/{agent_id}/tasks", post(submit_prompt))
         .route("/api/tasks/{task_id}", get(get_task))
         .route("/api/tasks/{task_id}/events", get(task_events))
-        .route("/mcp", post(mcp))
+        .route("/mcp/{publication_id}", post(mcp))
         .with_state(state))
 }
 
@@ -177,7 +219,8 @@ async fn ready(State(state): State<AppState>) -> Response {
     let ready = !state.config.tenant_id.is_empty()
         && state.config.authentication.identity_client().is_ok()
         && state.agent_platform.is_some()
-        && state.connectors.is_some();
+        && state.connectors.is_some()
+        && state.publications.ready().await.is_ok();
     let status = if ready {
         StatusCode::OK
     } else {
@@ -205,7 +248,34 @@ async fn resource_metadata(State(state): State<AppState>) -> Json<Value> {
     }))
 }
 
-async fn sso_start(State(state): State<AppState>) -> Response {
+async fn publication_resource_metadata(
+    State(state): State<AppState>,
+    Path(publication_id): Path<String>,
+) -> Response {
+    if !valid_opaque_id(&publication_id) {
+        return StatusCode::NOT_FOUND.into_response();
+    }
+    let resource = publication_resource(&state, &publication_id);
+    confidential_json(json!({
+        "resource": resource,
+        "authorization_servers": [format!("{}/identity", state.config.public_origin.trim_end_matches('/'))],
+        "bearer_methods_supported": ["header"],
+        "scopes_supported": ["mcp.tools.call"],
+        "resource_name": "Devcenter capability publication"
+    }))
+}
+
+#[derive(Deserialize)]
+#[serde(deny_unknown_fields)]
+struct LoginStart {
+    provider: Option<String>,
+}
+
+async fn identity_providers(State(state): State<AppState>) -> Json<Vec<IdentityProvider>> {
+    Json(state.config.identity_providers.clone())
+}
+
+async fn sso_start(State(state): State<AppState>, Query(start): Query<LoginStart>) -> Response {
     let Some(client_id) = state.config.identity_web_client_id.as_deref() else {
         return unavailable("browser_login_not_configured");
     };
@@ -218,6 +288,11 @@ async fn sso_start(State(state): State<AppState>) -> Response {
     let Ok(metadata) = identity.login_metadata().await else {
         return unavailable("identity_unavailable");
     };
+    let selected_provider =
+        match select_provider(&state.config.identity_providers, start.provider.as_deref()) {
+            Ok(provider) => provider,
+            Err(code) => return problem(StatusCode::BAD_REQUEST, code),
+        };
     let Ok(state_token) = random_token(32) else {
         return unavailable("randomness_unavailable");
     };
@@ -244,7 +319,36 @@ async fn sso_start(State(state): State<AppState>) -> Response {
         ("code_challenge", challenge.as_str()),
         ("code_challenge_method", "S256"),
     ]);
+    if let Some(provider) = selected_provider {
+        authorization
+            .query_pairs_mut()
+            .append_pair("identity_provider", provider);
+    }
     Redirect::temporary(authorization.as_str()).into_response()
+}
+
+fn select_provider<'a>(
+    providers: &'a [IdentityProvider],
+    requested: Option<&str>,
+) -> Result<Option<&'a str>, &'static str> {
+    if providers.is_empty() {
+        return requested
+            .is_none()
+            .then_some(None)
+            .ok_or("identity_provider_invalid");
+    }
+    if let Some(requested) = requested {
+        return providers
+            .iter()
+            .find(|provider| provider.id == requested)
+            .map(|provider| Some(provider.id.as_str()))
+            .ok_or("identity_provider_invalid");
+    }
+    if providers.len() == 1 {
+        Ok(Some(providers[0].id.as_str()))
+    } else {
+        Err("identity_provider_required")
+    }
 }
 
 #[derive(Deserialize)]
@@ -314,6 +418,26 @@ async fn session(State(state): State<AppState>, headers: HeaderMap) -> Response 
         "groups": authenticated.principal.groups
     }))
     .into_response()
+}
+
+async fn logout(State(state): State<AppState>, headers: HeaderMap) -> Response {
+    let origin = headers
+        .get(header::ORIGIN)
+        .and_then(|value| value.to_str().ok());
+    if origin != Some(state.config.public_origin.trim_end_matches('/')) {
+        return problem(StatusCode::FORBIDDEN, "origin_refused");
+    }
+    let mut response = StatusCode::NO_CONTENT.into_response();
+    response.headers_mut().insert(
+        header::SET_COOKIE,
+        HeaderValue::from_static(
+            "__Host-devcenter_session=; Path=/; Max-Age=0; Secure; HttpOnly; SameSite=Lax",
+        ),
+    );
+    response
+        .headers_mut()
+        .insert(header::CACHE_CONTROL, HeaderValue::from_static("no-store"));
+    response
 }
 
 async fn claude_status(State(state): State<AppState>, headers: HeaderMap) -> Response {
@@ -534,6 +658,7 @@ struct CreateManagedAgent {
     name: String,
     instructions: String,
     model: String,
+    capability_profile_id: Option<String>,
 }
 
 async fn create_managed_agent(
@@ -549,6 +674,18 @@ async fn create_managed_agent(
         return unavailable("agent_platform_not_configured");
     };
     let authorization = authenticated.authorization.as_str();
+    let capability_profile_id = match request.capability_profile_id {
+        Some(profile_id) => match CapabilityProfileId::new(profile_id) {
+            Ok(profile_id) => Some(profile_id),
+            Err(_) => {
+                return problem(
+                    StatusCode::UNPROCESSABLE_ENTITY,
+                    "capability_profile_id_invalid",
+                );
+            }
+        },
+        None => None,
+    };
     let agent = match client
         .create_agent(authorization, &CreateAgent { name: request.name })
         .await
@@ -563,7 +700,7 @@ async fn create_managed_agent(
             &RevisionSpec {
                 instructions: request.instructions,
                 model: request.model,
-                capability_profile_id: None,
+                capability_profile_id,
                 metadata: None,
             },
         )
@@ -684,46 +821,233 @@ async fn task_events(
     response
 }
 
-#[derive(Debug, Deserialize)]
-struct McpRequest {
-    jsonrpc: String,
-    id: Option<Value>,
-    method: String,
-}
-
-#[derive(Debug, Serialize)]
-struct McpResponse {
-    jsonrpc: &'static str,
-    id: Option<Value>,
-    result: Value,
-}
-
 async fn mcp(
     State(state): State<AppState>,
     headers: HeaderMap,
+    Path(publication_id): Path<String>,
     Json(request): Json<McpRequest>,
 ) -> Response {
-    if request.jsonrpc != "2.0" {
-        return problem(StatusCode::BAD_REQUEST, "json_rpc_required");
+    if !valid_opaque_id(&publication_id) {
+        return StatusCode::NOT_FOUND.into_response();
     }
+    let publication = match state.publications.publication(&publication_id).await {
+        Ok(Some(publication)) => publication,
+        Ok(None) => return StatusCode::NOT_FOUND.into_response(),
+        Err(_) => return unavailable("publication_store_unavailable"),
+    };
+    if publication.state != PublicationState::Active {
+        return problem(StatusCode::FORBIDDEN, "publication_not_active");
+    }
+    let Ok(authorization) = bearer_authorization(&headers) else {
+        return mcp_authentication_problem(&state, &publication_id, false);
+    };
+    let resource = publication_resource(&state, &publication_id);
+    let principal = match state
+        .config
+        .authentication
+        .verify_publication(Some(authorization.as_str()), &resource)
+        .await
+    {
+        Ok(principal) => principal,
+        Err(AuthenticationError::Invalid) => {
+            return mcp_authentication_problem(&state, &publication_id, false);
+        }
+        Err(AuthenticationError::Unavailable) => {
+            return mcp_authentication_problem(&state, &publication_id, true);
+        }
+    };
+    if principal.tenant_id != publication.tenant_id
+        || principal.subject != publication.owner_subject
+    {
+        return problem(StatusCode::FORBIDDEN, "publication_authority_refused");
+    }
+    let Ok(revision) = state.publications.active_revision(&publication).await else {
+        return unavailable("publication_revision_unavailable");
+    };
+    let tools = match Toolset::compile(revision.tools) {
+        Ok(tools) if tools.digest() == publication.toolset_digest => tools,
+        Ok(_) | Err(_) => return unavailable("publication_projection_invalid"),
+    };
+    match devcenter_mcp::handle(request, &tools) {
+        McpOutcome::Reply(reply) => confidential_json(reply),
+        McpOutcome::AcceptedNotification => StatusCode::ACCEPTED.into_response(),
+        McpOutcome::Call(call) => confidential_json(devcenter_mcp::call_error(
+            &call.request_id,
+            "authority_exchange_unavailable",
+            "current Connector authority could not be established",
+            &json!({"retry_required": true}),
+        )),
+    }
+}
+
+#[derive(Deserialize)]
+#[serde(deny_unknown_fields)]
+struct ChangePublicationState {
+    state: PublicationState,
+}
+
+async fn list_publications(State(state): State<AppState>, headers: HeaderMap) -> Response {
+    let authenticated = match authenticate(&state, &headers, false).await {
+        Ok(authenticated) => authenticated,
+        Err(response) => return response,
+    };
+    match state
+        .publications
+        .publications_for(
+            &authenticated.principal.tenant_id,
+            &authenticated.principal.subject,
+        )
+        .await
+    {
+        Ok(publications) => Json(publications).into_response(),
+        Err(_) => unavailable("publication_store_unavailable"),
+    }
+}
+
+async fn create_publication(State(state): State<AppState>, headers: HeaderMap) -> Response {
     if let Err(response) = authenticate(&state, &headers, true).await {
         return response;
     }
-    let result = match request.method.as_str() {
-        "initialize" => json!({
-            "protocolVersion": "2025-11-25",
-            "capabilities": {"tools": {"listChanged": true}},
-            "serverInfo": {"name": "devcenter", "version": env!("CARGO_PKG_VERSION")}
-        }),
-        "tools/list" => json!({"tools": []}),
-        _ => return problem(StatusCode::NOT_IMPLEMENTED, "method_not_available"),
+    unavailable("agent_platform_capability_profiles_unavailable")
+}
+
+async fn get_publication(
+    State(state): State<AppState>,
+    headers: HeaderMap,
+    Path(publication_id): Path<String>,
+) -> Response {
+    let authenticated = match authenticate(&state, &headers, false).await {
+        Ok(authenticated) => authenticated,
+        Err(response) => return response,
     };
-    Json(McpResponse {
-        jsonrpc: "2.0",
-        id: request.id,
-        result,
-    })
-    .into_response()
+    match owned_publication(&state, &authenticated.principal, &publication_id).await {
+        Ok(publication) => Json(publication).into_response(),
+        Err(response) => response,
+    }
+}
+
+async fn change_publication_state(
+    State(state): State<AppState>,
+    headers: HeaderMap,
+    Path(publication_id): Path<String>,
+    Json(request): Json<ChangePublicationState>,
+) -> Response {
+    let authenticated = match authenticate(&state, &headers, true).await {
+        Ok(authenticated) => authenticated,
+        Err(response) => return response,
+    };
+    if request.state == PublicationState::Revoked {
+        return unavailable("identity_publication_revocation_unavailable");
+    }
+    if let Err(response) =
+        owned_publication(&state, &authenticated.principal, &publication_id).await
+    {
+        return response;
+    }
+    match state
+        .publications
+        .set_publication_state(
+            &publication_id,
+            &authenticated.principal.tenant_id,
+            &authenticated.principal.subject,
+            request.state,
+            now_millis(),
+        )
+        .await
+    {
+        Ok(publication) => Json(publication).into_response(),
+        Err(StoreError::Conflict) => problem(StatusCode::CONFLICT, "publication_state_conflict"),
+        Err(_) => unavailable("publication_store_unavailable"),
+    }
+}
+
+async fn list_publication_clients(
+    State(state): State<AppState>,
+    headers: HeaderMap,
+    Path(publication_id): Path<String>,
+) -> Response {
+    let authenticated = match authenticate(&state, &headers, false).await {
+        Ok(authenticated) => authenticated,
+        Err(response) => return response,
+    };
+    if let Err(response) =
+        owned_publication(&state, &authenticated.principal, &publication_id).await
+    {
+        return response;
+    }
+    match state
+        .publications
+        .client_authorizations(&publication_id)
+        .await
+    {
+        Ok(clients) => Json(clients).into_response(),
+        Err(_) => unavailable("publication_store_unavailable"),
+    }
+}
+
+async fn revoke_publication_client(
+    State(state): State<AppState>,
+    headers: HeaderMap,
+    Path((publication_id, _authorization_id)): Path<(String, String)>,
+) -> Response {
+    let authenticated = match authenticate(&state, &headers, true).await {
+        Ok(authenticated) => authenticated,
+        Err(response) => return response,
+    };
+    if let Err(response) =
+        owned_publication(&state, &authenticated.principal, &publication_id).await
+    {
+        return response;
+    }
+    unavailable("identity_client_revocation_unavailable")
+}
+
+async fn list_publication_approvals(
+    State(state): State<AppState>,
+    headers: HeaderMap,
+    Path(publication_id): Path<String>,
+) -> Response {
+    let authenticated = match authenticate(&state, &headers, false).await {
+        Ok(authenticated) => authenticated,
+        Err(response) => return response,
+    };
+    if let Err(response) =
+        owned_publication(&state, &authenticated.principal, &publication_id).await
+    {
+        return response;
+    }
+    match state
+        .publications
+        .pending_approvals(
+            &publication_id,
+            &authenticated.principal.subject,
+            now_millis(),
+        )
+        .await
+    {
+        Ok(approvals) => Json(approvals).into_response(),
+        Err(_) => unavailable("publication_store_unavailable"),
+    }
+}
+
+async fn owned_publication(
+    state: &AppState,
+    principal: &Principal,
+    publication_id: &str,
+) -> Result<devcenter_store::Publication, Response> {
+    if !valid_opaque_id(publication_id) {
+        return Err(StatusCode::NOT_FOUND.into_response());
+    }
+    match state.publications.publication(publication_id).await {
+        Ok(Some(publication))
+            if publication.tenant_id == principal.tenant_id
+                && publication.owner_subject == principal.subject =>
+        {
+            Ok(publication)
+        }
+        Ok(Some(_) | None) => Err(StatusCode::NOT_FOUND.into_response()),
+        Err(_) => Err(unavailable("publication_store_unavailable")),
+    }
 }
 
 struct AuthenticatedSession {
@@ -819,6 +1143,62 @@ fn authentication_problem(error: AuthenticationError) -> Response {
         ),
     );
     response
+}
+
+fn mcp_authentication_problem(
+    state: &AppState,
+    publication_id: &str,
+    unavailable_authority: bool,
+) -> Response {
+    let status = if unavailable_authority {
+        StatusCode::SERVICE_UNAVAILABLE
+    } else {
+        StatusCode::UNAUTHORIZED
+    };
+    let mut response = problem(
+        status,
+        if unavailable_authority {
+            "mcp_resource_authority_unavailable"
+        } else {
+            "mcp_authentication_required"
+        },
+    );
+    let metadata = format!(
+        "{}/.well-known/oauth-protected-resource/mcp/{publication_id}",
+        state.config.public_origin.trim_end_matches('/')
+    );
+    if let Ok(value) = HeaderValue::from_str(&format!(
+        "Bearer resource_metadata=\"{metadata}\", scope=\"mcp.tools.call\""
+    )) {
+        response
+            .headers_mut()
+            .insert(header::WWW_AUTHENTICATE, value);
+    }
+    response
+}
+
+fn bearer_authorization(headers: &HeaderMap) -> Result<Zeroizing<String>, ()> {
+    let authorization = headers
+        .get(header::AUTHORIZATION)
+        .and_then(|value| value.to_str().ok())
+        .filter(|value| value.len() <= 4_096 && value.starts_with("Bearer "))
+        .ok_or(())?;
+    Ok(Zeroizing::new(authorization.to_owned()))
+}
+
+fn publication_resource(state: &AppState, publication_id: &str) -> String {
+    format!(
+        "{}/mcp/{publication_id}",
+        state.config.public_origin.trim_end_matches('/')
+    )
+}
+
+fn valid_opaque_id(value: &str) -> bool {
+    !value.is_empty()
+        && value.len() <= 128
+        && value
+            .bytes()
+            .all(|byte| byte.is_ascii_alphanumeric() || matches!(byte, b'_' | b'-'))
 }
 
 fn connector_error(error: &ConnectorsError, refused_code: &str) -> Response {
@@ -919,6 +1299,14 @@ fn now_seconds() -> u64 {
         .map_or(0, |duration| duration.as_secs())
 }
 
+fn now_millis() -> i64 {
+    SystemTime::now()
+        .duration_since(UNIX_EPOCH)
+        .map_or(0, |duration| {
+            i64::try_from(duration.as_millis()).unwrap_or(i64::MAX)
+        })
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -933,6 +1321,8 @@ mod tests {
             authentication,
             identity_web_client_id: None,
             identity_redirect_uri: None,
+            identity_providers: Vec::new(),
+            database_url: "sqlite::memory:".into(),
             agent_platform_origin: None,
             connectors_api_base: None,
         })
@@ -1014,7 +1404,7 @@ mod tests {
         assert_eq!(response.status(), StatusCode::NOT_FOUND);
 
         let contract: Value = serde_json::from_str(devcenter_web_assets::OPENAPI).unwrap();
-        assert_eq!(contract["info"]["version"], "0.3.4");
+        assert_eq!(contract["info"]["version"], "0.4.0");
         assert!(contract["paths"]["/api/connectors/claude-code/oauth/start"].is_object());
         assert!(contract["paths"]["/api/connectors/claude-code/oauth/complete"].is_object());
     }
@@ -1066,24 +1456,104 @@ mod tests {
     }
 
     #[tokio::test]
-    async fn development_mcp_advertises_no_ungranted_tools() {
-        let response =
-            test_router(devcenter_auth::Authentication::development_bearer("local-token").unwrap())
-                .oneshot(
-                    Request::builder()
-                        .method("POST")
-                        .uri("/mcp")
-                        .header(header::CONTENT_TYPE, "application/json")
-                        .header(header::AUTHORIZATION, "Bearer local-token")
-                        .body(Body::from(
-                            r#"{"jsonrpc":"2.0","id":1,"method":"tools/list"}"#,
-                        ))
-                        .unwrap(),
-                )
-                .await
-                .unwrap();
+    async fn development_mcp_advertises_only_the_immutable_publication_projection() {
+        let store = Store::connect_lazy("sqlite::memory:").unwrap();
+        store.ready().await.unwrap();
+        let tool = devcenter_mcp::CompiledTool {
+            name: "issue_get".to_owned(),
+            title: "Get issue".to_owned(),
+            description: "Read one issue".to_owned(),
+            operation_ref: "git/issue.get".to_owned(),
+            connection_id: "connection-1".to_owned(),
+            input_schema: json!({"type":"object"}),
+            output_schema: json!({"type":"object"}),
+            effect: devcenter_mcp::Effect::ReadOnly,
+            approval: devcenter_mcp::ApprovalPosture::NotRequired,
+        };
+        let tools = vec![tool];
+        let digest = Toolset::compile(tools.clone()).unwrap().digest().to_owned();
+        store
+            .create_publication(
+                &devcenter_store::Publication {
+                    publication_id: "pub_opaque".to_owned(),
+                    tenant_id: "local".to_owned(),
+                    owner_subject: "human:developer".to_owned(),
+                    profile_id: "profile-1".to_owned(),
+                    active_revision: 1,
+                    toolset_digest: digest.clone(),
+                    state: PublicationState::Active,
+                    created_at_ms: 1,
+                    updated_at_ms: 1,
+                },
+                &devcenter_store::PublicationRevision {
+                    publication_id: "pub_opaque".to_owned(),
+                    revision: 1,
+                    profile_revision: 3,
+                    toolset_digest: digest,
+                    tools,
+                    created_at_ms: 1,
+                },
+            )
+            .await
+            .unwrap();
+        let config = Config {
+            tenant_id: "local".into(),
+            public_origin: "https://devcenter.example.invalid".into(),
+            authentication: devcenter_auth::Authentication::development_bearer("local-token")
+                .unwrap(),
+            identity_web_client_id: None,
+            identity_redirect_uri: None,
+            identity_providers: Vec::new(),
+            database_url: "sqlite::memory:".into(),
+            agent_platform_origin: None,
+            connectors_api_base: None,
+        };
+        let response = router_with_store(config, store)
+            .unwrap()
+            .oneshot(
+                Request::builder()
+                    .method("POST")
+                    .uri("/mcp/pub_opaque")
+                    .header(header::CONTENT_TYPE, "application/json")
+                    .header(header::AUTHORIZATION, "Bearer local-token")
+                    .body(Body::from(
+                        r#"{"jsonrpc":"2.0","id":1,"method":"tools/list"}"#,
+                    ))
+                    .unwrap(),
+            )
+            .await
+            .unwrap();
         assert_eq!(response.status(), StatusCode::OK);
         let body = response.into_body().collect().await.unwrap().to_bytes();
-        assert!(String::from_utf8_lossy(&body).contains(r#""tools":[]"#));
+        let body: Value = serde_json::from_slice(&body).unwrap();
+        assert_eq!(body["result"]["tools"][0]["name"], "issue_get");
+        assert_eq!(
+            body["result"]["tools"][0]["_meta"]["devcenter/operation"],
+            "git/issue.get"
+        );
+    }
+
+    #[test]
+    fn provider_selection_is_explicit_only_when_needed() {
+        let providers = vec![
+            IdentityProvider {
+                id: "one".to_owned(),
+                display_name: "One".to_owned(),
+            },
+            IdentityProvider {
+                id: "two".to_owned(),
+                display_name: "Two".to_owned(),
+            },
+        ];
+        assert_eq!(
+            select_provider(&providers, None),
+            Err("identity_provider_required")
+        );
+        assert_eq!(select_provider(&providers, Some("two")), Ok(Some("two")));
+        assert_eq!(select_provider(&providers[..1], None), Ok(Some("one")));
+        assert_eq!(
+            select_provider(&providers, Some("unknown")),
+            Err("identity_provider_invalid")
+        );
     }
 }

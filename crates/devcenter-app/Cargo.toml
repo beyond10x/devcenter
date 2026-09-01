@@ -17,6 +17,7 @@ axum.workspace = true
 clap.workspace = true
 devcenter-auth.workspace = true
 devcenter-core.workspace = true
+serde_json.workspace = true
 devcenter-http.workspace = true
 tokio.workspace = true
 
