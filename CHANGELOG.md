@@ -4,10 +4,12 @@
 
 - Authenticate the private SDK Vue dependency before hosted frontend gates and inside the
   secret-mounted frontend container build, keeping credentials out of image layers.
+- Pin the generic Connector embedding seam that lets this SIP-disabled composition omit the unused
+  voice dependency graph while refusing any SIP-enabled configuration.
 
 ## 0.6.0 - 2026-09-02
 
-- Compose Todo 0.2.1 and the Service SDK 0.2.3 external catalog factory through Connectors'
+- Compose Todo 0.2.2 and the Service SDK 0.2.4 external catalog factory through Connectors'
   ordinary factory seam, without adding generated-service concepts to Connectors.
 - Add an authenticated generated-services BFF which retains descriptions, connections, access
   tokens, and approval evidence server-side and accepts only catalog-admitted, realm-free inputs.

@@ -8,8 +8,8 @@ importers:
   .:
     dependencies:
       "@b10x/service-console-vue":
-        specifier: git+https://github.com/beyond10x/service-sdk.git#a4da0cace5b4e197a2599c0063292e86fa8d9e96
-        version: git+https://github.com/beyond10x/service-sdk.git#a4da0cace5b4e197a2599c0063292e86fa8d9e96(typescript@5.9.3)
+        specifier: git+https://github.com/beyond10x/service-sdk.git#efa920eab4d39229b0c0b2856461c91a4b15431c
+        version: git+https://github.com/beyond10x/service-sdk.git#efa920eab4d39229b0c0b2856461c91a4b15431c(typescript@5.9.3)
       "@fontsource-variable/manrope":
         specifier: 5.3.0
         version: 5.3.0
@@ -117,14 +117,14 @@ packages:
     peerDependencies:
       playwright-core: ">= 1.0.0"
 
-  "@b10x/service-console-vue@git+https://github.com/beyond10x/service-sdk.git#a4da0cace5b4e197a2599c0063292e86fa8d9e96":
+  "@b10x/service-console-vue@git+https://github.com/beyond10x/service-sdk.git#efa920eab4d39229b0c0b2856461c91a4b15431c":
     resolution:
       {
-        commit: a4da0cace5b4e197a2599c0063292e86fa8d9e96,
+        commit: efa920eab4d39229b0c0b2856461c91a4b15431c,
         repo: https://github.com/beyond10x/service-sdk.git,
         type: git,
       }
-    version: 0.2.3
+    version: 0.2.4
 
   "@babel/code-frame@7.29.7":
     resolution:
@@ -3140,7 +3140,7 @@ snapshots:
       axe-core: 4.13.0
       playwright-core: 1.62.1
 
-  "@b10x/service-console-vue@git+https://github.com/beyond10x/service-sdk.git#a4da0cace5b4e197a2599c0063292e86fa8d9e96(typescript@5.9.3)":
+  "@b10x/service-console-vue@git+https://github.com/beyond10x/service-sdk.git#efa920eab4d39229b0c0b2856461c91a4b15431c(typescript@5.9.3)":
     dependencies:
       vue: 3.5.42(typescript@5.9.3)
     transitivePeerDependencies:

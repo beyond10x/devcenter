@@ -7,7 +7,7 @@ title: Run generated services in Devcenter
 summary: Discover and invoke SDK-generated service consoles through authenticated Devcenter bindings.
 relations:
 - derived_from: epic:authenticated-control-plane
-revision: 4
+revision: 5
 ---
 # Story: Run generated services in Devcenter
 
@@ -26,4 +26,4 @@ An authenticated person can discover every generated service composed into Devce
 
 ## Out of Scope
 
-Service behavior remains generated from Todo's service definition. Deployment-specific identities and policy remain in the private deployment repository. Connectors remains unchanged.
+Service behavior remains generated from Todo\x27s service definition. Deployment-specific identities and policy remain in the private deployment repository. No SDK or generated-service concept becomes part of Connectors; its generic embedding seam may omit unused optional capability graphs and must fail closed when omitted capabilities are configured.
