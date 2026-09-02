@@ -1,5 +1,15 @@
 # Changelog
 
+## 0.6.4 - 2026-09-02
+
+- Make Connector capability controls explicit in the connections and profiles views, including
+  clearer empty states, runtime-derived capability summaries, and active-profile guidance.
+- Consume released Connectors 0.4.5 for the dependency-neutral embedded runtime instead of an
+  unreleased source revision.
+- Align the compiled Identity and Workspace clients with the 0.4.0 and 0.1.5 runtimes already
+  deployed by the product composition.
+- Add the verified private-runtime promotion path used for Workspace release artifacts.
+
 ## 0.6.3 - 2026-09-02
 
 - Send only the two allowlisted repository identifiers when opening a project, avoiding a 422 from

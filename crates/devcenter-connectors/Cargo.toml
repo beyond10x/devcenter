@@ -4,7 +4,7 @@ members = ["."]
 
 [package]
 name = "devcenter-connectors"
-version = "0.6.3"
+version = "0.6.4"
 edition = "2024"
 rust-version = "1.97"
 license = "LicenseRef-B10x-Proprietary"
@@ -18,8 +18,8 @@ path = "src/main.rs"
 [dependencies]
 anyhow = "1"
 clap = { version = "4.6", features = ["derive", "env"] }
-connectors-runtime = { git = "https://github.com/beyond10x/connectors.git", rev = "6410df32d0f24c44b87ee26891e3259431740fa7", default-features = false }
-connectors-service = { package = "service", git = "https://github.com/beyond10x/connectors.git", rev = "6410df32d0f24c44b87ee26891e3259431740fa7" }
+connectors-runtime = { git = "https://github.com/beyond10x/connectors.git", rev = "6d9f04c876b4b2ace4fef64fdad2bef7427d3a41", default-features = false }
+connectors-service = { package = "service", git = "https://github.com/beyond10x/connectors.git", rev = "6d9f04c876b4b2ace4fef64fdad2bef7427d3a41" }
 eventlog-postgres = { git = "https://github.com/beyond10x/eventlog.git", rev = "b7e8f0d87b01c403415546d311952cb155caf16f" }
 serde = { version = "1", features = ["derive"] }
 serde_yaml = "0.9"

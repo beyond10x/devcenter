@@ -449,7 +449,7 @@ test("opens a deep-linked agent and creates a governed worker", async ({ page },
   await page.getByRole("button", { name: "Create and activate" }).click();
 
   await expect(page.getByRole("heading", { name: "Evidence keeper" })).toBeVisible();
-  await expect(page.getByRole("status")).toContainText("created and activated");
+  await expect(page.getByRole("status").filter({ hasText: "created and activated" })).toBeVisible();
   const accessibility = await new AxeBuilder({ page }).withTags(["wcag2a", "wcag2aa"]).analyze();
   expect(accessibility.violations).toEqual([]);
 });
@@ -612,7 +612,9 @@ test("makes capability posture explicit and applies bulk changes atomically", as
   );
 
   await page.getByRole("button", { name: "Allow all" }).click();
-  await expect(page.getByRole("status")).toContainText("All 3 capabilities are now allowed.");
+  await expect(
+    page.getByRole("status").filter({ hasText: "All 3 capabilities are now allowed." }),
+  ).toBeVisible();
   await expect(page.getByText("3 allowed", { exact: true })).toBeVisible();
   await expect(gitLabCapability.getByRole("button", { name: "Allow" })).toHaveAttribute(
     "aria-pressed",
@@ -620,7 +622,9 @@ test("makes capability posture explicit and applies bulk changes atomically", as
   );
 
   await page.getByRole("button", { name: "Deny all" }).click();
-  await expect(page.getByRole("status")).toContainText("All 3 capabilities are now denied.");
+  await expect(
+    page.getByRole("status").filter({ hasText: "All 3 capabilities are now denied." }),
+  ).toBeVisible();
   await expect(page.getByText("3 denied", { exact: true })).toBeVisible();
   const accessibility = await new AxeBuilder({ page }).withTags(["wcag2a", "wcag2aa"]).analyze();
   expect(accessibility.violations).toEqual([]);
@@ -639,7 +643,7 @@ test("shows one stable MCP endpoint and separate client setup commands", async (
   await expect(page.getByText(/claude mcp add --transport http/)).toBeVisible();
   await expect(page.getByText("Browser logout does not revoke it.")).toBeVisible();
   await page.getByRole("button", { name: "Revoke permanently" }).click();
-  await expect(page.getByRole("status")).toContainText("Publication revoked.");
+  await expect(page.getByRole("status").filter({ hasText: "Publication revoked." })).toBeVisible();
   const accessibility = await new AxeBuilder({ page }).withTags(["wcag2a", "wcag2aa"]).analyze();
   expect(accessibility.violations).toEqual([]);
 });
