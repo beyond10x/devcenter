@@ -1,5 +1,10 @@
 # Changelog
 
+## 0.6.1 - 2026-09-02
+
+- Authenticate the private SDK Vue dependency before hosted frontend gates and inside the
+  secret-mounted frontend container build, keeping credentials out of image layers.
+
 ## 0.6.0 - 2026-09-02
 
 - Compose Todo 0.2.1 and the Service SDK 0.2.3 external catalog factory through Connectors'
