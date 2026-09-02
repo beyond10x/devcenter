@@ -1,5 +1,12 @@
 # Changelog
 
+## 0.7.1 - 2026-09-02
+
+- Consume released Connectors 0.4.5 for the BFF client and protocol contracts while retaining the
+  generated-service composition's exact compatible runtime revision.
+- Align the compiled Identity and Workspace clients with the 0.4.0 and 0.1.5 runtimes already
+  deployed by the product composition.
+
 ## 0.7.0 - 2026-09-02
 
 - Add persistent System, Light, Dark, Monokai, Solarized Light, and Solarized Dark themes driven by
