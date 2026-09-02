@@ -24,7 +24,7 @@ import {
 import ConnectionsView from "@/features/connections/ConnectionsView.vue";
 import { useWorkspaceStore } from "@/stores/workspace";
 
-type CatalogTab = "catalog" | "connections";
+type ConnectorTab = "connections" | "catalog";
 type ExposureFilter = "all" | "exposed" | "hidden";
 
 const route = useRoute();
@@ -47,12 +47,15 @@ const startingProfile = ref("");
 const setupSessions = ref<Record<string, ConnectSession>>({});
 const setupError = ref("");
 
-const activeTab = computed<CatalogTab>(() =>
-  route.query.tab === "connections" ? "connections" : "catalog",
-);
 const providerRef = computed(() =>
   typeof route.params.providerRef === "string" ? route.params.providerRef : undefined,
 );
+const activeTab = computed<ConnectorTab>(() => {
+  if (providerRef.value || route.query.tab === "catalog" || typeof route.query.q === "string") {
+    return "catalog";
+  }
+  return "connections";
+});
 const services = computed(() => [
   ...new Set(detail.value?.operations.map((operation) => operation.service) ?? []),
 ]);
@@ -117,7 +120,7 @@ async function submitSearch() {
   offset.value = 0;
   await router.replace({
     path: "/connectors",
-    query: activeQuery.value ? { q: activeQuery.value } : {},
+    query: activeQuery.value ? { tab: "catalog", q: activeQuery.value } : { tab: "catalog" },
   });
   await loadCatalog();
 }
@@ -128,17 +131,17 @@ async function changePage(nextOffset: number) {
   window.scrollTo({ top: 0, behavior: "smooth" });
 }
 
-async function selectTab(tab: CatalogTab) {
+async function selectTab(tab: ConnectorTab) {
   await router.push({
     path: "/connectors",
-    query: tab === "connections" ? { tab: "connections" } : {},
+    query: tab === "catalog" ? { tab: "catalog" } : {},
   });
 }
 
 async function returnToCatalog() {
   await router.push({
     path: "/connectors",
-    query: activeQuery.value ? { q: activeQuery.value } : {},
+    query: activeQuery.value ? { tab: "catalog", q: activeQuery.value } : { tab: "catalog" },
   });
 }
 
@@ -205,11 +208,11 @@ function exposureLabel(operation: ConnectorCatalogOperation): string {
   <div class="view connectors-view">
     <header class="view-header connector-heading">
       <div>
-        <p class="eyebrow">Connector discovery</p>
+        <p class="eyebrow">Connector workspace</p>
         <h1>Connectors</h1>
         <p>
-          Explore the complete deployment catalog, inspect its operation contracts, and start only
-          the setup flows the Connector says are available to you.
+          Manage your connections first, then explore the deployment catalog and its operation
+          contracts when you need something new.
         </p>
       </div>
       <a
@@ -226,17 +229,19 @@ function exposureLabel(operation: ConnectorCatalogOperation): string {
     <nav class="connector-tabs" aria-label="Connector workspace">
       <button
         type="button"
-        :class="{ active: activeTab === 'catalog' }"
-        @click="selectTab('catalog')"
+        :class="{ active: activeTab === 'connections' }"
+        :aria-current="activeTab === 'connections' ? 'page' : undefined"
+        @click="selectTab('connections')"
       >
-        Catalog
+        My connectors
       </button>
       <button
         type="button"
-        :class="{ active: activeTab === 'connections' }"
-        @click="selectTab('connections')"
+        :class="{ active: activeTab === 'catalog' }"
+        :aria-current="activeTab === 'catalog' ? 'page' : undefined"
+        @click="selectTab('catalog')"
       >
-        My connections
+        Catalog
       </button>
     </nav>
 

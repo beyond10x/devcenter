@@ -1,5 +1,14 @@
 <script setup lang="ts">
-import { Check, CircleAlert, Plus, RefreshCw, ShieldCheck } from "@lucide/vue";
+import {
+  Check,
+  CheckCircle2,
+  CircleAlert,
+  CircleOff,
+  Plus,
+  RefreshCw,
+  ShieldAlert,
+  ShieldCheck,
+} from "@lucide/vue";
 import { computed, onMounted, ref } from "vue";
 import {
   api,
@@ -19,6 +28,11 @@ const loading = ref(true);
 const mutating = ref(false);
 const error = ref("");
 const notice = ref("");
+const postureOptions: { value: CapabilityPosture; label: string }[] = [
+  { value: "allow", label: "Allow" },
+  { value: "approval_required", label: "Approval" },
+  { value: "deny", label: "Deny" },
+];
 
 const selected = computed(() => profiles.value.find((profile) => profile.id === selectedId.value));
 const postureByOperation = computed(
@@ -27,6 +41,19 @@ const postureByOperation = computed(
       selected.value?.mappings.map((mapping) => [mapping.operation_ref, mapping.posture]) ?? [],
     ),
 );
+const postureCounts = computed(() => {
+  const counts: Record<CapabilityPosture, number> = {
+    allow: 0,
+    approval_required: 0,
+    deny: 0,
+  };
+  for (const capability of capabilities.value) counts[postureFor(capability)] += 1;
+  return counts;
+});
+
+function postureFor(capability: Capability): CapabilityPosture {
+  return postureByOperation.value.get(capability.operation_ref) ?? "deny";
+}
 
 function toolName(operationRef: string): string {
   return operationRef
@@ -36,10 +63,14 @@ function toolName(operationRef: string): string {
 }
 
 function mapping(capability: Capability, posture: CapabilityPosture): CapabilityMapping {
+  const existing = selected.value?.mappings.find(
+    (item) => item.operation_ref === capability.operation_ref,
+  );
   return {
+    ...existing,
     operation_ref: capability.operation_ref,
-    tool_name: toolName(capability.operation_ref),
-    connection_ref: capability.connections[0]?.connection_ref,
+    tool_name: existing?.tool_name ?? toolName(capability.operation_ref),
+    connection_ref: existing?.connection_ref ?? capability.connections[0]?.connection_ref,
     posture,
   };
 }
@@ -83,23 +114,34 @@ async function createProfile() {
 }
 
 async function setPosture(capability: Capability, posture: CapabilityPosture) {
+  await updatePostures(
+    (item) => (item.operation_ref === capability.operation_ref ? posture : postureFor(item)),
+    `${capability.title} is now ${posture === "approval_required" ? "approval required" : posture}.`,
+  );
+}
+
+async function setAllPostures(posture: Extract<CapabilityPosture, "allow" | "deny">) {
+  await updatePostures(
+    () => posture,
+    `All ${String(capabilities.value.length)} capabilities are now ${posture === "allow" ? "allowed" : "denied"}.`,
+  );
+}
+
+async function updatePostures(
+  resolvePosture: (capability: Capability) => CapabilityPosture,
+  successNotice: string,
+) {
   const profile = selected.value;
   if (!profile) return;
   mutating.value = true;
   error.value = "";
+  notice.value = "";
   try {
-    const mappings = capabilities.value.map((item) =>
-      mapping(
-        item,
-        item.operation_ref === capability.operation_ref
-          ? posture
-          : (postureByOperation.value.get(item.operation_ref) ?? "deny"),
-      ),
-    );
+    const mappings = capabilities.value.map((item) => mapping(item, resolvePosture(item)));
     const changed = await api.updateCapabilityProfile(profile, mappings);
     profiles.value = profiles.value.map((item) => (item.id === changed.id ? changed : item));
     workspace.capabilityProfiles = profiles.value;
-    notice.value = `${capability.title} is now ${posture.replace("_", " ")}.`;
+    notice.value = successNotice;
   } catch (cause) {
     error.value = errorMessage(cause);
   } finally {
@@ -165,10 +207,47 @@ onMounted(() => void load());
           </div>
           <span class="status-pill active">revision {{ selected.revision }}</span>
         </header>
+        <div class="permission-toolbar">
+          <div class="permission-toolbar-row">
+            <div class="permission-summary" aria-label="Effective permission totals">
+              <span class="permission-count allow">
+                <CheckCircle2 :size="15" /> {{ postureCounts.allow }} allowed
+              </span>
+              <span class="permission-count approval-required">
+                <ShieldAlert :size="15" /> {{ postureCounts.approval_required }} approval
+              </span>
+              <span class="permission-count deny">
+                <CircleOff :size="15" /> {{ postureCounts.deny }} denied
+              </span>
+            </div>
+            <div class="permission-bulk-actions" aria-label="Bulk permission actions">
+              <button
+                class="button quiet small bulk-allow"
+                type="button"
+                :disabled="mutating || !capabilities.length"
+                @click="setAllPostures('allow')"
+              >
+                <CheckCircle2 :size="15" /> Allow all
+              </button>
+              <button
+                class="button danger-quiet small"
+                type="button"
+                :disabled="mutating || !capabilities.length"
+                @click="setAllPostures('deny')"
+              >
+                <CircleOff :size="15" /> Deny all
+              </button>
+            </div>
+          </div>
+          <p>
+            Allow exposes a capability while preserving any approval the Connector itself requires.
+          </p>
+        </div>
         <div
           v-for="capability in capabilities"
           :key="capability.operation_ref"
           class="capability-row"
+          :class="`posture-${postureFor(capability)}`"
         >
           <div>
             <strong>{{ capability.title }}</strong>
@@ -176,14 +255,17 @@ onMounted(() => void load());
           </div>
           <div class="posture-control" :aria-label="`${capability.title} posture`">
             <button
-              v-for="posture in ['allow', 'approval_required', 'deny'] as CapabilityPosture[]"
-              :key="posture"
+              v-for="option in postureOptions"
+              :key="option.value"
               type="button"
-              :class="{ active: postureByOperation.get(capability.operation_ref) === posture }"
+              class="posture-button"
+              :class="[option.value, { active: postureFor(capability) === option.value }]"
+              :aria-pressed="postureFor(capability) === option.value"
               :disabled="mutating"
-              @click="setPosture(capability, posture)"
+              @click="setPosture(capability, option.value)"
             >
-              {{ posture === "approval_required" ? "approval" : posture }}
+              <Check v-if="postureFor(capability) === option.value" :size="13" />
+              {{ option.label }}
             </button>
           </div>
         </div>

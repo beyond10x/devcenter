@@ -100,6 +100,71 @@ const todoCatalog = {
 };
 
 async function mockAuthenticatedWorkspace(page: Page) {
+  const capabilities = [
+    {
+      operation_ref: "git.project.list",
+      title: "List GitLab projects",
+      effect: "read_only",
+      approval: "not_required",
+      connections: [
+        {
+          connection_ref: "connection:gitlab:test",
+          label: "My GitLab",
+          provider: "gitlab",
+          audiences: ["https://gitlab.example.test"],
+        },
+      ],
+    },
+    {
+      operation_ref: "todo.list_visible_lists",
+      title: "List visible Todo lists",
+      effect: "read_only",
+      approval: "not_required",
+      connections: [
+        {
+          connection_ref: "connection:todo",
+          label: "Todo",
+          provider: "todo",
+          audiences: [],
+        },
+      ],
+    },
+    {
+      operation_ref: "todo.create_list",
+      title: "Create Todo list",
+      effect: "mutating",
+      approval: "required",
+      connections: [
+        {
+          connection_ref: "connection:todo",
+          label: "Todo",
+          provider: "todo",
+          audiences: [],
+        },
+      ],
+    },
+  ];
+  let capabilityProfile = {
+    id: "profile-release",
+    name: "Release profile",
+    revision: 3,
+    mappings: [
+      {
+        operation_ref: "todo.list_visible_lists",
+        tool_name: "todo_list_visible_lists",
+        connection_ref: "connection:todo",
+        posture: "allow",
+      },
+      {
+        operation_ref: "todo.create_list",
+        tool_name: "todo_create_list",
+        connection_ref: "connection:todo",
+        posture: "approval_required",
+      },
+    ],
+    created_at_ms: 1_788_260_000_000,
+    updated_at_ms: 1_788_260_000_000,
+  };
   await page.route(/^https?:\/\/[^/]+\/api\//, async (route) => {
     const request = route.request();
     const path = new URL(request.url()).pathname;
@@ -117,6 +182,31 @@ async function mockAuthenticatedWorkspace(page: Page) {
     }
     if (path === "/api/connectors/claude-code") {
       await route.fulfill({ json: { provider: "claude-code", connected: false } });
+      return;
+    }
+    if (path === "/api/capabilities") {
+      await route.fulfill({ json: capabilities });
+      return;
+    }
+    if (path === "/api/capability-profiles" && request.method() === "GET") {
+      await route.fulfill({ json: [capabilityProfile] });
+      return;
+    }
+    if (path === "/api/capability-profiles/profile-release" && request.method() === "PATCH") {
+      const submitted = request.postDataJSON() as {
+        expected_revision: number;
+        name: string;
+        mappings: typeof capabilityProfile.mappings;
+      };
+      expect(submitted.expected_revision).toBe(capabilityProfile.revision);
+      expect(submitted.name).toBe(capabilityProfile.name);
+      capabilityProfile = {
+        ...capabilityProfile,
+        revision: capabilityProfile.revision + 1,
+        mappings: submitted.mappings,
+        updated_at_ms: capabilityProfile.updated_at_ms + 1,
+      };
+      await route.fulfill({ json: capabilityProfile });
       return;
     }
     if (path === "/api/services" && request.method() === "GET") {
@@ -489,13 +579,51 @@ test("keeps catalog and connection custody usable on a mobile viewport", async (
   await page.getByRole("button", { name: "Open navigation" }).click();
   await page.getByRole("link", { name: "Connectors" }).click();
   await expect(page.getByRole("heading", { name: "Connectors" })).toBeVisible();
+  await expect(page.getByRole("button", { name: "My connectors" })).toHaveAttribute(
+    "aria-current",
+    "page",
+  );
+  await expect(page.getByRole("heading", { name: "Model access" })).toBeVisible();
+  await page.getByRole("button", { name: "Catalog" }).click();
   await expect(page.getByRole("heading", { name: "GitLab" })).toBeVisible();
   await page.getByRole("link", { name: /GitLab/ }).click();
   await expect(page.getByText("git.project.list", { exact: true })).toBeVisible();
-  await page.getByRole("button", { name: "My connections" }).click();
+  await page.getByRole("button", { name: "My connectors" }).click();
   await expect(page.getByRole("heading", { name: "Model access" })).toBeVisible();
   await expect(page.getByText("Credential bytes", { exact: true })).toBeVisible();
   await expect(page.getByRole("button", { name: "Connect Claude" })).toBeVisible();
+});
+
+test("makes capability posture explicit and applies bulk changes atomically", async ({ page }) => {
+  await mockAuthenticatedWorkspace(page);
+  await page.goto("/profiles");
+
+  await expect(page.getByRole("heading", { name: "Release profile" })).toBeVisible();
+  await expect(page.getByText("1 allowed", { exact: true })).toBeVisible();
+  await expect(page.getByText("1 approval", { exact: true })).toBeVisible();
+  await expect(page.getByText("1 denied", { exact: true })).toBeVisible();
+
+  const gitLabCapability = page.locator(".capability-row").filter({
+    hasText: "List GitLab projects",
+  });
+  await expect(gitLabCapability.getByRole("button", { name: "Deny" })).toHaveAttribute(
+    "aria-pressed",
+    "true",
+  );
+
+  await page.getByRole("button", { name: "Allow all" }).click();
+  await expect(page.getByRole("status")).toContainText("All 3 capabilities are now allowed.");
+  await expect(page.getByText("3 allowed", { exact: true })).toBeVisible();
+  await expect(gitLabCapability.getByRole("button", { name: "Allow" })).toHaveAttribute(
+    "aria-pressed",
+    "true",
+  );
+
+  await page.getByRole("button", { name: "Deny all" }).click();
+  await expect(page.getByRole("status")).toContainText("All 3 capabilities are now denied.");
+  await expect(page.getByText("3 denied", { exact: true })).toBeVisible();
+  const accessibility = await new AxeBuilder({ page }).withTags(["wcag2a", "wcag2aa"]).analyze();
+  expect(accessibility.violations).toEqual([]);
 });
 
 test("shows one stable MCP endpoint and separate client setup commands", async ({
