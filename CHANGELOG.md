@@ -2,6 +2,11 @@
 
 ## Unreleased
 
+## 0.5.2 - 2026-09-02
+
+- Capture Helm's complete OCI push output before extracting the immutable chart digest, including
+  Helm versions that report a successful push on standard error.
+
 ## 0.5.1 - 2026-09-02
 
 - Authenticate private Cargo dependencies while validating the complete release candidate, so a

@@ -239,7 +239,7 @@ jobs:
         run: |
           echo "$GH_TOKEN" | helm registry login ghcr.io --username "$GITHUB_ACTOR" --password-stdin
           helm package deploy/charts/devcenter --destination /tmp
-          output=$(helm push "/tmp/devcenter-${GITHUB_REF_NAME}.tgz" oci://ghcr.io/beyond10x/charts)
+          output=$(helm push "/tmp/devcenter-${GITHUB_REF_NAME}.tgz" oci://ghcr.io/beyond10x/charts 2>&1)
           printf '%s\n' "$output"
           chart_digest=$(printf '%s\n' "$output" | awk '$1 == "Digest:" {print $2}')
           case "$chart_digest" in sha256:*) ;; *) exit 1 ;; esac
