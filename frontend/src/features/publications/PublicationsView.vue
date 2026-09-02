@@ -12,7 +12,8 @@ import {
   ShieldCheck,
   Unlink,
 } from "@lucide/vue";
-import { computed, onMounted, ref } from "vue";
+import { computed, onMounted, ref, watch } from "vue";
+import { useRoute, useRouter } from "vue-router";
 import {
   api,
   errorMessage,
@@ -22,9 +23,13 @@ import {
   type PublicationState,
 } from "@/api/client";
 
+const route = useRoute();
+const router = useRouter();
 const loading = ref(true);
 const publications = ref<Publication[]>([]);
-const selectedId = ref<string>();
+const selectedId = ref<string | undefined>(
+  typeof route.query.publication === "string" ? route.query.publication : undefined,
+);
 const clients = ref<ClientAuthorization[]>([]);
 const approvals = ref<Approval[]>([]);
 const profileId = ref("");
@@ -73,6 +78,7 @@ async function loadDetail() {
 
 async function choose(publicationId: string) {
   selectedId.value = publicationId;
+  await router.replace({ path: "/publications", query: { publication: publicationId } });
   error.value = "";
   try {
     await loadDetail();
@@ -141,6 +147,19 @@ function shortDigest(digest: string) {
 }
 
 onMounted(() => void load());
+watch(
+  () => route.query.publication,
+  (publicationId) => {
+    if (
+      typeof publicationId === "string" &&
+      publicationId !== selectedId.value &&
+      publications.value.some((publication) => publication.publication_id === publicationId)
+    ) {
+      selectedId.value = publicationId;
+      void loadDetail();
+    }
+  },
+);
 </script>
 
 <template>

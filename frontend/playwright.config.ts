@@ -1,5 +1,8 @@
 import { defineConfig, devices } from "@playwright/test";
 
+const port = process.env.DEVCENTER_E2E_PORT ?? "4173";
+const origin = `http://127.0.0.1:${port}`;
+
 export default defineConfig({
   testDir: "./e2e",
   fullyParallel: true,
@@ -7,7 +10,7 @@ export default defineConfig({
   retries: process.env.CI ? 2 : 0,
   reporter: process.env.CI ? "github" : "list",
   use: {
-    baseURL: "http://127.0.0.1:4173",
+    baseURL: origin,
     trace: "retain-on-failure",
   },
   projects: [
@@ -15,8 +18,8 @@ export default defineConfig({
     { name: "mobile-chromium", use: { ...devices["Pixel 7"] } },
   ],
   webServer: {
-    command: "pnpm dev --port 4173",
-    url: "http://127.0.0.1:4173",
+    command: `pnpm dev --port ${port}`,
+    url: origin,
     reuseExistingServer: !process.env.CI,
   },
 });

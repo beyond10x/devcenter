@@ -2,30 +2,26 @@
 format: aep.planning-md/1
 id: story:themes-dark-mode
 kind: story
-status: proposed
-title: Add themes and dark mode
-summary: Let people choose a persistent accessible Devcenter theme, including system-aware dark mode.
+status: implemented
+title: Add an accessible multi-theme design system
+summary: Offer persistent system, Devcenter, Monokai, and Solarized palettes across every product surface.
 relations:
 - derived_from: initiative:engineer-journey
-revision: 2
+revision: 6
 ---
 ## Outcome
 
-Devcenter offers a coherent theme system with light, dark, and system preferences across every product surface, including embedded generated-service consoles.
-
-## Context
-
-The current frontend assumes a single light palette. Theme choice should be a first-class product preference built from semantic design tokens, not a second set of page-specific overrides.
+Devcenter offers one coherent semantic design system with six accessible flat presets across authenticated, public, and embedded generated-service surfaces.
 
 ## Acceptance
 
-- A visible theme control offers Light, Dark, and System; System is the default and follows operating-system changes without a reload.
-- An explicit choice persists locally before application paint so navigation and reloads do not flash the wrong theme.
-- Semantic color, elevation, border, focus, code, status, chart, and overlay tokens drive all Devcenter views; components do not branch on theme.
-- Generated service-console widgets inherit the host theme through documented tokens while standalone generated docs retain a usable default.
-- Every theme maintains WCAG 2.2 AA contrast, visible keyboard focus, reduced-motion behavior, and browser-native control color-scheme.
-- Frontend unit, browser, mobile, accessibility, and production-build gates cover all three preferences and both effective palettes.
+- A visible control offers System, Light, Dark, Monokai, Solarized Light, and Solarized Dark; System is the default and follows operating-system changes without reload.
+- An explicit allowlisted preference persists locally and is applied before Vue mounts, including `data-theme`, `data-theme-preference`, native `color-scheme`, and browser theme color, without a wrong-theme flash.
+- Semantic canvas, surface, text, border, accent, status, focus, overlay, shadow, chart, and code tokens drive all Devcenter views; components do not branch on named themes.
+- Monokai is a complete application palette. Solarized Light and Dark remain recognizable while foreground/background pairs satisfy WCAG 2.2 AA.
+- The exact released Service SDK widget inherits the documented `--b10x-*` host-token contract while standalone generated docs retain accessible system-aware fallbacks.
+- Unit, browser, mobile, accessibility, representative visual-regression, and production-build gates cover all presets and both System resolutions.
 
 ## Out of Scope
 
-Organization-specific branding, per-connector skins, and server-side storage of a browser display preference.
+Organization branding, per-connector skins, custom palettes, and server-side or synchronized display preferences.

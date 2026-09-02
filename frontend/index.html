@@ -4,6 +4,45 @@
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <meta name="theme-color" content="#f3f5f4" />
+    <script>
+      (() => {
+        const key = "b10x.devcenter.theme.v1";
+        const allowed = new Set([
+          "system",
+          "light",
+          "dark",
+          "monokai",
+          "solarized-light",
+          "solarized-dark",
+        ]);
+        const colors = {
+          light: "#f3f5f4",
+          dark: "#101715",
+          monokai: "#272822",
+          "solarized-light": "#fdf6e3",
+          "solarized-dark": "#002b36",
+        };
+        let stored = null;
+        try {
+          stored = localStorage.getItem(key);
+        } catch {
+          // Storage may be disabled; system remains the safe default.
+        }
+        const preference = allowed.has(stored) ? stored : "system";
+        const resolved =
+          preference === "system"
+            ? matchMedia("(prefers-color-scheme: dark)").matches
+              ? "dark"
+              : "light"
+            : preference;
+        document.documentElement.dataset.themePreference = preference;
+        document.documentElement.dataset.theme = resolved;
+        document.documentElement.style.colorScheme = ["light", "solarized-light"].includes(resolved)
+          ? "light"
+          : "dark";
+        document.querySelector('meta[name="theme-color"]').content = colors[resolved];
+      })();
+    </script>
     <meta
       name="description"
       content="Devcenter is the governed workspace for engineering agents and their work."

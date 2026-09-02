@@ -9,7 +9,8 @@ import {
   ShieldAlert,
   ShieldCheck,
 } from "@lucide/vue";
-import { computed, onMounted, ref } from "vue";
+import { computed, onMounted, ref, watch } from "vue";
+import { useRoute, useRouter } from "vue-router";
 import {
   api,
   errorMessage,
@@ -21,9 +22,13 @@ import {
 import { useWorkspaceStore } from "@/stores/workspace";
 
 const workspace = useWorkspaceStore();
+const route = useRoute();
+const router = useRouter();
 const capabilities = ref<Capability[]>([]);
 const profiles = ref<CapabilityProfile[]>([]);
-const selectedId = ref<string>();
+const selectedId = ref<string | undefined>(
+  typeof route.query.profile === "string" ? route.query.profile : undefined,
+);
 const loading = ref(true);
 const mutating = ref(false);
 const error = ref("");
@@ -84,7 +89,11 @@ async function load() {
       api.capabilityProfiles(),
     ]);
     if (!profiles.value.some((profile) => profile.id === selectedId.value)) {
-      selectedId.value = profiles.value[0]?.id;
+      const requested = typeof route.query.profile === "string" ? route.query.profile : undefined;
+      selectedId.value =
+        requested && profiles.value.some((profile) => profile.id === requested)
+          ? requested
+          : profiles.value[0]?.id;
     }
     workspace.capabilityProfiles = profiles.value;
   } catch (cause) {
@@ -92,6 +101,11 @@ async function load() {
   } finally {
     loading.value = false;
   }
+}
+
+function chooseProfile(profileId: string) {
+  selectedId.value = profileId;
+  void router.replace({ path: "/profiles", query: { profile: profileId } });
 }
 
 async function createProfile() {
@@ -150,6 +164,17 @@ async function updatePostures(
 }
 
 onMounted(() => void load());
+watch(
+  () => route.query.profile,
+  (profileId) => {
+    if (
+      typeof profileId === "string" &&
+      profiles.value.some((profile) => profile.id === profileId)
+    ) {
+      selectedId.value = profileId;
+    }
+  },
+);
 </script>
 
 <template>
@@ -189,7 +214,7 @@ onMounted(() => void load());
           :key="profile.id"
           type="button"
           :class="{ selected: profile.id === selectedId }"
-          @click="selectedId = profile.id"
+          @click="chooseProfile(profile.id)"
         >
           <span class="publication-icon"><ShieldCheck :size="17" /></span>
           <span

@@ -9,11 +9,13 @@ import {
   ShieldCheck,
   Unlink,
 } from "@lucide/vue";
-import { computed, onMounted, ref } from "vue";
+import { computed, nextTick, onMounted, ref } from "vue";
+import { useRoute } from "vue-router";
 import { api, errorMessage, type ConnectorConnection } from "@/api/client";
 import { useWorkspaceStore } from "@/stores/workspace";
 
 const workspace = useWorkspaceStore();
+const route = useRoute();
 defineProps<{ embedded?: boolean }>();
 const code = ref("");
 const starting = ref(false);
@@ -24,6 +26,9 @@ const popupBlocked = ref(false);
 const providerConnections = ref<ConnectorConnection[]>([]);
 const providerLoading = ref(false);
 const providerError = ref("");
+const highlightedConnection = computed(() =>
+  typeof route.query.connection === "string" ? route.query.connection : undefined,
+);
 
 const connectionLabel = computed(() => {
   if (workspace.connectionState === "loading") return "Checking";
@@ -76,6 +81,12 @@ async function loadProviderConnections() {
   providerError.value = "";
   try {
     providerConnections.value = await api.connections();
+    await nextTick();
+    if (highlightedConnection.value) {
+      document.getElementById(`connection-${highlightedConnection.value}`)?.scrollIntoView({
+        block: "center",
+      });
+    }
   } catch (cause) {
     providerError.value = errorMessage(cause);
   } finally {
@@ -315,8 +326,10 @@ onMounted(() => void loadProviderConnections());
         </p>
         <article
           v-for="connection in providerConnections"
+          :id="`connection-${connection.connection_ref}`"
           :key="connection.connection_ref"
           class="provider-connection-card"
+          :class="{ 'search-highlight': connection.connection_ref === highlightedConnection }"
         >
           <span class="provider-mark">{{ connection.integration_ref[0]?.toUpperCase() }}</span>
           <div>

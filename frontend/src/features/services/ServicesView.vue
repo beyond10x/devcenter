@@ -5,11 +5,16 @@ import {
   type ServiceCatalog as GeneratedServiceCatalog,
 } from "@b10x/service-console-vue";
 import { Boxes, RefreshCw } from "@lucide/vue";
-import { onMounted, ref } from "vue";
+import { onMounted, ref, watch } from "vue";
+import { useRoute, useRouter } from "vue-router";
 import { api, errorMessage, type GeneratedServiceSummary } from "@/api/client";
 
+const route = useRoute();
+const router = useRouter();
 const services = ref<GeneratedServiceSummary[]>([]);
-const selected = ref<string>();
+const selected = ref<string | undefined>(
+  typeof route.query.service === "string" ? route.query.service : undefined,
+);
 const catalog = ref<GeneratedServiceCatalog>();
 const loading = ref(false);
 const failure = ref<string>();
@@ -21,8 +26,10 @@ async function loadServices() {
   try {
     const page = await api.generatedServices();
     services.value = page.services;
-    const first = services.value[0];
-    if (first) await selectService(first.service_ref);
+    const requested = typeof route.query.service === "string" ? route.query.service : undefined;
+    const initial =
+      services.value.find((service) => service.service_ref === requested) ?? services.value[0];
+    if (initial) await selectService(initial.service_ref, false);
   } catch (error) {
     failure.value = errorMessage(error);
   } finally {
@@ -30,8 +37,9 @@ async function loadServices() {
   }
 }
 
-async function selectService(serviceRef: string) {
+async function selectService(serviceRef: string, updateRoute = true) {
   selected.value = serviceRef;
+  if (updateRoute) await router.replace({ path: "/services", query: { service: serviceRef } });
   catalog.value = undefined;
   failure.value = undefined;
   try {
@@ -42,6 +50,18 @@ async function selectService(serviceRef: string) {
 }
 
 onMounted(loadServices);
+watch(
+  () => route.query.service,
+  (serviceRef) => {
+    if (
+      typeof serviceRef === "string" &&
+      serviceRef !== selected.value &&
+      services.value.some((service) => service.service_ref === serviceRef)
+    ) {
+      void selectService(serviceRef, false);
+    }
+  },
+);
 </script>
 
 <template>

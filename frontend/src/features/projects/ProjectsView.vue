@@ -37,7 +37,7 @@ const route = useRoute();
 const router = useRouter();
 const loading = ref(true);
 const error = ref("");
-const search = ref("");
+const search = ref(typeof route.query.q === "string" ? route.query.q : "");
 const repositories = ref<RepositoryCandidate[]>([]);
 const project = ref<Project>();
 const branches = ref<Branch[]>([]);
@@ -68,6 +68,14 @@ const selectedThread = computed(() =>
 
 onMounted(load);
 watch(projectId, load);
+watch(
+  () => route.query.q,
+  (value) => {
+    if (!projectId.value && typeof value === "string" && value !== search.value) {
+      search.value = value;
+    }
+  },
+);
 watch(selectedThreadId, () => void loadMessages());
 let repositoryRequest = 0;
 let searchTimer: number | undefined;

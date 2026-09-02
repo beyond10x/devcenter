@@ -449,7 +449,7 @@ test("opens a deep-linked agent and creates a governed worker", async ({ page },
   await page.getByRole("button", { name: "Create and activate" }).click();
 
   await expect(page.getByRole("heading", { name: "Evidence keeper" })).toBeVisible();
-  await expect(page.getByRole("status")).toContainText("created and activated");
+  await expect(page.getByRole("status").filter({ hasText: "created and activated" })).toBeVisible();
   const accessibility = await new AxeBuilder({ page }).withTags(["wcag2a", "wcag2aa"]).analyze();
   expect(accessibility.violations).toEqual([]);
 });
@@ -592,6 +592,13 @@ test("keeps catalog and connection custody usable on a mobile viewport", async (
   await expect(page.getByRole("heading", { name: "Model access" })).toBeVisible();
   await expect(page.getByText("Credential bytes", { exact: true })).toBeVisible();
   await expect(page.getByRole("button", { name: "Connect Claude" })).toBeVisible();
+  await page.getByRole("button", { name: "Open navigation" }).click();
+  await page.getByLabel("Theme").selectOption("solarized-dark");
+  await expect(page.locator("html")).toHaveAttribute("data-theme", "solarized-dark");
+  await expect(page).toHaveScreenshot("mobile-navigation-solarized-dark.png", {
+    animations: "disabled",
+    maxDiffPixelRatio: 0.01,
+  });
 });
 
 test("makes capability posture explicit and applies bulk changes atomically", async ({ page }) => {
@@ -612,7 +619,9 @@ test("makes capability posture explicit and applies bulk changes atomically", as
   );
 
   await page.getByRole("button", { name: "Allow all" }).click();
-  await expect(page.getByRole("status")).toContainText("All 3 capabilities are now allowed.");
+  await expect(
+    page.getByRole("status").filter({ hasText: "All 3 capabilities are now allowed." }),
+  ).toBeVisible();
   await expect(page.getByText("3 allowed", { exact: true })).toBeVisible();
   await expect(gitLabCapability.getByRole("button", { name: "Allow" })).toHaveAttribute(
     "aria-pressed",
@@ -620,8 +629,84 @@ test("makes capability posture explicit and applies bulk changes atomically", as
   );
 
   await page.getByRole("button", { name: "Deny all" }).click();
-  await expect(page.getByRole("status")).toContainText("All 3 capabilities are now denied.");
+  await expect(
+    page.getByRole("status").filter({ hasText: "All 3 capabilities are now denied." }),
+  ).toBeVisible();
   await expect(page.getByText("3 denied", { exact: true })).toBeVisible();
+  const accessibility = await new AxeBuilder({ page }).withTags(["wcag2a", "wcag2aa"]).analyze();
+  expect(accessibility.violations).toEqual([]);
+});
+
+test("persists themes and makes search and navigation shortcuts discoverable", async ({
+  page,
+}, testInfo) => {
+  test.skip(testInfo.project.name !== "chromium", "Desktop command surface behavior");
+  await mockAuthenticatedWorkspace(page);
+  await page.goto("/agents");
+
+  await page.getByLabel("Theme").selectOption("monokai");
+  await expect(page.locator("html")).toHaveAttribute("data-theme", "monokai");
+  await expect
+    .poll(() => page.evaluate(() => localStorage.getItem("b10x.devcenter.theme.v1")))
+    .toBe("monokai");
+  await page.reload();
+  await expect(page.locator("html")).toHaveAttribute("data-theme", "monokai");
+
+  const contrastRatios = await page.evaluate<number[]>(`(() => {
+    const themes = ["light", "dark", "monokai", "solarized-light", "solarized-dark"];
+    const parse = (color) => {
+      const hex = color.trim().slice(1);
+      return [0, 2, 4].map((offset) => Number.parseInt(hex.slice(offset, offset + 2), 16));
+    };
+    const luminance = (color) => {
+      const channels = parse(color).map((value) => {
+        const normalized = value / 255;
+        return normalized <= 0.04045
+          ? normalized / 12.92
+          : ((normalized + 0.055) / 1.055) ** 2.4;
+      });
+      return 0.2126 * channels[0] + 0.7152 * channels[1] + 0.0722 * channels[2];
+    };
+    const ratio = (foreground, background) => {
+      const left = luminance(foreground);
+      const right = luminance(background);
+      return (Math.max(left, right) + 0.05) / (Math.min(left, right) + 0.05);
+    };
+    const ratios = themes.flatMap((theme) => {
+      document.documentElement.dataset.theme = theme;
+      const style = getComputedStyle(document.documentElement);
+      return [
+        ratio(style.getPropertyValue("--ink"), style.getPropertyValue("--canvas")),
+        ratio(style.getPropertyValue("--muted"), style.getPropertyValue("--surface")),
+        ratio(style.getPropertyValue("--on-accent"), style.getPropertyValue("--accent")),
+      ];
+    });
+    document.documentElement.dataset.theme = "monokai";
+    return ratios;
+  })()`);
+  expect(Math.min(...contrastRatios)).toBeGreaterThanOrEqual(4.5);
+
+  await page.keyboard.press("Control+k");
+  await expect(page.getByRole("dialog", { name: "Search all Devcenter resources" })).toBeVisible();
+  await page.getByRole("combobox", { name: "Search all Devcenter resources" }).fill("todo");
+  const todoResult = page.getByRole("option").filter({ hasText: "Todo" }).first();
+  await expect(todoResult).toBeVisible();
+  await expect(page).toHaveScreenshot("global-search-monokai.png", {
+    animations: "disabled",
+    maxDiffPixelRatio: 0.01,
+  });
+  await todoResult.click();
+  await expect(page).toHaveURL(/\/services\?service=service(?::|%3A)todo$/);
+
+  await page.keyboard.press("?");
+  const shortcutDialog = page.getByRole("dialog", { name: "Keyboard shortcuts" });
+  await expect(shortcutDialog).toBeVisible();
+  await expect(shortcutDialog.getByText("Capability profiles", { exact: true })).toBeVisible();
+  await page.keyboard.press("Escape");
+  await page.keyboard.press("g");
+  await page.keyboard.press("c");
+  await expect(page).toHaveURL(/\/connectors$/);
+
   const accessibility = await new AxeBuilder({ page }).withTags(["wcag2a", "wcag2aa"]).analyze();
   expect(accessibility.violations).toEqual([]);
 });
@@ -639,7 +724,7 @@ test("shows one stable MCP endpoint and separate client setup commands", async (
   await expect(page.getByText(/claude mcp add --transport http/)).toBeVisible();
   await expect(page.getByText("Browser logout does not revoke it.")).toBeVisible();
   await page.getByRole("button", { name: "Revoke permanently" }).click();
-  await expect(page.getByRole("status")).toContainText("Publication revoked.");
+  await expect(page.getByRole("status").filter({ hasText: "Publication revoked." })).toBeVisible();
   const accessibility = await new AxeBuilder({ page }).withTags(["wcag2a", "wcag2aa"]).analyze();
   expect(accessibility.violations).toEqual([]);
 });

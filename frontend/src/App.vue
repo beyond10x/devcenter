@@ -2,6 +2,7 @@
 import { onMounted } from "vue";
 import { useRoute } from "vue-router";
 import AppShell from "@/app/AppShell.vue";
+import ThemePicker from "@/app/ThemePicker.vue";
 import DocsView from "@/features/docs/DocsView.vue";
 import BootScreen from "@/features/session/BootScreen.vue";
 import SignInView from "@/features/session/SignInView.vue";
@@ -13,6 +14,7 @@ onMounted(() => void workspace.bootstrap());
 </script>
 
 <template>
+  <ThemePicker v-if="workspace.sessionState !== 'ready'" class="public-theme-picker" />
   <DocsView v-if="route.name === 'docs' && workspace.sessionState !== 'ready'" />
   <BootScreen v-else-if="workspace.sessionState === 'loading'" />
   <SignInView v-else-if="workspace.sessionState === 'idle'" />

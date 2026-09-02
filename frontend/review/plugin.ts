@@ -24,9 +24,26 @@ interface ReviewPublication {
   updated_at_ms: number;
 }
 
+interface ReviewCapabilityMapping {
+  operation_ref: string;
+  tool_name: string;
+  connection_ref?: string;
+  posture: "allow" | "approval_required" | "deny";
+}
+
+interface ReviewCapabilityProfile {
+  id: string;
+  name: string;
+  revision: number;
+  mappings: ReviewCapabilityMapping[];
+  created_at_ms: number;
+  updated_at_ms: number;
+}
+
 let connected = false;
 let nextAgent = 3;
 let nextPublication = 2;
+let nextCapabilityProfile = 2;
 const initialPublication: ReviewPublication = {
   publication_id: "pub_review_7mz4v2",
   tenant_id: "review-tenant",
@@ -39,6 +56,79 @@ const initialPublication: ReviewPublication = {
   updated_at_ms: 1_788_260_000_000,
 };
 const publications: ReviewPublication[] = [initialPublication];
+const reviewCapabilities = [
+  {
+    operation_ref: "git.project.list",
+    title: "List GitLab projects",
+    effect: "read_only",
+    approval: "not_required",
+    connections: [
+      {
+        connection_ref: "connection:gitlab:review",
+        label: "Review GitLab",
+        provider: "gitlab",
+        audiences: ["https://gitlab.example.test"],
+      },
+    ],
+  },
+  {
+    operation_ref: "todo.list_visible_lists",
+    title: "List visible Todo lists",
+    effect: "read_only",
+    approval: "not_required",
+    connections: [
+      {
+        connection_ref: "connection:todo:review",
+        label: "Todo",
+        provider: "todo",
+        audiences: [],
+      },
+    ],
+  },
+  {
+    operation_ref: "todo.create_list",
+    title: "Create Todo list",
+    effect: "mutating",
+    approval: "required",
+    connections: [
+      {
+        connection_ref: "connection:todo:review",
+        label: "Todo",
+        provider: "todo",
+        audiences: [],
+      },
+    ],
+  },
+] as const;
+const capabilityProfiles: ReviewCapabilityProfile[] = [
+  {
+    id: "profile-release-operations",
+    name: "Release operations",
+    revision: 4,
+    mappings: [
+      {
+        operation_ref: "git.project.list",
+        tool_name: "git_project_list",
+        connection_ref: "connection:gitlab:review",
+        posture: "allow",
+      },
+      {
+        operation_ref: "todo.list_visible_lists",
+        tool_name: "todo_list_visible_lists",
+        connection_ref: "connection:todo:review",
+        posture: "allow",
+      },
+      {
+        operation_ref: "todo.create_list",
+        tool_name: "todo_create_list",
+        connection_ref: "connection:todo:review",
+        posture: "approval_required",
+      },
+    ],
+    created_at_ms: 1_788_260_000_000,
+    updated_at_ms: 1_788_260_000_000,
+  },
+];
 const agents: ReviewAgent[] = [
   {
     id: "agent-release",
@@ -458,6 +548,54 @@ export function reviewApi(): Plugin {
             };
             agents.unshift(created);
             sendJson(response, 201, created);
+            return;
+          }
+          if (path === "/api/capabilities" && method === "GET") {
+            sendJson(response, 200, reviewCapabilities);
+            return;
+          }
+          if (path === "/api/capability-profiles" && method === "GET") {
+            sendJson(response, 200, capabilityProfiles);
+            return;
+          }
+          if (path === "/api/capability-profiles" && method === "POST") {
+            const submitted = await readJson(request);
+            const now = Date.now();
+            const created: ReviewCapabilityProfile = {
+              id: `profile-review-${String(nextCapabilityProfile++)}`,
+              name: typeof submitted.name === "string" ? submitted.name : "Engineering default",
+              revision: 1,
+              mappings: Array.isArray(submitted.mappings)
+                ? (submitted.mappings as ReviewCapabilityMapping[])
+                : [],
+              created_at_ms: now,
+              updated_at_ms: now,
+            };
+            capabilityProfiles.unshift(created);
+            sendJson(response, 201, created);
+            return;
+          }
+          const capabilityProfileMatch = path.match(/^\/api\/capability-profiles\/([^/]+)$/);
+          if (capabilityProfileMatch && method === "PATCH") {
+            const current = capabilityProfiles.find(
+              (profile) => profile.id === capabilityProfileMatch[1],
+            );
+            if (!current) {
+              sendJson(response, 404, { code: "capability_profile_not_found" });
+              return;
+            }
+            const submitted = await readJson(request);
+            if (submitted.expected_revision !== current.revision) {
+              sendJson(response, 409, { code: "capability_profile_revision_conflict" });
+              return;
+            }
+            if (typeof submitted.name === "string") current.name = submitted.name;
+            if (Array.isArray(submitted.mappings)) {
+              current.mappings = submitted.mappings as ReviewCapabilityMapping[];
+            }
+            current.revision += 1;
+            current.updated_at_ms = Date.now();
+            sendJson(response, 200, current);
             return;
           }
           if (path === "/api/mcp/publications" && method === "GET") {

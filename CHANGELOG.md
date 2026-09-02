@@ -1,5 +1,18 @@
 # Changelog
 
+## 0.7.0 - 2026-09-02
+
+- Add persistent System, Light, Dark, Monokai, Solarized Light, and Solarized Dark themes driven by
+  one semantic token contract across Devcenter and the SDK-generated service console.
+- Add authority-bounded Search all, stable resource deep links, mnemonic section shortcuts, and an
+  accessible keyboard-help panel without introducing a new search authority surface.
+- Put My connectors before the catalog, make capability postures visually explicit, and add atomic
+  Allow all and Deny all actions to reduce permission-review friction.
+- Apply a focused ambient canvas, depth, navigation, status, empty-state, and typography pass with
+  desktop/mobile visual baselines and WCAG AA contrast coverage.
+- Pin the Service SDK 0.3.0 Vue widget for the shared host-theme contract while retaining the
+  Todo-compatible exact Rust composition pin.
+
 ## 0.6.3 - 2026-09-02
 
 - Send only the two allowlisted repository identifiers when opening a project, avoiding a 422 from
