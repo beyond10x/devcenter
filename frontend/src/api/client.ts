@@ -192,7 +192,10 @@ export const api = {
   openProject: (repository: Pick<RepositoryCandidate, "forge_instance_ref" | "project_ref">) =>
     request<Project>("/api/projects", {
       method: "POST",
-      body: JSON.stringify(repository),
+      body: JSON.stringify({
+        forge_instance_ref: repository.forge_instance_ref,
+        project_ref: repository.project_ref,
+      }),
     }),
   project: (projectId: string) =>
     request<Project>(`/api/projects/${encodeURIComponent(projectId)}`),

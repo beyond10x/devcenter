@@ -48,6 +48,10 @@ ingress:
   # independently opt-in; Identity still derives the actor, tenant, audience, groups, and scopes.
   identityCliRoutes:
     enabled: false
+  # Identity-authenticated native Connector clients discover and call the complete hosted API at
+  # this prefix. Connectors still enforces exact audience, scope, tenant, actor, and Grant policy.
+  connectorClientApi:
+    enabled: false
   # Operator CLI routes are sent directly to Connectors, which enforces its own exact Identity
   # audience, scope, and operator-group policy. Keep this independent from end-user setup routes.
   connectorAdminRoutes:

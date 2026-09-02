@@ -10,6 +10,12 @@
 {{- if and .Values.ingress.identityCliRoutes.enabled (not (index .Values.components "identity").enabled) }}
 {{- fail "ingress.identityCliRoutes.enabled requires components.identity.enabled" }}
 {{- end }}
+{{- if and .Values.ingress.connectorClientApi.enabled (not .Values.ingress.enabled) }}
+{{- fail "ingress.connectorClientApi.enabled requires ingress.enabled" }}
+{{- end }}
+{{- if and .Values.ingress.connectorClientApi.enabled (not (index .Values.components "connectors").enabled) }}
+{{- fail "ingress.connectorClientApi.enabled requires components.connectors.enabled" }}
+{{- end }}
 {{- if .Values.ingress.enabled }}
 apiVersion: networking.k8s.io/v1
 kind: Ingress
@@ -52,6 +58,12 @@ spec:
             backend:
               service: {name: {{ include "devcenter.fullname" . }}-identity, port: {name: http}}
           {{- end }}
+          {{- end }}
+          {{- if and .Values.ingress.connectorClientApi.enabled (index .Values.components "connectors").enabled }}
+          - path: /api/connectors/v1
+            pathType: Prefix
+            backend:
+              service: {name: {{ include "devcenter.fullname" . }}-connectors, port: {name: http}}
           {{- end }}
           {{- if and .Values.ingress.connectorSetupRoutes.enabled (index .Values.components "connectors").enabled }}
           - path: /api/connectors/v1/connect-sessions

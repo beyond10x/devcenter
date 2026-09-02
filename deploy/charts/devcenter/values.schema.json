@@ -27,6 +27,7 @@
         "tls",
         "connectorSetupRoutes",
         "identityCliRoutes",
+        "connectorClientApi",
         "connectorAdminRoutes",
         "connectorDocs"
       ],
@@ -46,6 +47,7 @@
         },
         "connectorSetupRoutes": { "$ref": "#/$defs/routeToggle" },
         "identityCliRoutes": { "$ref": "#/$defs/routeToggle" },
+        "connectorClientApi": { "$ref": "#/$defs/routeToggle" },
         "connectorAdminRoutes": { "$ref": "#/$defs/routeToggle" },
         "connectorDocs": { "$ref": "#/$defs/routeToggle" }
       }

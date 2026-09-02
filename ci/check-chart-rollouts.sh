@@ -8,7 +8,8 @@ rendered=$(mktemp)
 missing_database_error=$(mktemp)
 invalid_docs_error=$(mktemp)
 invalid_identity_cli_error=$(mktemp)
-trap 'rm -f "$rendered" "$missing_database_error" "$invalid_docs_error" "$invalid_identity_cli_error"' EXIT
+invalid_connector_client_error=$(mktemp)
+trap 'rm -f "$rendered" "$missing_database_error" "$invalid_docs_error" "$invalid_identity_cli_error" "$invalid_connector_client_error"' EXIT
 
 grants_checksum() {
   helm template devcenter "$chart" \
@@ -143,6 +144,7 @@ helm template devcenter "$chart" \
   --set ingress.tls.enabled=false \
   --set ingress.connectorSetupRoutes.enabled=true \
   --set ingress.identityCliRoutes.enabled=true \
+  --set ingress.connectorClientApi.enabled=true \
   --set ingress.connectorAdminRoutes.enabled=true \
   --set ingress.connectorDocs.enabled=true \
   --set networkPolicy.enabled=false \
@@ -152,6 +154,7 @@ grep -q 'path: /api/connectors/v1/connect-sessions' "$rendered"
 grep -q 'path: /api/connectors/v1/oauth/gitlab/callback' "$rendered"
 grep -A1 'path: /.well-known/identity-cli-login' "$rendered" | grep -q 'pathType: Exact'
 grep -A1 'path: /v1/access-token' "$rendered" | grep -q 'pathType: Exact'
+grep -A1 'path: /api/connectors/v1$' "$rendered" | grep -q 'pathType: Prefix'
 grep -q 'path: /api/connectors/v1/admin' "$rendered"
 grep -q 'path: /api/connectors/v1/docs' "$rendered"
 grep -q 'path: /api/connectors/v1/openapi.json' "$rendered"
@@ -195,3 +198,31 @@ then
   exit 1
 fi
 grep -q "ingress.identityCliRoutes.enabled requires components.identity.enabled" "$invalid_identity_cli_error"
+
+if helm template devcenter "$chart" \
+  --namespace devcenter \
+  --values "$values" \
+  --set ingress.connectorClientApi.enabled=true \
+  >/dev/null 2>"$invalid_connector_client_error"
+then
+  echo "chart unexpectedly exposed the Connector client API without ingress" >&2
+  exit 1
+fi
+grep -q "ingress.connectorClientApi.enabled requires ingress.enabled" "$invalid_connector_client_error"
+
+if helm template devcenter "$chart" \
+  --namespace devcenter \
+  --values "$values" \
+  --set ingress.enabled=true \
+  --set ingress.host=devcenter.example.invalid \
+  --set ingress.tls.enabled=false \
+  --set ingress.connectorClientApi.enabled=true \
+  --set components.connectors.enabled=false \
+  --set components.secrets.enabled=false \
+  --set networkPolicy.enabled=false \
+  >/dev/null 2>"$invalid_connector_client_error"
+then
+  echo "chart unexpectedly exposed the Connector client API without Connectors" >&2
+  exit 1
+fi
+grep -q "ingress.connectorClientApi.enabled requires components.connectors.enabled" "$invalid_connector_client_error"

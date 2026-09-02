@@ -223,10 +223,18 @@ async function mockAuthenticatedWorkspace(page: Page) {
             default_branch: "trunk",
             visibility: "private",
             web_url: project.web_url,
-            opened_project_id: project.id,
+            opened_project_id: null,
           },
         ],
       });
+      return;
+    }
+    if (path === "/api/projects" && request.method() === "POST") {
+      expect(request.postDataJSON()).toEqual({
+        forge_instance_ref: project.forge_instance_ref,
+        project_ref: project.project_ref,
+      });
+      await route.fulfill({ json: project, status: 201 });
       return;
     }
     if (path === `/api/projects/${project.id}`) {
