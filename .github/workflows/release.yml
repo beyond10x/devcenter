@@ -114,7 +114,7 @@ jobs:
           build-args: SOURCE_SHA=${{ github.sha }}
           secrets: |
             github_token=${{ steps.app-token.outputs.token }}
-          tags: ghcr.io/beyond10x/devcenter-connectors:${{ github.ref_name }}-${{ matrix.arch }}
+          tags: ghcr.io/beyond10x/devcenter:connectors-${{ github.ref_name }}-${{ matrix.arch }}
 
   image-manifests:
     needs: images
@@ -141,9 +141,9 @@ jobs:
             "ghcr.io/beyond10x/devcenterctl:${GITHUB_REF_NAME}-amd64" \
             "ghcr.io/beyond10x/devcenterctl:${GITHUB_REF_NAME}-arm64"
           docker buildx imagetools create \
-            --tag "ghcr.io/beyond10x/devcenter-connectors:${GITHUB_REF_NAME}" \
-            "ghcr.io/beyond10x/devcenter-connectors:${GITHUB_REF_NAME}-amd64" \
-            "ghcr.io/beyond10x/devcenter-connectors:${GITHUB_REF_NAME}-arm64"
+            --tag "ghcr.io/beyond10x/devcenter:connectors-${GITHUB_REF_NAME}" \
+            "ghcr.io/beyond10x/devcenter:connectors-${GITHUB_REF_NAME}-amd64" \
+            "ghcr.io/beyond10x/devcenter:connectors-${GITHUB_REF_NAME}-arm64"
       - uses: sigstore/cosign-installer@6f9f17788090df1f26f669e9d70d6ae9567deba6 # v4.1.2
       - name: Sign immutable multi-arch images
         id: digests
@@ -155,14 +155,14 @@ jobs:
             "ghcr.io/beyond10x/devcenterctl:${GITHUB_REF_NAME}" \
             --format '{{json .Manifest.Digest}}' | tr -d '"')
           connectors_digest=$(docker buildx imagetools inspect \
-            "ghcr.io/beyond10x/devcenter-connectors:${GITHUB_REF_NAME}" \
+            "ghcr.io/beyond10x/devcenter:connectors-${GITHUB_REF_NAME}" \
             --format '{{json .Manifest.Digest}}' | tr -d '"')
           case "$server_digest" in sha256:*) ;; *) exit 1 ;; esac
           case "$ctl_digest" in sha256:*) ;; *) exit 1 ;; esac
           case "$connectors_digest" in sha256:*) ;; *) exit 1 ;; esac
           cosign sign --yes "ghcr.io/beyond10x/devcenter@${server_digest}"
           cosign sign --yes "ghcr.io/beyond10x/devcenterctl@${ctl_digest}"
-          cosign sign --yes "ghcr.io/beyond10x/devcenter-connectors@${connectors_digest}"
+          cosign sign --yes "ghcr.io/beyond10x/devcenter@${connectors_digest}"
           echo "server=${server_digest}" >> "$GITHUB_OUTPUT"
           echo "ctl=${ctl_digest}" >> "$GITHUB_OUTPUT"
           echo "connectors=${connectors_digest}" >> "$GITHUB_OUTPUT"
@@ -172,7 +172,6 @@ jobs:
         run: |
           test "$(gh api /orgs/beyond10x/packages/container/devcenter --jq .visibility)" = private
           test "$(gh api /orgs/beyond10x/packages/container/devcenterctl --jq .visibility)" = private
-          test "$(gh api /orgs/beyond10x/packages/container/devcenter-connectors --jq .visibility)" = private
 
   release-candidate:
     needs: [validate-version, image-manifests]
@@ -233,7 +232,7 @@ jobs:
             '  connectors:' \
             '    enabled: true' \
             '    image:' \
-            '      repository: ghcr.io/beyond10x/devcenter-connectors' \
+            '      repository: ghcr.io/beyond10x/devcenter' \
             "      digest: ${CONNECTORS_DIGEST}" \
             'networkPolicy:' \
             '  enabled: false' > "$candidate/values.yaml"
@@ -248,8 +247,8 @@ jobs:
             "version = \"${GITHUB_REF_NAME}\"" \
             "digest = \"${SERVER_DIGEST}\"" \
             '[images.connectors]' \
-            'reference = "ghcr.io/beyond10x/devcenter-connectors"' \
-            "version = \"${GITHUB_REF_NAME}\"" \
+            'reference = "ghcr.io/beyond10x/devcenter"' \
+            "version = \"connectors-${GITHUB_REF_NAME}\"" \
             "digest = \"${CONNECTORS_DIGEST}\"" > "$candidate/deployment.lock.toml"
           helm lint deploy/charts/devcenter --values "$candidate/values.yaml"
           cargo run --locked --bin devcenterctl -- deployment validate \

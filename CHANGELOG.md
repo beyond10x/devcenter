@@ -1,5 +1,11 @@
 # Changelog
 
+## 0.5.5 - 2026-09-02
+
+- Publish the composed Connector runtime as the distinct `connectors-<version>` artifact in
+  Devcenter's existing private package, after the release guard correctly refused a newly created
+  package that inherited public visibility from the source repository.
+
 ## 0.5.4 - 2026-09-02
 
 - Let signed-in people inspect and resolve exact agent Connector calls while the BFF keeps

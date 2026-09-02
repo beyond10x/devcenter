@@ -104,12 +104,13 @@ multi-arch Linux container, including `linux/arm64` for Docker on Apple Silicon.
 
 The public chart is released as `oci://ghcr.io/beyond10x/charts/devcenter`.
 
-The release also publishes `ghcr.io/beyond10x/devcenter-connectors`. That component composes the
-generated Todo Connector factory with the ordinary hosted Connectors runtime. A deployment chooses
-the exact operation exposure, risk, approval posture, and Grants in a strict value-free overlay;
-the component chooses Eventlog's PostgreSQL adapter through a Secret-backed database URL. Domain
-commands, validation, projections, read-your-writes behavior, and Connector dispatch remain
-generated or SDK-owned rather than being reimplemented in Devcenter.
+The release also publishes the `connectors-<version>` image in the private
+`ghcr.io/beyond10x/devcenter` package. That component composes the generated Todo Connector factory
+with the ordinary hosted Connectors runtime. A deployment chooses the exact operation exposure,
+risk, approval posture, and Grants in a strict value-free overlay; the component chooses Eventlog's
+PostgreSQL adapter through a Secret-backed database URL. Domain commands, validation, projections,
+read-your-writes behavior, and Connector dispatch remain generated or SDK-owned rather than being
+reimplemented in Devcenter.
 
 Secrets is an inner service of that composition, not a standalone chart dependency. The chart
 accepts a pre-created versioned keyring Secret and a pre-created database Secret. For development it
