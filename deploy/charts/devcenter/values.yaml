@@ -109,6 +109,9 @@ components:
     podSecurityContext: {}
     args: []
     env: {}
+    # Kubernetes valueFrom sources, keyed by environment variable name. Use this for secret-backed
+    # service configuration such as AEP_DATABASE_URL without putting credential bytes in values.
+    envValueFrom: {}
     envFrom: []
     configFiles: {}
     volumeMounts: []
