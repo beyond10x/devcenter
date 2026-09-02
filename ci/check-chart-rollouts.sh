@@ -7,7 +7,8 @@ values="$chart/ci/test-values.yaml"
 rendered=$(mktemp)
 missing_database_error=$(mktemp)
 invalid_docs_error=$(mktemp)
-trap 'rm -f "$rendered" "$missing_database_error" "$invalid_docs_error"' EXIT
+invalid_identity_cli_error=$(mktemp)
+trap 'rm -f "$rendered" "$missing_database_error" "$invalid_docs_error" "$invalid_identity_cli_error"' EXIT
 
 grants_checksum() {
   helm template devcenter "$chart" \
@@ -112,6 +113,7 @@ helm template devcenter "$chart" \
   --set ingress.host=devcenter.example.invalid \
   --set ingress.tls.enabled=false \
   --set ingress.connectorSetupRoutes.enabled=true \
+  --set ingress.identityCliRoutes.enabled=true \
   --set ingress.connectorAdminRoutes.enabled=true \
   --set ingress.connectorDocs.enabled=true \
   --set networkPolicy.enabled=false \
@@ -119,6 +121,8 @@ helm template devcenter "$chart" \
 
 grep -q 'path: /api/connectors/v1/connect-sessions' "$rendered"
 grep -q 'path: /api/connectors/v1/oauth/gitlab/callback' "$rendered"
+grep -A1 'path: /.well-known/identity-cli-login' "$rendered" | grep -q 'pathType: Exact'
+grep -A1 'path: /v1/access-token' "$rendered" | grep -q 'pathType: Exact'
 grep -q 'path: /api/connectors/v1/admin' "$rendered"
 grep -q 'path: /api/connectors/v1/docs' "$rendered"
 grep -q 'path: /api/connectors/v1/openapi.json' "$rendered"
@@ -134,3 +138,31 @@ then
   exit 1
 fi
 grep -q "ingress.connectorDocs.enabled requires ingress.enabled" "$invalid_docs_error"
+
+if helm template devcenter "$chart" \
+  --namespace devcenter \
+  --values "$values" \
+  --set ingress.identityCliRoutes.enabled=true \
+  >/dev/null 2>"$invalid_identity_cli_error"
+then
+  echo "chart unexpectedly exposed Identity CLI routes without ingress" >&2
+  exit 1
+fi
+grep -q "ingress.identityCliRoutes.enabled requires ingress.enabled" "$invalid_identity_cli_error"
+
+if helm template devcenter "$chart" \
+  --namespace devcenter \
+  --values "$values" \
+  --set ingress.enabled=true \
+  --set ingress.host=devcenter.example.invalid \
+  --set ingress.tls.enabled=false \
+  --set ingress.identityCliRoutes.enabled=true \
+  --set components.identity.enabled=false \
+  --set components.secrets.enabled=false \
+  --set networkPolicy.enabled=false \
+  >/dev/null 2>"$invalid_identity_cli_error"
+then
+  echo "chart unexpectedly exposed Identity CLI routes without Identity" >&2
+  exit 1
+fi
+grep -q "ingress.identityCliRoutes.enabled requires components.identity.enabled" "$invalid_identity_cli_error"

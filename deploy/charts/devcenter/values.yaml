@@ -44,6 +44,10 @@ ingress:
     secretName: ""
   connectorSetupRoutes:
     enabled: false
+  # Identity's public CLI discovery and scoped access-token exchange. Keep these exact routes
+  # independently opt-in; Identity still derives the actor, tenant, audience, groups, and scopes.
+  identityCliRoutes:
+    enabled: false
   # Operator CLI routes are sent directly to Connectors, which enforces its own exact Identity
   # audience, scope, and operator-group policy. Keep this independent from end-user setup routes.
   connectorAdminRoutes:

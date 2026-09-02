@@ -6,6 +6,8 @@
   secret-mounted frontend container build, keeping credentials out of image layers.
 - Pin the generic Connector embedding seam that lets this SIP-disabled composition omit the unused
   voice dependency graph while refusing any SIP-enabled configuration.
+- Let deployments explicitly expose Identity's exact CLI discovery and scoped access-token routes,
+  enabling hosted Connector administration without broadening the Devcenter BFF allowlist.
 
 ## 0.6.0 - 2026-09-02
 
