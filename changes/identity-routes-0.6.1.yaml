@@ -1,0 +1,13 @@
+schema: b10x-change/v1
+id: devcenter/identity-routes-0.6.1
+repository: devcenter
+publishedAt: 2026-09-02T14:28:12Z
+title: Devcenter activates scoped Identity administration
+summary: Devcenter 0.6.1 exposes Identity's exact CLI discovery and scoped access-token routes, pins the SIP-disabled Connector embedding seam, and authenticates private frontend dependencies without leaking credentials into image layers.
+kind: capability
+impact: significant
+source:
+  url: https://github.com/beyond10x/devcenter/releases/tag/0.6.1
+  version: 0.6.1
+journeys: [operate-services, build-agents]
+affectedSurfaces: [devcenter/docs, identity/docs, connectors/docs]
