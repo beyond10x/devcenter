@@ -9,7 +9,8 @@ import {
   ShieldCheck,
   Unlink,
 } from "@lucide/vue";
-import { computed, ref } from "vue";
+import { computed, onMounted, ref } from "vue";
+import { api, errorMessage, type ConnectSession, type ConnectorConnection } from "@/api/client";
 import { useWorkspaceStore } from "@/stores/workspace";
 
 const workspace = useWorkspaceStore();
@@ -19,6 +20,10 @@ const completing = ref(false);
 const revoking = ref(false);
 const confirmRevoke = ref(false);
 const popupBlocked = ref(false);
+const providerConnections = ref<ConnectorConnection[]>([]);
+const providerLoading = ref(false);
+const providerError = ref("");
+const gitlabSession = ref<ConnectSession>();
 
 const connectionLabel = computed(() => {
   if (workspace.connectionState === "loading") return "Checking";
@@ -65,6 +70,54 @@ async function revoke() {
     revoking.value = false;
   }
 }
+
+async function loadProviderConnections() {
+  providerLoading.value = true;
+  providerError.value = "";
+  try {
+    providerConnections.value = await api.connections();
+  } catch (cause) {
+    providerError.value = errorMessage(cause);
+  } finally {
+    providerLoading.value = false;
+  }
+}
+
+async function connectGitLab(authProfile: "gitlab.oauth_user" | "gitlab.personal_token") {
+  providerLoading.value = true;
+  providerError.value = "";
+  try {
+    const session = await api.startConnection("gitlab", "My GitLab", authProfile);
+    gitlabSession.value = session;
+    if (session.browser_completion_url) {
+      const popup = window.open(session.browser_completion_url, "_blank", "noopener,noreferrer");
+      popupBlocked.value = !popup;
+    }
+    void pollGitLab(session.connect_session_ref, 0);
+  } catch (cause) {
+    providerError.value = errorMessage(cause);
+  } finally {
+    providerLoading.value = false;
+  }
+}
+
+async function pollGitLab(sessionRef: string, attempt: number) {
+  if (attempt >= 60) return;
+  await new Promise((resolve) => window.setTimeout(resolve, 2_000));
+  try {
+    const session = await api.connectionSession(sessionRef);
+    gitlabSession.value = session;
+    if (session.state === "completed") {
+      await loadProviderConnections();
+      return;
+    }
+    if (session.state === "pending") void pollGitLab(sessionRef, attempt + 1);
+  } catch (cause) {
+    providerError.value = errorMessage(cause);
+  }
+}
+
+onMounted(() => void loadProviderConnections());
 </script>
 
 <template>
@@ -270,5 +323,88 @@ async function revoke() {
         /></a>
       </aside>
     </div>
+
+    <section class="provider-connection-section">
+      <header>
+        <div>
+          <p class="eyebrow">Connected things</p>
+          <h2>Repositories and provider APIs</h2>
+          <p>These are the credential-free connections visible to your current Identity session.</p>
+        </div>
+        <button
+          class="button quiet small"
+          type="button"
+          :disabled="providerLoading"
+          @click="loadProviderConnections"
+        >
+          <RefreshCw :size="15" :class="{ spinning: providerLoading }" /> Refresh
+        </button>
+      </header>
+      <p v-if="providerError" class="form-error" role="alert">
+        <CircleAlert :size="16" /> {{ providerError }}
+      </p>
+      <div class="provider-connection-grid">
+        <article class="provider-connection-card gitlab-card">
+          <span class="provider-mark">G</span>
+          <div>
+            <strong>GitLab</strong>
+            <p>Repository discovery, branches, files, merge requests, issues and pipelines.</p>
+            <span v-if="gitlabSession?.state === 'pending'" class="form-hint">
+              Authorization is waiting in the provider window.
+            </span>
+          </div>
+          <div
+            v-if="
+              !providerConnections.some(
+                (connection) =>
+                  connection.integration_ref === 'gitlab' && connection.state === 'callable',
+              )
+            "
+            class="provider-connect-actions"
+          >
+            <button
+              class="button primary small"
+              type="button"
+              :disabled="providerLoading || gitlabSession?.state === 'pending'"
+              @click="connectGitLab('gitlab.oauth_user')"
+            >
+              <KeyRound :size="15" /> Connect GitLab
+            </button>
+            <button
+              class="button quiet small"
+              type="button"
+              :disabled="providerLoading || gitlabSession?.state === 'pending'"
+              @click="connectGitLab('gitlab.personal_token')"
+            >
+              Use personal token
+            </button>
+          </div>
+          <span v-else class="status-pill succeeded"
+            ><span class="status-dot"></span>Connected</span
+          >
+        </article>
+        <article
+          v-for="connection in providerConnections"
+          :key="connection.connection_ref"
+          class="provider-connection-card"
+        >
+          <span class="provider-mark">{{ connection.integration_ref[0]?.toUpperCase() }}</span>
+          <div>
+            <strong>{{ connection.label }}</strong>
+            <p>{{ connection.integration_ref }} · {{ connection.actor ?? "bounded" }} authority</p>
+            <code>{{ connection.connection_ref }}</code>
+          </div>
+          <span
+            class="status-pill"
+            :class="{
+              succeeded: connection.state === 'callable',
+              failed: connection.state === 'degraded',
+            }"
+          >
+            {{ connection.state }}
+          </span>
+        </article>
+      </div>
+    </section>
   </div>
 </template>

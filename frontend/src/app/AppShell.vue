@@ -8,6 +8,7 @@ import {
   PanelLeftClose,
   PanelLeftOpen,
   RadioTower,
+  ShieldCheck,
   X,
 } from "@lucide/vue";
 import { ref } from "vue";
@@ -21,6 +22,7 @@ const navigation = [
   { to: "/projects", label: "Projects", icon: FolderGit2 },
   { to: "/agents", label: "Agents", icon: Bot },
   { to: "/connections", label: "Connections", icon: Cable },
+  { to: "/profiles", label: "Capability profiles", icon: ShieldCheck },
   { to: "/publications", label: "MCP publications", icon: RadioTower },
   { to: "/docs", label: "Documentation", icon: BookOpen },
 ];

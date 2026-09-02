@@ -7,9 +7,13 @@ use std::time::{SystemTime, UNIX_EPOCH};
 
 use agent_platform_client::{
     ActivateRevision, AgentId, AgentPlatformClient, ClientError as AgentPlatformError, CreateAgent,
-    RevisionSpec, SubmitTask, TaskId,
+    CreateCapabilityProfile as PlatformCreateCapabilityProfile, RevisionSpec, SubmitTask, TaskId,
+    UpdateCapabilityProfile as PlatformUpdateCapabilityProfile,
 };
-use agent_platform_core::CapabilityProfileId;
+use agent_platform_core::{
+    CapabilityMapping, CapabilityProfileId, ConnectorApprovalPosture, ConnectorConnectionSummary,
+    ConnectorEffectClass, ConnectorOperationDescription,
+};
 use axum::body::Body;
 use axum::extract::{Path, Query, State};
 use axum::http::{HeaderMap, HeaderValue, StatusCode, header};
@@ -19,6 +23,10 @@ use axum::{Json, Router};
 use base64::Engine as _;
 use base64::engine::general_purpose::URL_SAFE_NO_PAD;
 use connectors_client::{ClientError as ConnectorsError, HostedClient};
+use connectors_protocol::{
+    connection,
+    operation::{self, OwnerContext},
+};
 use devcenter_auth::{AuthenticationError, Principal};
 use devcenter_core::{Config, IdentityProvider};
 use devcenter_mcp::{Outcome as McpOutcome, Request as McpRequest, Toolset};
@@ -37,6 +45,7 @@ const MAX_PENDING_LOGINS: usize = 1_024;
 const MAX_PROVIDER_CREDENTIAL_BYTES: usize = 64 * 1024;
 const CONNECTORS_AUDIENCE: &str = "urn:b10x:connectors";
 const CONNECTORS_SELF_SCOPE: &str = "connectors.connections.self";
+const CONNECTORS_CATALOG_SCOPE: &str = "connectors.catalog.read";
 
 #[derive(Clone)]
 struct AppState {
@@ -101,7 +110,17 @@ pub fn router_with_store(
         pending_logins: Arc::new(Mutex::new(BTreeMap::new())),
         publications,
     };
-    Ok(Router::new()
+    Ok(frontend_routes()
+        .merge(publication_routes())
+        .merge(connection_routes())
+        .merge(agent_routes())
+        .merge(project_routes())
+        .route("/mcp/{publication_id}", post(mcp))
+        .with_state(state))
+}
+
+fn frontend_routes() -> Router<AppState> {
+    Router::new()
         .route("/", get(app))
         .route("/agents", get(app))
         .route("/agents/{agent_id}", get(app))
@@ -130,7 +149,10 @@ pub fn router_with_store(
         .route("/auth/logout", post(logout))
         .route("/api/auth/providers", get(identity_providers))
         .route("/api/session", get(session))
-        .merge(project_routes())
+}
+
+fn publication_routes() -> Router<AppState> {
+    Router::new()
         .route(
             "/api/mcp/publications",
             get(list_publications).post(create_publication),
@@ -151,6 +173,10 @@ pub fn router_with_store(
             "/api/mcp/publications/{publication_id}/approvals",
             get(list_publication_approvals),
         )
+}
+
+fn connection_routes() -> Router<AppState> {
+    Router::new()
         .route(
             "/api/connectors/claude-code",
             get(claude_status)
@@ -165,12 +191,31 @@ pub fn router_with_store(
             "/api/connectors/claude-code/oauth/complete",
             post(complete_claude_oauth),
         )
+        .route(
+            "/api/connections",
+            get(list_connections).post(start_connection),
+        )
+        .route(
+            "/api/connect-sessions/{connect_session_ref}",
+            get(connection_session),
+        )
+        .route("/api/capabilities", get(list_capabilities))
+        .route(
+            "/api/capability-profiles",
+            get(list_capability_profiles).post(create_capability_profile),
+        )
+        .route(
+            "/api/capability-profiles/{profile_id}",
+            axum::routing::patch(update_capability_profile),
+        )
+}
+
+fn agent_routes() -> Router<AppState> {
+    Router::new()
         .route("/api/agents", get(list_agents).post(create_managed_agent))
         .route("/api/agents/{agent_id}/tasks", post(submit_prompt))
         .route("/api/tasks/{task_id}", get(get_task))
         .route("/api/tasks/{task_id}/events", get(task_events))
-        .route("/mcp/{publication_id}", post(mcp))
-        .with_state(state))
 }
 
 fn project_routes() -> Router<AppState> {
@@ -967,6 +1012,367 @@ async fn disconnect_claude(State(state): State<AppState>, headers: HeaderMap) ->
         Ok(status) => Json(json!({"provider": status.provider, "connected": status.connected}))
             .into_response(),
         Err(_) => unavailable("connectors_unavailable"),
+    }
+}
+
+async fn list_connections(State(state): State<AppState>, headers: HeaderMap) -> Response {
+    let authenticated = match authenticate(&state, &headers, false).await {
+        Ok(authenticated) => authenticated,
+        Err(response) => return response,
+    };
+    let (identity, connectors) = match credential_services(&state) {
+        Ok(services) => services,
+        Err(response) => return response,
+    };
+    let Ok(access) = identity
+        .issue_access_token(
+            authenticated.authorization.as_str(),
+            CONNECTORS_AUDIENCE,
+            CONNECTORS_CATALOG_SCOPE,
+        )
+        .await
+    else {
+        return unavailable("identity_access_unavailable");
+    };
+    let context = connector_owner_context(&state, &authenticated);
+    match connectors
+        .connection(
+            access.credential.expose_at_authorization_boundary(),
+            &context,
+            connection::ConnectionRequest::Search(connection::SearchRequest {
+                query: String::new(),
+                limit: connection::MAX_SEARCH_RESULTS,
+            }),
+        )
+        .await
+    {
+        Ok(envelope) => match envelope.response {
+            Some(connection::ConnectionResult::Search { connections }) => {
+                confidential_json(connections)
+            }
+            _ => unavailable("connectors_invalid_response"),
+        },
+        Err(error) => connector_error(&error, "connection_search_refused"),
+    }
+}
+
+#[derive(Deserialize)]
+#[serde(deny_unknown_fields)]
+struct StartConnection {
+    integration_ref: String,
+    label: String,
+    auth_profile: Option<String>,
+}
+
+async fn start_connection(
+    State(state): State<AppState>,
+    headers: HeaderMap,
+    Json(request): Json<StartConnection>,
+) -> Response {
+    let authenticated = match authenticate(&state, &headers, true).await {
+        Ok(authenticated) => authenticated,
+        Err(response) => return response,
+    };
+    let (identity, connectors) = match credential_services(&state) {
+        Ok(services) => services,
+        Err(response) => return response,
+    };
+    let Ok(access) = identity
+        .issue_access_token(
+            authenticated.authorization.as_str(),
+            CONNECTORS_AUDIENCE,
+            CONNECTORS_SELF_SCOPE,
+        )
+        .await
+    else {
+        return unavailable("identity_access_unavailable");
+    };
+    let context = connector_owner_context(&state, &authenticated);
+    match connectors
+        .connection(
+            access.credential.expose_at_authorization_boundary(),
+            &context,
+            connection::ConnectionRequest::ConnectSessionCreate(
+                connection::ConnectSessionCreateRequest {
+                    integration_ref: request.integration_ref,
+                    label: request.label,
+                    auth_profile: request.auth_profile,
+                },
+            ),
+        )
+        .await
+    {
+        Ok(envelope) => match envelope.response {
+            Some(connection::ConnectionResult::ConnectSessionCreate(session)) => {
+                (StatusCode::CREATED, Json(session)).into_response()
+            }
+            _ => unavailable("connectors_invalid_response"),
+        },
+        Err(error) => connector_error(&error, "connection_start_refused"),
+    }
+}
+
+async fn connection_session(
+    State(state): State<AppState>,
+    headers: HeaderMap,
+    Path(connect_session_ref): Path<String>,
+) -> Response {
+    let authenticated = match authenticate(&state, &headers, false).await {
+        Ok(authenticated) => authenticated,
+        Err(response) => return response,
+    };
+    let (identity, connectors) = match credential_services(&state) {
+        Ok(services) => services,
+        Err(response) => return response,
+    };
+    let Ok(access) = identity
+        .issue_access_token(
+            authenticated.authorization.as_str(),
+            CONNECTORS_AUDIENCE,
+            CONNECTORS_CATALOG_SCOPE,
+        )
+        .await
+    else {
+        return unavailable("identity_access_unavailable");
+    };
+    let context = connector_owner_context(&state, &authenticated);
+    match connectors
+        .connection(
+            access.credential.expose_at_authorization_boundary(),
+            &context,
+            connection::ConnectionRequest::ConnectSessionStatus(
+                connection::ConnectSessionStatusRequest {
+                    connect_session_ref,
+                },
+            ),
+        )
+        .await
+    {
+        Ok(envelope) => match envelope.response {
+            Some(connection::ConnectionResult::ConnectSessionStatus(session)) => {
+                confidential_json(session)
+            }
+            _ => unavailable("connectors_invalid_response"),
+        },
+        Err(error) => connector_error(&error, "connection_status_refused"),
+    }
+}
+
+async fn list_capabilities(State(state): State<AppState>, headers: HeaderMap) -> Response {
+    let authenticated = match authenticate(&state, &headers, false).await {
+        Ok(authenticated) => authenticated,
+        Err(response) => return response,
+    };
+    let (identity, connectors) = match credential_services(&state) {
+        Ok(services) => services,
+        Err(response) => return response,
+    };
+    let Ok(access) = identity
+        .issue_access_token(
+            authenticated.authorization.as_str(),
+            CONNECTORS_AUDIENCE,
+            CONNECTORS_CATALOG_SCOPE,
+        )
+        .await
+    else {
+        return unavailable("identity_access_unavailable");
+    };
+    let context = connector_owner_context(&state, &authenticated);
+    match connectors
+        .operation(
+            access.credential.expose_at_authorization_boundary(),
+            &context,
+            operation::OperationRequest::Search(operation::SearchRequest {
+                query: String::new(),
+                limit: operation::MAX_SEARCH_RESULTS,
+            }),
+        )
+        .await
+    {
+        Ok(envelope) => match envelope.response {
+            Some(operation::OperationResult::Search { operations }) => {
+                confidential_json(operations)
+            }
+            _ => unavailable("connectors_invalid_response"),
+        },
+        Err(error) => connector_error(&error, "capability_search_refused"),
+    }
+}
+
+async fn list_capability_profiles(State(state): State<AppState>, headers: HeaderMap) -> Response {
+    let authenticated = match authenticate(&state, &headers, false).await {
+        Ok(authenticated) => authenticated,
+        Err(response) => return response,
+    };
+    let Some(client) = state.agent_platform.as_ref() else {
+        return unavailable("agent_platform_not_configured");
+    };
+    match client
+        .list_capability_profiles(authenticated.authorization.as_str())
+        .await
+    {
+        Ok(profiles) => confidential_json(profiles),
+        Err(error) => agent_platform_error(&error),
+    }
+}
+
+#[derive(Deserialize)]
+#[serde(deny_unknown_fields)]
+struct CreateCapabilityProfileRequest {
+    name: String,
+    mappings: Vec<CapabilityMapping>,
+}
+
+#[derive(Deserialize)]
+#[serde(deny_unknown_fields)]
+struct UpdateCapabilityProfileRequest {
+    expected_revision: u64,
+    name: String,
+    mappings: Vec<CapabilityMapping>,
+}
+
+async fn create_capability_profile(
+    State(state): State<AppState>,
+    headers: HeaderMap,
+    Json(request): Json<CreateCapabilityProfileRequest>,
+) -> Response {
+    let authenticated = match authenticate(&state, &headers, true).await {
+        Ok(authenticated) => authenticated,
+        Err(response) => return response,
+    };
+    let Some(client) = state.agent_platform.as_ref() else {
+        return unavailable("agent_platform_not_configured");
+    };
+    let operation_descriptions =
+        match capability_snapshot(&state, &authenticated, &request.mappings).await {
+            Ok(descriptions) => descriptions,
+            Err(response) => return response,
+        };
+    let request = PlatformCreateCapabilityProfile {
+        name: request.name,
+        mappings: request.mappings,
+        operation_descriptions,
+    };
+    match client
+        .create_capability_profile(authenticated.authorization.as_str(), &request)
+        .await
+    {
+        Ok(profile) => (StatusCode::CREATED, Json(profile)).into_response(),
+        Err(error) => agent_platform_error(&error),
+    }
+}
+
+async fn update_capability_profile(
+    State(state): State<AppState>,
+    headers: HeaderMap,
+    Path(profile_id): Path<String>,
+    Json(request): Json<UpdateCapabilityProfileRequest>,
+) -> Response {
+    let authenticated = match authenticate(&state, &headers, true).await {
+        Ok(authenticated) => authenticated,
+        Err(response) => return response,
+    };
+    let Some(client) = state.agent_platform.as_ref() else {
+        return unavailable("agent_platform_not_configured");
+    };
+    let Ok(profile_id) = CapabilityProfileId::new(profile_id) else {
+        return problem(
+            StatusCode::UNPROCESSABLE_ENTITY,
+            "capability_profile_id_invalid",
+        );
+    };
+    let operation_descriptions =
+        match capability_snapshot(&state, &authenticated, &request.mappings).await {
+            Ok(descriptions) => descriptions,
+            Err(response) => return response,
+        };
+    let request = PlatformUpdateCapabilityProfile {
+        expected_revision: request.expected_revision,
+        name: request.name,
+        mappings: request.mappings,
+        operation_descriptions,
+    };
+    match client
+        .update_capability_profile(authenticated.authorization.as_str(), &profile_id, &request)
+        .await
+    {
+        Ok(profile) => confidential_json(profile),
+        Err(error) => agent_platform_error(&error),
+    }
+}
+
+async fn capability_snapshot(
+    state: &AppState,
+    authenticated: &AuthenticatedSession,
+    mappings: &[CapabilityMapping],
+) -> Result<Vec<ConnectorOperationDescription>, Response> {
+    let (identity, connectors) = credential_services(state)?;
+    let access = identity
+        .issue_access_token(
+            authenticated.authorization.as_str(),
+            CONNECTORS_AUDIENCE,
+            CONNECTORS_CATALOG_SCOPE,
+        )
+        .await
+        .map_err(|_| unavailable("identity_access_unavailable"))?;
+    let context = connector_owner_context(state, authenticated);
+    let mut descriptions = Vec::with_capacity(mappings.len());
+    for mapping in mappings {
+        let envelope = connectors
+            .operation(
+                access.credential.expose_at_authorization_boundary(),
+                &context,
+                operation::OperationRequest::Describe(operation::DescribeRequest {
+                    operation_ref: mapping.operation_ref.clone(),
+                }),
+            )
+            .await
+            .map_err(|error| connector_error(&error, "capability_description_refused"))?;
+        let Some(operation::OperationResult::Describe(description)) = envelope.response else {
+            return Err(unavailable("connectors_invalid_response"));
+        };
+        descriptions.push(ConnectorOperationDescription {
+            operation_ref: description.operation_ref,
+            title: description.title,
+            description: description.description,
+            input_schema: description.input_schema,
+            output_schema: description.output_schema,
+            effect: match description.effect {
+                operation::EffectClass::ReadOnly => ConnectorEffectClass::ReadOnly,
+                operation::EffectClass::Mutating => ConnectorEffectClass::Mutating,
+                operation::EffectClass::Destructive => ConnectorEffectClass::Destructive,
+            },
+            approval: match description.approval {
+                operation::ApprovalPosture::NotRequired => ConnectorApprovalPosture::NotRequired,
+                operation::ApprovalPosture::Required => ConnectorApprovalPosture::Required,
+            },
+            connections: description
+                .connections
+                .into_iter()
+                .map(|connection| ConnectorConnectionSummary {
+                    connection_ref: connection.connection_ref,
+                    label: connection.label,
+                    provider: connection.provider,
+                    audiences: connection.audiences,
+                    purpose: connection.purpose,
+                })
+                .collect(),
+            description_ref: description.description_ref,
+        });
+    }
+    Ok(descriptions)
+}
+
+fn connector_owner_context(state: &AppState, session: &AuthenticatedSession) -> OwnerContext {
+    OwnerContext {
+        tenant_id: state.config.tenant_id.clone(),
+        agent_id: "devcenter-browser".to_owned(),
+        agent_revision: 1,
+        authority_snapshot_id: "devcenter-session".to_owned(),
+        authority_snapshot_sha256: format!(
+            "{:x}",
+            Sha256::digest(session.authorization.as_str().as_bytes())
+        ),
     }
 }
 
@@ -1799,6 +2205,9 @@ mod tests {
         assert_eq!(contract["info"]["version"], env!("CARGO_PKG_VERSION"));
         assert!(contract["paths"]["/api/connectors/claude-code/oauth/start"].is_object());
         assert!(contract["paths"]["/api/connectors/claude-code/oauth/complete"].is_object());
+        assert!(contract["paths"]["/api/connections"].is_object());
+        assert!(contract["paths"]["/api/capabilities"].is_object());
+        assert!(contract["paths"]["/api/capability-profiles"].is_object());
         assert!(contract["paths"]["/.well-known/oauth-protected-resource"].is_object());
     }
 
@@ -1825,7 +2234,14 @@ mod tests {
 
     #[tokio::test]
     async fn protected_routes_fail_closed_without_identity() {
-        for path in ["/api/session", "/api/agents", "/api/connectors/claude-code"] {
+        for path in [
+            "/api/session",
+            "/api/agents",
+            "/api/connectors/claude-code",
+            "/api/connections",
+            "/api/capabilities",
+            "/api/capability-profiles",
+        ] {
             let response = test_router(devcenter_auth::Authentication::Unconfigured)
                 .oneshot(Request::builder().uri(path).body(Body::empty()).unwrap())
                 .await

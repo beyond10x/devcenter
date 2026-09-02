@@ -2,7 +2,7 @@
   "openapi": "3.1.0",
   "info": {
     "title": "Devcenter API",
-    "version": "0.4.7",
+    "version": "0.5.0",
     "description": "Authenticated browser/BFF surface for identity, connector custody, agents, and tasks."
   },
   "paths": {
@@ -202,6 +202,190 @@
           },
           "401": { "$ref": "#/components/responses/Problem" },
           "403": { "$ref": "#/components/responses/Problem" },
+          "422": { "$ref": "#/components/responses/Problem" },
+          "503": { "$ref": "#/components/responses/Unavailable" }
+        }
+      }
+    },
+    "/api/connections": {
+      "get": {
+        "operationId": "listConnections",
+        "security": [{ "browserSession": [] }, { "identityBearer": [] }],
+        "responses": {
+          "200": {
+            "description": "Connections visible through the current Connector grants",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "array",
+                  "items": {
+                    "$ref": "#/components/schemas/ConnectorConnection"
+                  }
+                }
+              }
+            }
+          },
+          "401": { "$ref": "#/components/responses/Problem" },
+          "503": { "$ref": "#/components/responses/Unavailable" }
+        }
+      },
+      "post": {
+        "operationId": "startConnection",
+        "security": [{ "browserSession": [] }, { "identityBearer": [] }],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": { "$ref": "#/components/schemas/StartConnection" }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": "Connector-owned acquisition session",
+            "content": {
+              "application/json": {
+                "schema": { "$ref": "#/components/schemas/ConnectSession" }
+              }
+            }
+          },
+          "401": { "$ref": "#/components/responses/Problem" },
+          "403": { "$ref": "#/components/responses/Problem" },
+          "503": { "$ref": "#/components/responses/Unavailable" }
+        }
+      }
+    },
+    "/api/connect-sessions/{connect_session_ref}": {
+      "get": {
+        "operationId": "getConnectSession",
+        "security": [{ "browserSession": [] }, { "identityBearer": [] }],
+        "parameters": [
+          {
+            "name": "connect_session_ref",
+            "in": "path",
+            "required": true,
+            "schema": { "type": "string" }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Current Connector acquisition state",
+            "content": {
+              "application/json": {
+                "schema": { "$ref": "#/components/schemas/ConnectSession" }
+              }
+            }
+          },
+          "401": { "$ref": "#/components/responses/Problem" },
+          "404": { "$ref": "#/components/responses/Problem" },
+          "503": { "$ref": "#/components/responses/Unavailable" }
+        }
+      }
+    },
+    "/api/capabilities": {
+      "get": {
+        "operationId": "listCapabilities",
+        "security": [{ "browserSession": [] }, { "identityBearer": [] }],
+        "responses": {
+          "200": {
+            "description": "Callable operations under current Connector grants",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "array",
+                  "items": { "$ref": "#/components/schemas/Capability" }
+                }
+              }
+            }
+          },
+          "401": { "$ref": "#/components/responses/Problem" },
+          "503": { "$ref": "#/components/responses/Unavailable" }
+        }
+      }
+    },
+    "/api/capability-profiles": {
+      "get": {
+        "operationId": "listCapabilityProfiles",
+        "security": [{ "browserSession": [] }, { "identityBearer": [] }],
+        "responses": {
+          "200": {
+            "description": "Revisioned Agent Platform capability profiles",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "array",
+                  "items": { "$ref": "#/components/schemas/CapabilityProfile" }
+                }
+              }
+            }
+          },
+          "401": { "$ref": "#/components/responses/Problem" },
+          "503": { "$ref": "#/components/responses/Unavailable" }
+        }
+      },
+      "post": {
+        "operationId": "createCapabilityProfile",
+        "security": [{ "browserSession": [] }, { "identityBearer": [] }],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/CreateCapabilityProfile"
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": "Profile compiled from current credential-free Connector descriptions",
+            "content": {
+              "application/json": {
+                "schema": { "$ref": "#/components/schemas/CapabilityProfile" }
+              }
+            }
+          },
+          "401": { "$ref": "#/components/responses/Problem" },
+          "403": { "$ref": "#/components/responses/Problem" },
+          "422": { "$ref": "#/components/responses/Problem" },
+          "503": { "$ref": "#/components/responses/Unavailable" }
+        }
+      }
+    },
+    "/api/capability-profiles/{profile_id}": {
+      "patch": {
+        "operationId": "updateCapabilityProfile",
+        "security": [{ "browserSession": [] }, { "identityBearer": [] }],
+        "parameters": [
+          {
+            "name": "profile_id",
+            "in": "path",
+            "required": true,
+            "schema": { "type": "string" }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/UpdateCapabilityProfile"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "New compare-and-swap profile revision",
+            "content": {
+              "application/json": {
+                "schema": { "$ref": "#/components/schemas/CapabilityProfile" }
+              }
+            }
+          },
+          "401": { "$ref": "#/components/responses/Problem" },
+          "403": { "$ref": "#/components/responses/Problem" },
+          "409": { "$ref": "#/components/responses/Problem" },
           "422": { "$ref": "#/components/responses/Problem" },
           "503": { "$ref": "#/components/responses/Unavailable" }
         }
@@ -1066,6 +1250,184 @@
             "writeOnly": true,
             "maxLength": 12288
           }
+        },
+        "additionalProperties": false
+      },
+      "StartConnection": {
+        "type": "object",
+        "required": ["integration_ref", "label"],
+        "properties": {
+          "integration_ref": { "type": "string" },
+          "label": { "type": "string" },
+          "auth_profile": { "type": ["string", "null"] }
+        },
+        "additionalProperties": false
+      },
+      "ConnectSession": {
+        "type": "object",
+        "required": [
+          "connect_session_ref",
+          "integration_ref",
+          "state",
+          "expires_at_unix_ms"
+        ],
+        "properties": {
+          "connect_session_ref": { "type": "string" },
+          "integration_ref": { "type": "string" },
+          "state": {
+            "type": "string",
+            "enum": ["pending", "completed", "expired", "failed"]
+          },
+          "expires_at_unix_ms": { "type": "integer", "minimum": 0 },
+          "completion_endpoint": { "type": ["string", "null"] },
+          "browser_completion_url": {
+            "type": ["string", "null"],
+            "format": "uri"
+          },
+          "connection_ref": { "type": ["string", "null"] }
+        },
+        "additionalProperties": false
+      },
+      "ConnectorConnection": {
+        "type": "object",
+        "required": [
+          "connection_ref",
+          "integration_ref",
+          "label",
+          "state",
+          "initiation",
+          "route"
+        ],
+        "properties": {
+          "connection_ref": { "type": "string" },
+          "integration_ref": { "type": "string" },
+          "label": { "type": "string" },
+          "state": {
+            "type": "string",
+            "enum": ["created", "authorized", "callable", "degraded", "revoked"]
+          },
+          "initiation": {
+            "type": "array",
+            "items": { "type": "string", "enum": ["b10x", "provider"] }
+          },
+          "route": { "type": "object" },
+          "scope": {
+            "type": ["string", "null"],
+            "enum": ["tenant", "principal", null]
+          },
+          "actor": {
+            "type": ["string", "null"],
+            "enum": ["app", "user", null]
+          },
+          "auth_profile": { "type": ["string", "null"] }
+        },
+        "additionalProperties": false
+      },
+      "CapabilityConnection": {
+        "type": "object",
+        "required": ["connection_ref", "label", "provider", "audiences"],
+        "properties": {
+          "connection_ref": { "type": "string" },
+          "label": { "type": "string" },
+          "provider": { "type": "string" },
+          "audiences": { "type": "array", "items": { "type": "string" } },
+          "purpose": { "type": ["string", "null"] }
+        },
+        "additionalProperties": false
+      },
+      "Capability": {
+        "type": "object",
+        "required": [
+          "operation_ref",
+          "title",
+          "effect",
+          "approval",
+          "connections"
+        ],
+        "properties": {
+          "operation_ref": { "type": "string" },
+          "title": { "type": "string" },
+          "effect": {
+            "type": "string",
+            "enum": ["read_only", "mutating", "destructive"]
+          },
+          "approval": {
+            "type": "string",
+            "enum": ["not_required", "required"]
+          },
+          "connections": {
+            "type": "array",
+            "items": { "$ref": "#/components/schemas/CapabilityConnection" }
+          }
+        },
+        "additionalProperties": false
+      },
+      "CapabilityMapping": {
+        "type": "object",
+        "required": ["operation_ref", "tool_name", "posture"],
+        "properties": {
+          "operation_ref": { "type": "string" },
+          "tool_name": { "type": "string" },
+          "connection_ref": { "type": ["string", "null"] },
+          "context": { "type": ["string", "null"] },
+          "posture": {
+            "type": "string",
+            "enum": ["allow", "approval_required", "deny"]
+          }
+        },
+        "additionalProperties": false
+      },
+      "CreateCapabilityProfile": {
+        "type": "object",
+        "required": ["name", "mappings"],
+        "properties": {
+          "name": { "type": "string" },
+          "mappings": {
+            "type": "array",
+            "items": { "$ref": "#/components/schemas/CapabilityMapping" }
+          }
+        },
+        "additionalProperties": false
+      },
+      "UpdateCapabilityProfile": {
+        "type": "object",
+        "required": ["expected_revision", "name", "mappings"],
+        "properties": {
+          "expected_revision": { "type": "integer", "minimum": 1 },
+          "name": { "type": "string" },
+          "mappings": {
+            "type": "array",
+            "items": { "$ref": "#/components/schemas/CapabilityMapping" }
+          }
+        },
+        "additionalProperties": false
+      },
+      "CapabilityProfile": {
+        "type": "object",
+        "required": [
+          "id",
+          "tenant_id",
+          "name",
+          "revision",
+          "mappings",
+          "compiled",
+          "created_by",
+          "created_at_ms",
+          "updated_at_ms"
+        ],
+        "properties": {
+          "id": { "type": "string" },
+          "tenant_id": { "type": "string" },
+          "name": { "type": "string" },
+          "revision": { "type": "integer", "minimum": 1 },
+          "mappings": {
+            "type": "array",
+            "items": { "$ref": "#/components/schemas/CapabilityMapping" }
+          },
+          "compiled": { "type": "object" },
+          "created_by": { "type": "string" },
+          "created_at_ms": { "type": "integer", "minimum": 0 },
+          "updated_at_ms": { "type": "integer", "minimum": 0 }
         },
         "additionalProperties": false
       },

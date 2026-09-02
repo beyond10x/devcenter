@@ -106,12 +106,16 @@ onBeforeUnmount(() => {
         </div>
         <div class="field">
           <label for="agent-profile">Capability profile <span>(optional)</span></label>
-          <input
-            id="agent-profile"
-            v-model="capabilityProfileId"
-            placeholder="Capability profile ID"
-            autocomplete="off"
-          />
+          <select id="agent-profile" v-model="capabilityProfileId">
+            <option value="">No external capabilities</option>
+            <option
+              v-for="profile in workspace.capabilityProfiles"
+              :key="profile.id"
+              :value="profile.id"
+            >
+              {{ profile.name }} · revision {{ profile.revision }}
+            </option>
+          </select>
           <small>The profile is pinned to this immutable agent revision.</small>
         </div>
         <p v-if="formError" class="form-error" role="alert">{{ formError }}</p>

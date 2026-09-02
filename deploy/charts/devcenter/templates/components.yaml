@@ -59,11 +59,15 @@ spec:
           args: {{ toYaml . | nindent 12 }}
           {{- end }}
           ports: [{name: http, containerPort: {{ $component.port }}, protocol: TCP}]
-          {{- if or $component.env (eq $name "secrets") (eq $name "workspace") (eq $name "aep-service") }}
+          {{- if or $component.env $component.envValueFrom (eq $name "secrets") (eq $name "workspace") (eq $name "aep-service") }}
           env:
             {{- range $key, $value := $component.env }}
             - name: {{ $key }}
               value: {{ $value | quote }}
+            {{- end }}
+            {{- range $key, $valueFrom := $component.envValueFrom }}
+            - name: {{ $key }}
+              valueFrom: {{ toYaml $valueFrom | nindent 16 }}
             {{- end }}
             {{- if eq $name "secrets" }}
             - name: SECRETS_DATABASE_URL

@@ -42,6 +42,8 @@ ingress:
   tls:
     enabled: true
     secretName: ""
+  connectorSetupRoutes:
+    enabled: false
 
 # Inner services are private ClusterIP workloads. Every enabled component requires an immutable
 # image digest supplied by the deployment. Environment-specific configuration uses Secret and
@@ -107,6 +109,9 @@ components:
     podSecurityContext: {}
     args: []
     env: {}
+    # Kubernetes valueFrom sources, keyed by environment variable name. Use this for secret-backed
+    # service configuration such as AEP_DATABASE_URL without putting credential bytes in values.
+    envValueFrom: {}
     envFrom: []
     configFiles: {}
     volumeMounts: []
