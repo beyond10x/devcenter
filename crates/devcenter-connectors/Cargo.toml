@@ -4,7 +4,7 @@ members = ["."]
 
 [package]
 name = "devcenter-connectors"
-version = "0.5.6"
+version = "0.5.7"
 edition = "2024"
 rust-version = "1.97"
 license = "LicenseRef-B10x-Proprietary"
@@ -18,13 +18,13 @@ path = "src/main.rs"
 [dependencies]
 anyhow = "1"
 clap = { version = "4.6", features = ["derive", "env"] }
-connectors-runtime = { git = "https://github.com/beyond10x/connectors.git", rev = "1bf84ea4d28995857176577226405943c50ae256" }
-connectors-service = { package = "service", git = "https://github.com/beyond10x/connectors.git", rev = "1bf84ea4d28995857176577226405943c50ae256" }
+connectors-runtime = { git = "https://github.com/beyond10x/connectors.git", rev = "c3f7cd952e7776e5496e4d369443a819daa15c44" }
+connectors-service = { package = "service", git = "https://github.com/beyond10x/connectors.git", rev = "c3f7cd952e7776e5496e4d369443a819daa15c44" }
 eventlog-postgres = { git = "https://github.com/beyond10x/eventlog.git", rev = "b7e8f0d87b01c403415546d311952cb155caf16f" }
 serde = { version = "1", features = ["derive"] }
 serde_yaml = "0.9"
-service-connectors = { git = "https://github.com/beyond10x/service-sdk.git", rev = "42eebfd322a1a25ff918cf09a1d9b82eca971067" }
-todo-generated-service = { git = "https://github.com/beyond10x/todo.git", rev = "561611609675a98cb41a4c055ea0d6e59b6ea00e" }
+service-connectors = { git = "https://github.com/beyond10x/service-sdk.git", rev = "04390a169e9c014876a7c42e5aa20a6d62301156" }
+todo-generated-service = { git = "https://github.com/beyond10x/todo.git", rev = "4ca3368583293f1963301149596f3f7122506020" }
 tokio = { version = "1", features = ["macros", "rt-multi-thread", "signal"] }
 
 [workspace.lints.rust]

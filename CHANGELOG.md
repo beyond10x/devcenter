@@ -1,5 +1,10 @@
 # Changelog
 
+## 0.5.7 - 2026-09-02
+
+- Admit the exact Identity authority used to issue Connector approval proofs, so an approved
+  effect-bearing agent call reaches the composed Connector instead of failing at token verification.
+
 ## 0.5.6 - 2026-09-02
 
 - Compose Todo service generation with Connectors 0.4.1 so the final Devcenter Connector retains
