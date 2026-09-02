@@ -2,9 +2,11 @@
 
 Devcenter is a generic control surface for governed agents, workflows, connectors, and sandboxed
 execution. This public repository contains the application source and deployment CLI, plus the
-source of the public, configuration-neutral Helm chart. The repository remains proprietary under
-the included license; application and deployment CLI container images remain private. Devcenter
-does not publish native binary archives.
+source of the public, configuration-neutral Helm chart. The
+[PolyForm Free Trial License 1.0.0](LICENSE) grants a trial of less than 32 consecutive days to
+evaluate Devcenter for a particular application; production, redistribution, and post-trial use
+require a separate agreement with beyond10x. Application and deployment CLI container images remain
+private. Devcenter does not publish native binary archives.
 
 The repository deliberately contains no real deployment values. A deployment supplies its tenant,
 hosts, image mirrors, Identity configuration, generated-service deployment overlays, connector
@@ -22,9 +24,13 @@ pnpm --dir frontend review
 ```
 
 Open `http://127.0.0.1:4173`. Review mode contacts no Identity, Connector, model provider, or Agent
-Platform.
+Platform. This source-only path is the public evaluation path and needs no beyond10x account or
+private artifact.
 
 ### Run the full service container
+
+This path is available only to evaluators with approved access to the private sibling dependencies.
+The public review mode above does not require that access.
 
 Build the same Linux container used by deployments. The token lets Cargo fetch the GitHub-hosted
 Rust dependencies through HTTPS and is not retained in an image layer:
@@ -114,7 +120,10 @@ publication authorization.
 upgrades, verifies the result, and rolls back to an explicit revision. It is distributed only as a
 multi-arch Linux container, including `linux/arm64` for Docker on Apple Silicon.
 
-The public chart is released as `oci://ghcr.io/beyond10x/charts/devcenter`.
+The public chart is released as `oci://ghcr.io/beyond10x/charts/devcenter`. It can be inspected and
+rendered during an evaluation, but an operational installation also needs the private application
+images and deployment-specific values. The public chart alone is not a public production
+distribution.
 
 The release also publishes the `connectors-<version>` image in the private
 `ghcr.io/beyond10x/devcenter` package. That component composes the generated Todo Connector factory

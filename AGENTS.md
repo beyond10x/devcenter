@@ -12,10 +12,10 @@ This repository owns the generic Devcenter frontend, BFF, deployment CLI, embedd
 and generic Helm chart. It owns no organization-specific deployment configuration, connector
 catalogue, hostname, email domain, tenant identifier, registry coordinate, or cluster credential.
 
-The repository source and chart are public. The application images and CLI release remain private.
-Deployment-specific values and automation inputs live in a downstream private repository. Public
-repository visibility does not change the proprietary license unless that license is changed
-explicitly.
+The repository source and chart are public under the PolyForm Free Trial License 1.0.0. The
+application images and CLI release remain private. Deployment-specific values and automation inputs
+live in a downstream private repository. Production or post-trial use requires a separate written
+agreement with beyond10x.
 
 ## Invariants
 

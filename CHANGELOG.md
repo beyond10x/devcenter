@@ -1,5 +1,13 @@
 # Changelog
 
+## Unreleased
+
+- Replace the no-use proprietary notice with the standard PolyForm Free Trial License 1.0.0, making
+  the documented public review path legally usable for a time-bounded evaluation while keeping
+  production, redistribution, private images, and post-trial use outside the public grant.
+- Separate the public frontend review path from the approval-required full-service source build and
+  make clear that the public chart is not sufficient for an operational deployment.
+
 ## 0.8.0 - 2026-09-03
 
 - Turn agent tasks into persistent, principal-owned chat histories with a compact roster and a

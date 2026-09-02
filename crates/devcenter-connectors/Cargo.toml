@@ -7,7 +7,7 @@ name = "devcenter-connectors"
 version = "0.8.0"
 edition = "2024"
 rust-version = "1.97"
-license = "LicenseRef-B10x-Proprietary"
+license = "PolyForm-Free-Trial-1.0.0"
 repository = "https://github.com/beyond10x/devcenter"
 publish = false
 
