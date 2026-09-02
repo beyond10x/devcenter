@@ -27,12 +27,41 @@ grants_checksum() {
       '
 }
 
+component_config_checksum() {
+  component=$1
+  shift
+  helm template devcenter "$chart" \
+    --namespace devcenter \
+    --values "$values" \
+    "$@" \
+    | awk -v expected="devcenter-$component" '
+        /^kind: Deployment$/ { deployment = 1; name = ""; next }
+        deployment && name == "" && /^  name: / { name = $2; next }
+        deployment && name == expected && /checksum\/component-config:/ {
+          gsub(/"/, "", $2)
+          print $2
+          exit
+        }
+        /^---$/ { deployment = 0; name = "" }
+      '
+}
+
 default_checksum=$(grants_checksum)
 alternate_checksum=$(grants_checksum --set components.connectors.serviceAccountName=alternate-connectors)
 
 test -n "$default_checksum"
 test -n "$alternate_checksum"
 test "$default_checksum" != "$alternate_checksum"
+
+default_component_checksum=$(component_config_checksum connectors)
+alternate_component_checksum=$(
+  component_config_checksum connectors \
+    --set-string 'components.connectors.configFiles.services\.yaml=services: []'
+)
+
+test -n "$default_component_checksum"
+test -n "$alternate_component_checksum"
+test "$default_component_checksum" != "$alternate_component_checksum"
 
 helm template devcenter "$chart" \
   --namespace devcenter \

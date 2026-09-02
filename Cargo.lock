@@ -15,8 +15,8 @@ dependencies = [
 
 [[package]]
 name = "agent-platform-client"
-version = "0.5.0"
-source = "git+ssh://git@github.com/beyond10x/agent-platform.git?rev=b7dc199b7b5b2e97b84b074f2f825140775083f2#b7dc199b7b5b2e97b84b074f2f825140775083f2"
+version = "0.5.4"
+source = "git+ssh://git@github.com/beyond10x/agent-platform.git?rev=da80d686e39e2125b3acc6bdee657d6fc99155f2#da80d686e39e2125b3acc6bdee657d6fc99155f2"
 dependencies = [
  "agent-platform-core",
  "reqwest 0.13.4",
@@ -28,8 +28,8 @@ dependencies = [
 
 [[package]]
 name = "agent-platform-core"
-version = "0.5.0"
-source = "git+ssh://git@github.com/beyond10x/agent-platform.git?rev=b7dc199b7b5b2e97b84b074f2f825140775083f2#b7dc199b7b5b2e97b84b074f2f825140775083f2"
+version = "0.5.4"
+source = "git+ssh://git@github.com/beyond10x/agent-platform.git?rev=da80d686e39e2125b3acc6bdee657d6fc99155f2#da80d686e39e2125b3acc6bdee657d6fc99155f2"
 dependencies = [
  "schemars 0.8.22",
  "serde",
@@ -711,7 +711,7 @@ dependencies = [
 
 [[package]]
 name = "devcenter-app"
-version = "0.6.1"
+version = "0.6.2"
 dependencies = [
  "anyhow",
  "axum",
@@ -725,7 +725,7 @@ dependencies = [
 
 [[package]]
 name = "devcenter-auth"
-version = "0.6.1"
+version = "0.6.2"
 dependencies = [
  "identity-client 0.3.2",
  "tokio",
@@ -733,7 +733,7 @@ dependencies = [
 
 [[package]]
 name = "devcenter-core"
-version = "0.6.1"
+version = "0.6.2"
 dependencies = [
  "devcenter-auth",
  "serde",
@@ -741,7 +741,7 @@ dependencies = [
 
 [[package]]
 name = "devcenter-http"
-version = "0.6.1"
+version = "0.6.2"
 dependencies = [
  "agent-platform-client",
  "agent-platform-core",
@@ -771,7 +771,7 @@ dependencies = [
 
 [[package]]
 name = "devcenter-mcp"
-version = "0.6.1"
+version = "0.6.2"
 dependencies = [
  "serde",
  "serde_json",
@@ -780,7 +780,7 @@ dependencies = [
 
 [[package]]
 name = "devcenter-store"
-version = "0.6.1"
+version = "0.6.2"
 dependencies = [
  "devcenter-mcp",
  "serde",
@@ -793,7 +793,7 @@ dependencies = [
 
 [[package]]
 name = "devcenter-web-assets"
-version = "0.6.1"
+version = "0.6.2"
 dependencies = [
  "mime_guess",
  "rust-embed",
@@ -801,7 +801,7 @@ dependencies = [
 
 [[package]]
 name = "devcenterctl"
-version = "0.6.1"
+version = "0.6.2"
 dependencies = [
  "anyhow",
  "clap",
@@ -3637,7 +3637,7 @@ version = "0.1.11"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "c2a7b1c03c876122aa43f3020e6c3c3ee5c05081c9a00739faf7503aeba10d22"
 dependencies = [
- "windows-sys 0.48.0",
+ "windows-sys 0.61.2",
 ]
 
 [[package]]

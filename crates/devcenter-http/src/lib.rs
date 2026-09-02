@@ -11,8 +11,9 @@ use agent_platform_client::{
     RevisionSpec, SubmitTask, TaskId, UpdateCapabilityProfile as PlatformUpdateCapabilityProfile,
 };
 use agent_platform_core::{
-    ApprovalId, CapabilityMapping, CapabilityProfileId, ConnectorApprovalPosture,
-    ConnectorConnectionSummary, ConnectorEffectClass, ConnectorOperationDescription,
+    ApprovalId, CapabilityMapping, CapabilityPosture, CapabilityProfileId,
+    ConnectorApprovalPosture, ConnectorConnectionSummary, ConnectorEffectClass,
+    ConnectorOperationDescription,
 };
 use axum::body::Body;
 use axum::extract::{Path, Query, State};
@@ -1716,6 +1717,33 @@ struct UpdateCapabilityProfileRequest {
     mappings: Vec<CapabilityMapping>,
 }
 
+#[derive(Deserialize)]
+struct CapabilityProfileSnapshot {
+    id: CapabilityProfileId,
+    name: String,
+    revision: u64,
+    mappings: Vec<CapabilityMapping>,
+    compiled: CompiledToolsetSnapshot,
+}
+
+#[derive(Deserialize)]
+struct CompiledToolsetSnapshot {
+    capabilities: Vec<CompiledCapabilitySnapshot>,
+}
+
+#[derive(Deserialize)]
+struct CompiledCapabilitySnapshot {
+    operation_ref: String,
+    connection_ref: String,
+    description_ref: String,
+    tool: CompiledToolSnapshot,
+}
+
+#[derive(Deserialize)]
+struct CompiledToolSnapshot {
+    name: String,
+}
+
 async fn create_capability_profile(
     State(state): State<AppState>,
     headers: HeaderMap,
@@ -1861,6 +1889,107 @@ fn connector_owner_context(state: &AppState, session: &AuthenticatedSession) -> 
     }
 }
 
+fn capability_profile_is_current(
+    profile: &CapabilityProfileSnapshot,
+    descriptions: &[ConnectorOperationDescription],
+) -> bool {
+    let expected = profile
+        .mappings
+        .iter()
+        .filter(|mapping| mapping.posture != CapabilityPosture::Deny)
+        .map(|mapping| {
+            let description = descriptions
+                .iter()
+                .find(|description| description.operation_ref == mapping.operation_ref)?;
+            let connection_ref = mapping.connection_ref.as_deref().or_else(|| {
+                let [connection] = description.connections.as_slice() else {
+                    return None;
+                };
+                Some(connection.connection_ref.as_str())
+            })?;
+            Some((
+                mapping.tool_name.as_str(),
+                mapping.operation_ref.as_str(),
+                connection_ref,
+                description.description_ref.as_str(),
+            ))
+        })
+        .collect::<Option<Vec<_>>>();
+    let Some(expected) = expected else {
+        return false;
+    };
+    profile.compiled.capabilities.len() == expected.len()
+        && profile.compiled.capabilities.iter().zip(expected).all(
+            |(compiled, (tool_name, operation_ref, connection_ref, description_ref))| {
+                compiled.tool.name == tool_name
+                    && compiled.operation_ref == operation_ref
+                    && compiled.connection_ref == connection_ref
+                    && compiled.description_ref == description_ref
+            },
+        )
+}
+
+async fn refresh_agent_capability_profile(
+    state: &AppState,
+    authenticated: &AuthenticatedSession,
+    client: &AgentPlatformClient,
+    agent_id: &AgentId,
+) -> Result<(), Response> {
+    let authorization = authenticated.authorization.as_str();
+    let agent = client
+        .get_agent(authorization, agent_id)
+        .await
+        .map_err(|error| agent_platform_error(&error))?;
+    let Some(active_revision) = agent.active_revision else {
+        return Ok(());
+    };
+    let revisions = client
+        .list_revisions(authorization, agent_id)
+        .await
+        .map_err(|error| agent_platform_error(&error))?;
+    let Some(profile_id) = revisions
+        .into_iter()
+        .find(|revision| revision.revision == active_revision)
+        .and_then(|revision| revision.spec.capability_profile_id)
+    else {
+        return Ok(());
+    };
+
+    for attempt in 0..2 {
+        let profiles = client
+            .list_capability_profiles(authorization)
+            .await
+            .map_err(|error| agent_platform_error(&error))?;
+        let profiles: Vec<CapabilityProfileSnapshot> = serde_json::from_value(profiles)
+            .map_err(|_| unavailable("agent_platform_profile_invalid"))?;
+        let Some(profile) = profiles
+            .into_iter()
+            .find(|profile| profile.id == profile_id)
+        else {
+            return Err(unavailable("agent_platform_profile_invalid"));
+        };
+        let descriptions = capability_snapshot(state, authenticated, &profile.mappings).await?;
+        if capability_profile_is_current(&profile, &descriptions) {
+            return Ok(());
+        }
+        let request = PlatformUpdateCapabilityProfile {
+            expected_revision: profile.revision,
+            name: profile.name,
+            mappings: profile.mappings,
+            operation_descriptions: descriptions,
+        };
+        match client
+            .update_capability_profile(authorization, &profile_id, &request)
+            .await
+        {
+            Ok(_) => return Ok(()),
+            Err(AgentPlatformError::Refused(409)) if attempt == 0 => {}
+            Err(error) => return Err(agent_platform_error(&error)),
+        }
+    }
+    Err(unavailable("agent_platform_profile_refresh_conflict"))
+}
+
 async fn list_agents(State(state): State<AppState>, headers: HeaderMap) -> Response {
     let authenticated = match authenticate(&state, &headers, false).await {
         Ok(authenticated) => authenticated,
@@ -1974,6 +2103,11 @@ async fn submit_prompt(
     let Ok(agent_id) = AgentId::new(agent_id) else {
         return problem(StatusCode::UNPROCESSABLE_ENTITY, "agent_id_invalid");
     };
+    if let Err(response) =
+        refresh_agent_capability_profile(&state, &authenticated, client, &agent_id).await
+    {
+        return response;
+    }
     match client
         .submit_task(
             authenticated.authorization.as_str(),
@@ -3138,6 +3272,54 @@ mod tests {
             }))
             .is_err()
         );
+    }
+
+    #[test]
+    fn task_submission_refreshes_only_stale_exact_capability_snapshots() {
+        let profile: CapabilityProfileSnapshot = serde_json::from_value(json!({
+            "id": "profile-one",
+            "name": "Todo",
+            "revision": 3,
+            "mappings": [{
+                "operation_ref": "todo.create_list",
+                "tool_name": "create_list",
+                "posture": "approval_required"
+            }],
+            "compiled": {
+                "capabilities": [{
+                    "operation_ref": "todo.create_list",
+                    "connection_ref": "connection:todo",
+                    "description_ref": "description:todo:current",
+                    "tool": {"name": "create_list"}
+                }]
+            }
+        }))
+        .unwrap();
+        let description = ConnectorOperationDescription {
+            operation_ref: "todo.create_list".to_owned(),
+            title: "Create list".to_owned(),
+            description: "Create one Todo list".to_owned(),
+            input_schema: json!({"type": "object"}),
+            output_schema: json!({"type": "object"}),
+            effect: ConnectorEffectClass::Mutating,
+            approval: ConnectorApprovalPosture::Required,
+            connections: vec![ConnectorConnectionSummary {
+                connection_ref: "connection:todo".to_owned(),
+                label: "Todo".to_owned(),
+                provider: "provider:todo".to_owned(),
+                audiences: Vec::new(),
+                purpose: None,
+            }],
+            description_ref: "description:todo:current".to_owned(),
+        };
+
+        assert!(capability_profile_is_current(
+            &profile,
+            std::slice::from_ref(&description)
+        ));
+        let mut advanced = description;
+        advanced.description_ref = "description:todo:advanced".to_owned();
+        assert!(!capability_profile_is_current(&profile, &[advanced]));
     }
 
     #[test]

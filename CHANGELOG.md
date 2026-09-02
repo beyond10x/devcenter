@@ -1,5 +1,12 @@
 # Changelog
 
+## 0.6.2 - 2026-09-02
+
+- Refresh an active agent's exact Connector capability descriptions before accepting a new task,
+  so stale description leases cannot strand reads or make a current approval unissuable.
+- Roll component pods whenever their mounted configuration changes, ensuring newly deployed
+  generated-service factories and overlays become active without an image digest change.
+
 ## 0.6.1 - 2026-09-02
 
 - Authenticate the private SDK Vue dependency before hosted frontend gates and inside the
