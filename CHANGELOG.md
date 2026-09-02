@@ -1,5 +1,10 @@
 # Changelog
 
+## 0.5.6 - 2026-09-02
+
+- Compose Todo service generation with Connectors 0.4.1 so the final Devcenter Connector retains
+  deployment-declared, connection-bound post-DNS egress enforcement.
+
 ## 0.5.5 - 2026-09-02
 
 - Publish the composed Connector runtime as the distinct `connectors-<version>` artifact in

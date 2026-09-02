@@ -13,7 +13,7 @@ members = [
 exclude = ["crates/devcenter-connectors"]
 
 [workspace.package]
-version = "0.5.5"
+version = "0.5.6"
 edition = "2024"
 rust-version = "1.97"
 license = "LicenseRef-B10x-Proprietary"
@@ -30,8 +30,8 @@ devcenter-store = { path = "crates/devcenter-store" }
 identity-client = { git = "ssh://git@github.com/beyond10x/identity.git", tag = "0.3.2" }
 agent-platform-client = { git = "ssh://git@github.com/beyond10x/agent-platform.git", rev = "b7dc199b7b5b2e97b84b074f2f825140775083f2" }
 agent-platform-core = { git = "ssh://git@github.com/beyond10x/agent-platform.git", rev = "b7dc199b7b5b2e97b84b074f2f825140775083f2" }
-connectors-client = { git = "ssh://git@github.com/beyond10x/connectors.git", rev = "8100d9bfbfe39c844dc7c0226db94d44d24cb55e" }
-connectors-protocol = { package = "protocol", git = "ssh://git@github.com/beyond10x/connectors.git", rev = "8100d9bfbfe39c844dc7c0226db94d44d24cb55e" }
+connectors-client = { git = "ssh://git@github.com/beyond10x/connectors.git", rev = "1bf84ea4d28995857176577226405943c50ae256" }
+connectors-protocol = { package = "protocol", git = "ssh://git@github.com/beyond10x/connectors.git", rev = "1bf84ea4d28995857176577226405943c50ae256" }
 workspace-client = { git = "ssh://git@github.com/beyond10x/workspace.git", rev = "8cbab51f170d7bf0398ae2ccce2497a8f536d3fb" }
 workspace-core = { git = "ssh://git@github.com/beyond10x/workspace.git", rev = "8cbab51f170d7bf0398ae2ccce2497a8f536d3fb" }
 
