@@ -2,6 +2,11 @@
 
 ## Unreleased
 
+## 0.5.1 - 2026-09-02
+
+- Authenticate private Cargo dependencies while validating the complete release candidate, so a
+  successful image build cannot stall chart and release publication at the final validation seam.
+
 ## 0.5.0 - 2026-09-02
 
 - Show every Connector connection visible to the current Identity session and support GitLab OAuth
