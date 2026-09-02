@@ -1,6 +1,6 @@
 import { createRouter, createWebHistory } from "vue-router";
 import AgentsView from "@/features/agents/AgentsView.vue";
-import ConnectionsView from "@/features/connections/ConnectionsView.vue";
+import ConnectorsView from "@/features/connectors/ConnectorsView.vue";
 import DocsView from "@/features/docs/DocsView.vue";
 import PublicationsView from "@/features/publications/PublicationsView.vue";
 import ProjectsView from "@/features/projects/ProjectsView.vue";
@@ -14,7 +14,12 @@ export default createRouter({
     { path: "/projects/:projectId", name: "project", component: ProjectsView },
     { path: "/agents", name: "agents", component: AgentsView },
     { path: "/agents/:agentId", name: "agent", component: AgentsView },
-    { path: "/connections", name: "connections", component: ConnectionsView },
+    { path: "/connectors", name: "connectors", component: ConnectorsView },
+    { path: "/connectors/:providerRef", name: "connector", component: ConnectorsView },
+    {
+      path: "/connections",
+      redirect: (to) => ({ path: "/connectors", query: { ...to.query, tab: "connections" } }),
+    },
     { path: "/profiles", name: "profiles", component: ProfilesView },
     { path: "/publications", name: "publications", component: PublicationsView },
     { path: "/docs", name: "docs", component: DocsView },

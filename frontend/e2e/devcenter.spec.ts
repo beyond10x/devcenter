@@ -56,12 +56,65 @@ async function mockAuthenticatedWorkspace(page: Page) {
           subject: "actor-1",
           email: "engineer@example.test",
           groups: ["engineers"],
+          connectors_docs_available: false,
         },
       });
       return;
     }
     if (path === "/api/connectors/claude-code") {
       await route.fulfill({ json: { provider: "claude-code", connected: false } });
+      return;
+    }
+    if (path === "/api/connectors/catalog") {
+      await route.fulfill({
+        json: {
+          providers: [
+            {
+              provider_ref: "gitlab",
+              authority: "com.gitlab",
+              vendor: "GitLab",
+              description: "Projects, branches, merge requests, issues, and pipelines.",
+              audiences: ["https://gitlab.example.test"],
+              services: ["git", "issues", "ci"],
+              operation_count: 24,
+              configurable: true,
+              setup_profiles: [{ auth_profile: "gitlab.oauth_user", actor: "person" }],
+            },
+          ],
+          next_offset: null,
+        },
+      });
+      return;
+    }
+    if (path === "/api/connectors/catalog/gitlab") {
+      await route.fulfill({
+        json: {
+          provider: {
+            provider_ref: "gitlab",
+            authority: "com.gitlab",
+            vendor: "GitLab",
+            description: "Projects, branches, merge requests, issues, and pipelines.",
+            audiences: ["https://gitlab.example.test"],
+            services: ["git", "issues", "ci"],
+            operation_count: 24,
+            configurable: true,
+            setup_profiles: [{ auth_profile: "gitlab.oauth_user", actor: "person" }],
+          },
+          operations: [
+            {
+              operation_ref: "git.project.list",
+              service: "git",
+              description: "List projects visible to the connected person.",
+              risk: "read_only",
+              exposed: true,
+            },
+          ],
+        },
+      });
+      return;
+    }
+    if (path === "/api/connections") {
+      await route.fulfill({ json: [] });
       return;
     }
     if (path === "/api/agents" && request.method() === "GET") {
@@ -300,13 +353,20 @@ test("opens a visible repository as a commit-pinned project", async ({ page }, t
   expect(accessibility.violations).toEqual([]);
 });
 
-test("keeps connection custody understandable on a mobile viewport", async ({ page }, testInfo) => {
+test("keeps catalog and connection custody usable on a mobile viewport", async ({
+  page,
+}, testInfo) => {
   test.skip(testInfo.project.name !== "mobile-chromium", "Mobile navigation behavior");
   await mockAuthenticatedWorkspace(page);
   await page.goto("/agents");
 
   await page.getByRole("button", { name: "Open navigation" }).click();
-  await page.getByRole("link", { name: "Connections" }).click();
+  await page.getByRole("link", { name: "Connectors" }).click();
+  await expect(page.getByRole("heading", { name: "Connectors" })).toBeVisible();
+  await expect(page.getByRole("heading", { name: "GitLab" })).toBeVisible();
+  await page.getByRole("link", { name: /GitLab/ }).click();
+  await expect(page.getByText("git.project.list", { exact: true })).toBeVisible();
+  await page.getByRole("button", { name: "My connections" }).click();
   await expect(page.getByRole("heading", { name: "Model access" })).toBeVisible();
   await expect(page.getByText("Credential bytes", { exact: true })).toBeVisible();
   await expect(page.getByRole("button", { name: "Connect Claude" })).toBeVisible();

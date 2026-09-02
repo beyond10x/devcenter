@@ -3,3 +3,6 @@ Devcenter has been installed for tenant {{ .Values.global.tenantId | quote }}.
 Documentation: {{ .Values.global.publicOrigin | trimSuffix "/" }}/docs/
 OpenAPI:       {{ .Values.global.publicOrigin | trimSuffix "/" }}/openapi.json
 MCP:           {{ .Values.global.publicOrigin | trimSuffix "/" }}/mcp
+{{- if and .Values.ingress.enabled .Values.ingress.connectorDocs.enabled (index .Values.components "connectors").enabled }}
+Connector API: {{ .Values.global.publicOrigin | trimSuffix "/" }}/api/connectors/v1/docs
+{{- end }}

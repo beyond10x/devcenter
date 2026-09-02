@@ -13,6 +13,11 @@ export type PublicationState = components["schemas"]["PublicationState"];
 export type Publication = components["schemas"]["Publication"];
 export type ClientAuthorization = components["schemas"]["ClientAuthorization"];
 export type Approval = components["schemas"]["Approval"];
+export type ConnectorCatalogPage = components["schemas"]["ConnectorCatalogPage"];
+export type ConnectorCatalogOperation = components["schemas"]["ConnectorCatalogOperation"];
+export type ConnectorProviderDescription = components["schemas"]["ConnectorProviderDescription"];
+export type ConnectorProviderSummary = components["schemas"]["ConnectorProviderSummary"];
+export type ConnectorSetupProfile = components["schemas"]["ConnectorSetupProfile"];
 export interface RepositoryCandidate {
   forge_instance_ref: string;
   project_ref: string;
@@ -227,6 +232,18 @@ export const api = {
       }),
     }),
   connections: () => request<ConnectorConnection[]>("/api/connections"),
+  connectorCatalog: (query = "", offset = 0, limit = 24) => {
+    const parameters = new URLSearchParams({
+      query,
+      offset: String(offset),
+      limit: String(limit),
+    });
+    return request<ConnectorCatalogPage>(`/api/connectors/catalog?${parameters.toString()}`);
+  },
+  connectorCatalogProvider: (providerRef: string) =>
+    request<ConnectorProviderDescription>(
+      `/api/connectors/catalog/${encodeURIComponent(providerRef)}`,
+    ),
   startConnection: (integrationRef: string, label: string, authProfile?: string) =>
     request<ConnectSession>("/api/connections", {
       method: "POST",

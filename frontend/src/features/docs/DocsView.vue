@@ -1,5 +1,8 @@
 <script setup lang="ts">
 import { ArrowUpRight, BookOpen, Braces, ShieldCheck } from "@lucide/vue";
+import { useWorkspaceStore } from "@/stores/workspace";
+
+const workspace = useWorkspaceStore();
 </script>
 
 <template>
@@ -70,6 +73,12 @@ import { ArrowUpRight, BookOpen, Braces, ShieldCheck } from "@lucide/vue";
             allowlist. Identity supplies generic verified authority while each downstream service
             keeps its own authorization vocabulary. <code>/mcp</code> exposes governed composition;
             it is not an unrestricted inner-service proxy.
+          </p>
+          <p v-if="workspace.session?.connectors_docs_available">
+            This deployment also exposes the Connector-owned
+            <a href="/api/connectors/v1/docs">API reference</a> and
+            <a href="/api/connectors/v1/openapi.json">OpenAPI document</a> at their exact service
+            routes.
           </p>
         </section>
         <section id="deployment">

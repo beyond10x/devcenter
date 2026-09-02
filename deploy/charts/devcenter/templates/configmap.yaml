@@ -15,6 +15,7 @@ data:
   DEV_CENTER_IDENTITY_WEB_CLIENT_ID: {{ .Values.devcenter.identity.webClientId | quote }}
   DEV_CENTER_IDENTITY_REDIRECT_URI: {{ default (printf "%s/auth/sso/callback" (trimSuffix "/" .Values.global.publicOrigin)) .Values.devcenter.identity.redirectUri | quote }}
   DEV_CENTER_IDENTITY_PROVIDERS: {{ toJson .Values.devcenter.identity.providers | quote }}
+  DEV_CENTER_CONNECTORS_DOCS_AVAILABLE: {{ and .Values.ingress.enabled .Values.ingress.connectorDocs.enabled (index .Values.components "connectors").enabled | quote }}
   {{- if (index .Values.components "identity").enabled }}
   DEV_CENTER_IDENTITY_ORIGIN: {{ printf "http://%s-identity.%s.svc.cluster.local:%v" (include "devcenter.fullname" .) .Release.Namespace (index .Values.components "identity").port | quote }}
   {{- end }}

@@ -24,7 +24,7 @@ use base64::Engine as _;
 use base64::engine::general_purpose::URL_SAFE_NO_PAD;
 use connectors_client::{ClientError as ConnectorsError, HostedClient};
 use connectors_protocol::{
-    approval, connection,
+    approval, catalog, connection,
     operation::{self, OwnerContext},
 };
 use devcenter_auth::{AuthenticationError, Principal};
@@ -126,7 +126,9 @@ fn frontend_routes() -> Router<AppState> {
         .route("/", get(app))
         .route("/agents", get(app))
         .route("/agents/{agent_id}", get(app))
-        .route("/connections", get(app))
+        .route("/connectors", get(app))
+        .route("/connectors/{provider_ref}", get(app))
+        .route("/connections", get(legacy_connections))
         .route("/projects", get(app))
         .route("/projects/{project_id}", get(app))
         .route("/profiles", get(app))
@@ -179,6 +181,11 @@ fn publication_routes() -> Router<AppState> {
 
 fn connection_routes() -> Router<AppState> {
     Router::new()
+        .route("/api/connectors/catalog", get(search_catalog))
+        .route(
+            "/api/connectors/catalog/{provider_ref}",
+            get(describe_catalog_provider),
+        )
         .route(
             "/api/connectors/claude-code",
             get(claude_status)
@@ -210,6 +217,10 @@ fn connection_routes() -> Router<AppState> {
             "/api/capability-profiles/{profile_id}",
             axum::routing::patch(update_capability_profile),
         )
+}
+
+async fn legacy_connections() -> Redirect {
+    Redirect::permanent("/connectors?tab=connections")
 }
 
 fn agent_routes() -> Router<AppState> {
@@ -529,9 +540,157 @@ async fn session(State(state): State<AppState>, headers: HeaderMap) -> Response 
         "tenant_id": authenticated.principal.tenant_id,
         "subject": authenticated.principal.subject,
         "email": authenticated.principal.email,
-        "groups": authenticated.principal.groups
+        "groups": authenticated.principal.groups,
+        "connectors_docs_available": state.config.connectors_docs_available
     }))
     .into_response()
+}
+
+#[derive(Deserialize)]
+#[serde(default, deny_unknown_fields)]
+struct CatalogQuery {
+    query: String,
+    offset: u16,
+    limit: u16,
+}
+
+impl Default for CatalogQuery {
+    fn default() -> Self {
+        Self {
+            query: String::new(),
+            offset: 0,
+            limit: 24,
+        }
+    }
+}
+
+async fn search_catalog(
+    State(state): State<AppState>,
+    headers: HeaderMap,
+    query: Result<Query<CatalogQuery>, axum::extract::rejection::QueryRejection>,
+) -> Response {
+    let authenticated = match authenticate(&state, &headers, false).await {
+        Ok(authenticated) => authenticated,
+        Err(response) => return response,
+    };
+    let Ok(Query(query)) = query else {
+        return problem(StatusCode::UNPROCESSABLE_ENTITY, "catalog_query_invalid");
+    };
+    if query.query.len() > 512 || query.limit == 0 || query.limit > catalog::MAX_PROVIDER_RESULTS {
+        return problem(StatusCode::UNPROCESSABLE_ENTITY, "catalog_query_invalid");
+    }
+    let (identity, connectors) = match credential_services(&state) {
+        Ok(services) => services,
+        Err(response) => return response,
+    };
+    let Ok(access) = identity
+        .issue_access_token(
+            authenticated.authorization.as_str(),
+            CONNECTORS_AUDIENCE,
+            CONNECTORS_CATALOG_SCOPE,
+        )
+        .await
+    else {
+        return unavailable("identity_access_unavailable");
+    };
+    let context = connector_owner_context(&state, &authenticated);
+    match connectors
+        .catalog(
+            access.credential.expose_at_authorization_boundary(),
+            &context,
+            catalog::CatalogRequest::Search(catalog::SearchRequest {
+                query: query.query,
+                offset: query.offset,
+                limit: query.limit,
+            }),
+        )
+        .await
+    {
+        Ok(envelope) => match envelope.response {
+            Some(catalog::CatalogResult::Search {
+                providers,
+                next_offset,
+            }) => confidential_json(json!({
+                "providers": providers,
+                "next_offset": next_offset
+            })),
+            None if envelope
+                .error
+                .as_ref()
+                .is_some_and(|error| error.code == "invalid_input") =>
+            {
+                problem(StatusCode::UNPROCESSABLE_ENTITY, "catalog_query_invalid")
+            }
+            _ => problem(StatusCode::BAD_GATEWAY, "catalog_search_refused"),
+        },
+        Err(error) => connector_error(&error, "catalog_search_refused"),
+    }
+}
+
+async fn describe_catalog_provider(
+    State(state): State<AppState>,
+    headers: HeaderMap,
+    Path(provider_ref): Path<String>,
+) -> Response {
+    let authenticated = match authenticate(&state, &headers, false).await {
+        Ok(authenticated) => authenticated,
+        Err(response) => return response,
+    };
+    if provider_ref.is_empty()
+        || provider_ref.len() > 256
+        || !provider_ref.bytes().all(|byte| byte.is_ascii_graphic())
+    {
+        return problem(
+            StatusCode::UNPROCESSABLE_ENTITY,
+            "catalog_provider_ref_invalid",
+        );
+    }
+    let (identity, connectors) = match credential_services(&state) {
+        Ok(services) => services,
+        Err(response) => return response,
+    };
+    let Ok(access) = identity
+        .issue_access_token(
+            authenticated.authorization.as_str(),
+            CONNECTORS_AUDIENCE,
+            CONNECTORS_CATALOG_SCOPE,
+        )
+        .await
+    else {
+        return unavailable("identity_access_unavailable");
+    };
+    let context = connector_owner_context(&state, &authenticated);
+    match connectors
+        .catalog(
+            access.credential.expose_at_authorization_boundary(),
+            &context,
+            catalog::CatalogRequest::Describe(catalog::DescribeRequest { provider_ref }),
+        )
+        .await
+    {
+        Ok(envelope) => match envelope.response {
+            Some(catalog::CatalogResult::Describe(description)) => confidential_json(description),
+            None if envelope
+                .error
+                .as_ref()
+                .is_some_and(|error| error.code == "not_found") =>
+            {
+                problem(StatusCode::NOT_FOUND, "catalog_provider_not_found")
+            }
+            None if envelope
+                .error
+                .as_ref()
+                .is_some_and(|error| error.code == "invalid_input") =>
+            {
+                problem(
+                    StatusCode::UNPROCESSABLE_ENTITY,
+                    "catalog_provider_ref_invalid",
+                )
+            }
+            _ => problem(StatusCode::BAD_GATEWAY, "catalog_describe_refused"),
+        },
+        Err(error) => connector_error(&error, "catalog_describe_refused"),
+    }
 }
 
 async fn list_repositories(State(state): State<AppState>, headers: HeaderMap) -> Response {
@@ -2235,6 +2394,7 @@ mod tests {
             database_url: "sqlite::memory:".into(),
             agent_platform_origin: None,
             connectors_api_base: None,
+            connectors_docs_available: false,
             workspace_origin: None,
         })
         .unwrap()
@@ -2279,7 +2439,8 @@ mod tests {
             "/",
             "/agents",
             "/agents/agent-1",
-            "/connections",
+            "/connectors",
+            "/connectors/gitlab",
             "/docs",
             "/docs/",
         ] {
@@ -2351,12 +2512,50 @@ mod tests {
         assert_eq!(contract["info"]["version"], env!("CARGO_PKG_VERSION"));
         assert!(contract["paths"]["/api/connectors/claude-code/oauth/start"].is_object());
         assert!(contract["paths"]["/api/connectors/claude-code/oauth/complete"].is_object());
+        assert!(contract["paths"]["/api/connectors/catalog"].is_object());
+        assert!(contract["paths"]["/api/connectors/catalog/{provider_ref}"].is_object());
         assert!(contract["paths"]["/api/connections"].is_object());
         assert!(contract["paths"]["/api/capabilities"].is_object());
         assert!(contract["paths"]["/api/capability-profiles"].is_object());
         assert!(contract["paths"]["/api/tasks/{task_id}/approvals"].is_object());
         assert!(contract["paths"]["/api/tasks/{task_id}/approvals/{approval_id}"].is_object());
         assert!(contract["paths"]["/.well-known/oauth-protected-resource"].is_object());
+    }
+
+    #[tokio::test]
+    async fn legacy_connections_route_redirects_to_the_generic_surface() {
+        let response = test_router(devcenter_auth::Authentication::Unconfigured)
+            .oneshot(
+                Request::builder()
+                    .uri("/connections")
+                    .body(Body::empty())
+                    .unwrap(),
+            )
+            .await
+            .unwrap();
+        assert_eq!(response.status(), StatusCode::PERMANENT_REDIRECT);
+        assert_eq!(
+            response.headers().get(header::LOCATION).unwrap(),
+            "/connectors?tab=connections"
+        );
+    }
+
+    #[tokio::test]
+    async fn catalog_query_bounds_have_a_stable_refusal() {
+        let response =
+            test_router(devcenter_auth::Authentication::development_bearer("local-token").unwrap())
+                .oneshot(
+                    Request::builder()
+                        .uri("/api/connectors/catalog?limit=0")
+                        .header(header::AUTHORIZATION, "Bearer local-token")
+                        .body(Body::empty())
+                        .unwrap(),
+                )
+                .await
+                .unwrap();
+        assert_eq!(response.status(), StatusCode::UNPROCESSABLE_ENTITY);
+        let body = response.into_body().collect().await.unwrap().to_bytes();
+        assert_eq!(body, r#"{"code":"catalog_query_invalid"}"#);
     }
 
     #[tokio::test]
@@ -2386,6 +2585,8 @@ mod tests {
             "/api/session",
             "/api/agents",
             "/api/connectors/claude-code",
+            "/api/connectors/catalog",
+            "/api/connectors/catalog/gitlab",
             "/api/connections",
             "/api/capabilities",
             "/api/capability-profiles",
@@ -2519,6 +2720,7 @@ mod tests {
             database_url: "sqlite::memory:".into(),
             agent_platform_origin: None,
             connectors_api_base: None,
+            connectors_docs_available: false,
             workspace_origin: None,
         };
         router_with_store(config, store).unwrap()

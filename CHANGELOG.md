@@ -1,5 +1,14 @@
 # Changelog
 
+## 0.5.10 - 2026-09-02
+
+- Make the complete Connector catalog the default `/connectors` workspace, with bounded provider
+  search, provider and operation detail, and setup actions derived only from runtime-advertised
+  profiles; redirect the former `/connections` route and retire its hard-coded GitLab setup card.
+- Pin Connectors 0.4.4 for the typed hosted catalog contract and complete GitLab setup profiles.
+- Let deployments explicitly expose the Connector-owned docs and OpenAPI routes as exact ingress
+  paths, defaulting them off and advertising them in the session only when they are reachable.
+
 ## 0.5.9 - 2026-09-02
 
 - Compose Connectors 0.4.3 so hosted operators can inspect Integration readiness and supply

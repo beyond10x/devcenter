@@ -6,7 +6,8 @@ values="$chart/ci/test-values.yaml"
 
 rendered=$(mktemp)
 missing_database_error=$(mktemp)
-trap 'rm -f "$rendered" "$missing_database_error"' EXIT
+invalid_docs_error=$(mktemp)
+trap 'rm -f "$rendered" "$missing_database_error" "$invalid_docs_error"' EXIT
 
 grants_checksum() {
   helm template devcenter "$chart" \
@@ -91,6 +92,7 @@ grep -q 'chmod 0600 /var/run/substrate-tls/tls.key' "$rendered"
 grep -q 'chown 65532:65532 /var/run/substrate-tls/tls.crt /var/run/substrate-tls/tls.key' "$rendered"
 grep -q 'chown 65532:65532 /var/lib/substrate /var/run/substrate /var/run/substrate-tls' "$rendered"
 grep -q 'name: tls-source' "$rendered"
+grep -q 'DEV_CENTER_CONNECTORS_DOCS_AVAILABLE: "false"' "$rendered"
 
 if helm template devcenter "$chart" \
   --namespace devcenter \
@@ -111,9 +113,24 @@ helm template devcenter "$chart" \
   --set ingress.tls.enabled=false \
   --set ingress.connectorSetupRoutes.enabled=true \
   --set ingress.connectorAdminRoutes.enabled=true \
+  --set ingress.connectorDocs.enabled=true \
   --set networkPolicy.enabled=false \
   > "$rendered"
 
 grep -q 'path: /api/connectors/v1/connect-sessions' "$rendered"
 grep -q 'path: /api/connectors/v1/oauth/gitlab/callback' "$rendered"
 grep -q 'path: /api/connectors/v1/admin' "$rendered"
+grep -q 'path: /api/connectors/v1/docs' "$rendered"
+grep -q 'path: /api/connectors/v1/openapi.json' "$rendered"
+grep -q 'DEV_CENTER_CONNECTORS_DOCS_AVAILABLE: "true"' "$rendered"
+
+if helm template devcenter "$chart" \
+  --namespace devcenter \
+  --values "$values" \
+  --set ingress.connectorDocs.enabled=true \
+  >/dev/null 2>"$invalid_docs_error"
+then
+  echo "chart unexpectedly exposed Connector docs without ingress" >&2
+  exit 1
+fi
+grep -q "ingress.connectorDocs.enabled requires ingress.enabled" "$invalid_docs_error"

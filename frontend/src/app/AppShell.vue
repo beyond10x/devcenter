@@ -21,7 +21,7 @@ const reviewMode = import.meta.env.MODE === "review";
 const navigation = [
   { to: "/projects", label: "Projects", icon: FolderGit2 },
   { to: "/agents", label: "Agents", icon: Bot },
-  { to: "/connections", label: "Connections", icon: Cable },
+  { to: "/connectors", label: "Connectors", icon: Cable },
   { to: "/profiles", label: "Capability profiles", icon: ShieldCheck },
   { to: "/publications", label: "MCP publications", icon: RadioTower },
   { to: "/docs", label: "Documentation", icon: BookOpen },
@@ -70,7 +70,7 @@ async function logout() {
           <component :is="item.icon" :size="18" />
           <span>{{ item.label }}</span>
           <span
-            v-if="item.to === '/connections'"
+            v-if="item.to === '/connectors'"
             class="nav-status"
             :class="{ ok: workspace.connected }"
           ></span>

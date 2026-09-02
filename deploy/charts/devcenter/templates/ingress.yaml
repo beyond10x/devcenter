@@ -1,3 +1,9 @@
+{{- if and .Values.ingress.connectorDocs.enabled (not .Values.ingress.enabled) }}
+{{- fail "ingress.connectorDocs.enabled requires ingress.enabled" }}
+{{- end }}
+{{- if and .Values.ingress.connectorDocs.enabled (not (index .Values.components "connectors").enabled) }}
+{{- fail "ingress.connectorDocs.enabled requires components.connectors.enabled" }}
+{{- end }}
 {{- if .Values.ingress.enabled }}
 apiVersion: networking.k8s.io/v1
 kind: Ingress
@@ -44,6 +50,16 @@ spec:
           {{- if and .Values.ingress.connectorAdminRoutes.enabled (index .Values.components "connectors").enabled }}
           - path: /api/connectors/v1/admin
             pathType: Prefix
+            backend:
+              service: {name: {{ include "devcenter.fullname" . }}-connectors, port: {name: http}}
+          {{- end }}
+          {{- if and .Values.ingress.connectorDocs.enabled (index .Values.components "connectors").enabled }}
+          - path: /api/connectors/v1/docs
+            pathType: Exact
+            backend:
+              service: {name: {{ include "devcenter.fullname" . }}-connectors, port: {name: http}}
+          - path: /api/connectors/v1/openapi.json
+            pathType: Exact
             backend:
               service: {name: {{ include "devcenter.fullname" . }}-connectors, port: {name: http}}
           {{- end }}

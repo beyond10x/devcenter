@@ -10,10 +10,11 @@ import {
   Unlink,
 } from "@lucide/vue";
 import { computed, onMounted, ref } from "vue";
-import { api, errorMessage, type ConnectSession, type ConnectorConnection } from "@/api/client";
+import { api, errorMessage, type ConnectorConnection } from "@/api/client";
 import { useWorkspaceStore } from "@/stores/workspace";
 
 const workspace = useWorkspaceStore();
+defineProps<{ embedded?: boolean }>();
 const code = ref("");
 const starting = ref(false);
 const completing = ref(false);
@@ -23,7 +24,6 @@ const popupBlocked = ref(false);
 const providerConnections = ref<ConnectorConnection[]>([]);
 const providerLoading = ref(false);
 const providerError = ref("");
-const gitlabSession = ref<ConnectSession>();
 
 const connectionLabel = computed(() => {
   if (workspace.connectionState === "loading") return "Checking";
@@ -83,45 +83,11 @@ async function loadProviderConnections() {
   }
 }
 
-async function connectGitLab(authProfile: "gitlab.oauth_user" | "gitlab.personal_token") {
-  providerLoading.value = true;
-  providerError.value = "";
-  try {
-    const session = await api.startConnection("gitlab", "My GitLab", authProfile);
-    gitlabSession.value = session;
-    if (session.browser_completion_url) {
-      const popup = window.open(session.browser_completion_url, "_blank", "noopener,noreferrer");
-      popupBlocked.value = !popup;
-    }
-    void pollGitLab(session.connect_session_ref, 0);
-  } catch (cause) {
-    providerError.value = errorMessage(cause);
-  } finally {
-    providerLoading.value = false;
-  }
-}
-
-async function pollGitLab(sessionRef: string, attempt: number) {
-  if (attempt >= 60) return;
-  await new Promise((resolve) => window.setTimeout(resolve, 2_000));
-  try {
-    const session = await api.connectionSession(sessionRef);
-    gitlabSession.value = session;
-    if (session.state === "completed") {
-      await loadProviderConnections();
-      return;
-    }
-    if (session.state === "pending") void pollGitLab(sessionRef, attempt + 1);
-  } catch (cause) {
-    providerError.value = errorMessage(cause);
-  }
-}
-
 onMounted(() => void loadProviderConnections());
 </script>
 
 <template>
-  <div class="view connections-view">
+  <div class="connections-view" :class="{ view: !embedded }">
     <header class="view-header">
       <div>
         <p class="eyebrow">Connection custody</p>
@@ -344,45 +310,9 @@ onMounted(() => void loadProviderConnections());
         <CircleAlert :size="16" /> {{ providerError }}
       </p>
       <div class="provider-connection-grid">
-        <article class="provider-connection-card gitlab-card">
-          <span class="provider-mark">G</span>
-          <div>
-            <strong>GitLab</strong>
-            <p>Repository discovery, branches, files, merge requests, issues and pipelines.</p>
-            <span v-if="gitlabSession?.state === 'pending'" class="form-hint">
-              Authorization is waiting in the provider window.
-            </span>
-          </div>
-          <div
-            v-if="
-              !providerConnections.some(
-                (connection) =>
-                  connection.integration_ref === 'gitlab' && connection.state === 'callable',
-              )
-            "
-            class="provider-connect-actions"
-          >
-            <button
-              class="button primary small"
-              type="button"
-              :disabled="providerLoading || gitlabSession?.state === 'pending'"
-              @click="connectGitLab('gitlab.oauth_user')"
-            >
-              <KeyRound :size="15" /> Connect GitLab
-            </button>
-            <button
-              class="button quiet small"
-              type="button"
-              :disabled="providerLoading || gitlabSession?.state === 'pending'"
-              @click="connectGitLab('gitlab.personal_token')"
-            >
-              Use personal token
-            </button>
-          </div>
-          <span v-else class="status-pill succeeded"
-            ><span class="status-dot"></span>Connected</span
-          >
-        </article>
+        <p v-if="!providerLoading && providerConnections.length === 0" class="provider-empty">
+          No Connector connections are visible yet. Start one from the catalog tab.
+        </p>
         <article
           v-for="connection in providerConnections"
           :key="connection.connection_ref"

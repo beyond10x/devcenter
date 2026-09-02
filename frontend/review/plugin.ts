@@ -138,6 +138,49 @@ const reviewWorkflows = [
       "Evidence-backed draft planning entities and a current-state system specification.",
   },
 ];
+const reviewProviders = [
+  {
+    provider_ref: "gitlab",
+    authority: "com.gitlab",
+    vendor: "GitLab",
+    description: "Projects, branches, merge requests, issues, and pipelines.",
+    audiences: ["https://gitlab.example.test"],
+    services: ["git", "issues", "ci"],
+    operation_count: 24,
+    configurable: true,
+    setup_profiles: [
+      { auth_profile: "gitlab.oauth_user", actor: "person" },
+      { auth_profile: "gitlab.personal_token", actor: "person" },
+    ],
+  },
+  {
+    provider_ref: "slack",
+    authority: "com.slack.api",
+    vendor: "Slack",
+    description: "Channels, messages, replies, reactions, and users.",
+    audiences: ["https://slack.com/api"],
+    services: ["messaging"],
+    operation_count: 12,
+    configurable: false,
+    setup_profiles: [],
+  },
+];
+const reviewGitlabOperations = [
+  {
+    operation_ref: "git.project.list",
+    service: "git",
+    description: "List projects visible to the connected person.",
+    risk: "read_only",
+    exposed: true,
+  },
+  {
+    operation_ref: "git.merge_request.create",
+    service: "git",
+    description: "Create a merge request from an existing branch.",
+    risk: "mutating",
+    exposed: false,
+  },
+];
 
 function sendJson(response: ServerResponse, status: number, value: unknown) {
   response.statusCode = status;
@@ -215,6 +258,7 @@ export function reviewApi(): Plugin {
               subject: "review-engineer",
               email: "reviewer@example.test",
               groups: ["engineers"],
+              connectors_docs_available: true,
             });
             return;
           }
@@ -438,6 +482,40 @@ export function reviewApi(): Plugin {
           }
           if (path === "/api/connectors/claude-code" && method === "GET") {
             sendJson(response, 200, { provider: "claude-code", connected });
+            return;
+          }
+          if (path === "/api/connectors/catalog" && method === "GET") {
+            const query = (url.searchParams.get("query") ?? "").toLowerCase();
+            const providers = reviewProviders.filter(
+              (provider) =>
+                !query ||
+                provider.provider_ref.includes(query) ||
+                provider.vendor.toLowerCase().includes(query) ||
+                provider.description.toLowerCase().includes(query),
+            );
+            sendJson(response, 200, { providers, next_offset: null });
+            return;
+          }
+          if (path === "/api/connectors/catalog/gitlab" && method === "GET") {
+            sendJson(response, 200, {
+              provider: reviewProviders[0],
+              operations: reviewGitlabOperations,
+            });
+            return;
+          }
+          if (path === "/api/connections" && method === "GET") {
+            sendJson(response, 200, []);
+            return;
+          }
+          if (path === "/api/connections" && method === "POST") {
+            const submitted = await readJson(request);
+            sendJson(response, 201, {
+              connect_session_ref: `review-connect-${String(Date.now())}`,
+              integration_ref: submitted.integration_ref,
+              state: "completed",
+              expires_at_unix_ms: Date.now() + 600_000,
+              connection_ref: `connection:${String(submitted.integration_ref)}:review`,
+            });
             return;
           }
           if (path === "/api/connectors/claude-code" && method === "DELETE") {

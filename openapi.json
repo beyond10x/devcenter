@@ -2,7 +2,7 @@
   "openapi": "3.1.0",
   "info": {
     "title": "Devcenter API",
-    "version": "0.5.9",
+    "version": "0.5.10",
     "description": "Authenticated browser/BFF surface for identity, connector custody, agents, and tasks."
   },
   "paths": {
@@ -203,6 +203,94 @@
           "401": { "$ref": "#/components/responses/Problem" },
           "403": { "$ref": "#/components/responses/Problem" },
           "422": { "$ref": "#/components/responses/Problem" },
+          "503": { "$ref": "#/components/responses/Unavailable" }
+        }
+      }
+    },
+    "/api/connectors/catalog": {
+      "get": {
+        "operationId": "searchConnectorCatalog",
+        "security": [{ "browserSession": [] }, { "identityBearer": [] }],
+        "parameters": [
+          {
+            "name": "query",
+            "in": "query",
+            "schema": { "type": "string", "maxLength": 512, "default": "" }
+          },
+          {
+            "name": "offset",
+            "in": "query",
+            "schema": {
+              "type": "integer",
+              "minimum": 0,
+              "maximum": 65535,
+              "default": 0
+            }
+          },
+          {
+            "name": "limit",
+            "in": "query",
+            "schema": {
+              "type": "integer",
+              "minimum": 1,
+              "maximum": 64,
+              "default": 24
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Stable page of credential-free Connector provider summaries",
+            "headers": {
+              "Cache-Control": { "schema": { "const": "no-store" } }
+            },
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ConnectorCatalogPage"
+                }
+              }
+            }
+          },
+          "401": { "$ref": "#/components/responses/Problem" },
+          "403": { "$ref": "#/components/responses/Problem" },
+          "422": { "$ref": "#/components/responses/Problem" },
+          "502": { "$ref": "#/components/responses/Problem" },
+          "503": { "$ref": "#/components/responses/Unavailable" }
+        }
+      }
+    },
+    "/api/connectors/catalog/{provider_ref}": {
+      "get": {
+        "operationId": "describeConnectorCatalogProvider",
+        "security": [{ "browserSession": [] }, { "identityBearer": [] }],
+        "parameters": [
+          {
+            "name": "provider_ref",
+            "in": "path",
+            "required": true,
+            "schema": { "type": "string", "minLength": 1, "maxLength": 256 }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Complete credential-free Connector provider description",
+            "headers": {
+              "Cache-Control": { "schema": { "const": "no-store" } }
+            },
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ConnectorProviderDescription"
+                }
+              }
+            }
+          },
+          "401": { "$ref": "#/components/responses/Problem" },
+          "403": { "$ref": "#/components/responses/Problem" },
+          "404": { "$ref": "#/components/responses/Problem" },
+          "422": { "$ref": "#/components/responses/Problem" },
+          "502": { "$ref": "#/components/responses/Problem" },
           "503": { "$ref": "#/components/responses/Unavailable" }
         }
       }
@@ -1150,12 +1238,18 @@
       },
       "Session": {
         "type": "object",
-        "required": ["tenant_id", "subject", "groups"],
+        "required": [
+          "tenant_id",
+          "subject",
+          "groups",
+          "connectors_docs_available"
+        ],
         "properties": {
           "tenant_id": { "type": "string" },
           "subject": { "type": "string" },
           "email": { "type": ["string", "null"] },
-          "groups": { "type": "array", "items": { "type": "string" } }
+          "groups": { "type": "array", "items": { "type": "string" } },
+          "connectors_docs_available": { "type": "boolean" }
         },
         "additionalProperties": false
       },
@@ -1309,6 +1403,89 @@
             "format": "password",
             "writeOnly": true,
             "maxLength": 12288
+          }
+        },
+        "additionalProperties": false
+      },
+      "ConnectorSetupProfile": {
+        "type": "object",
+        "required": ["auth_profile", "actor"],
+        "properties": {
+          "auth_profile": { "type": "string" },
+          "actor": { "type": "string", "enum": ["person", "application"] }
+        },
+        "additionalProperties": false
+      },
+      "ConnectorProviderSummary": {
+        "type": "object",
+        "required": [
+          "provider_ref",
+          "vendor",
+          "description",
+          "audiences",
+          "services",
+          "operation_count",
+          "configurable",
+          "setup_profiles"
+        ],
+        "properties": {
+          "provider_ref": { "type": "string" },
+          "authority": { "type": ["string", "null"] },
+          "vendor": { "type": "string" },
+          "description": { "type": "string" },
+          "audiences": { "type": "array", "items": { "type": "string" } },
+          "services": { "type": "array", "items": { "type": "string" } },
+          "operation_count": { "type": "integer", "minimum": 0 },
+          "configurable": { "type": "boolean" },
+          "setup_profiles": {
+            "type": "array",
+            "items": { "$ref": "#/components/schemas/ConnectorSetupProfile" }
+          }
+        },
+        "additionalProperties": false
+      },
+      "ConnectorCatalogPage": {
+        "type": "object",
+        "required": ["providers"],
+        "properties": {
+          "providers": {
+            "type": "array",
+            "items": { "$ref": "#/components/schemas/ConnectorProviderSummary" }
+          },
+          "next_offset": { "type": ["integer", "null"], "minimum": 0 }
+        },
+        "additionalProperties": false
+      },
+      "ConnectorCatalogOperation": {
+        "type": "object",
+        "required": [
+          "operation_ref",
+          "service",
+          "description",
+          "risk",
+          "exposed"
+        ],
+        "properties": {
+          "operation_ref": { "type": "string" },
+          "service": { "type": "string" },
+          "description": { "type": "string" },
+          "risk": { "type": "string" },
+          "exposed": { "type": "boolean" }
+        },
+        "additionalProperties": false
+      },
+      "ConnectorProviderDescription": {
+        "type": "object",
+        "required": ["provider", "operations"],
+        "properties": {
+          "provider": {
+            "$ref": "#/components/schemas/ConnectorProviderSummary"
+          },
+          "operations": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/ConnectorCatalogOperation"
+            }
           }
         },
         "additionalProperties": false

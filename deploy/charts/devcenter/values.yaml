@@ -48,6 +48,10 @@ ingress:
   # audience, scope, and operator-group policy. Keep this independent from end-user setup routes.
   connectorAdminRoutes:
     enabled: false
+  # Connector-owned reference routes contain no deployment credentials, but external publication
+  # remains an explicit deployment choice.
+  connectorDocs:
+    enabled: false
 
 # Inner services are private ClusterIP workloads. Every enabled component requires an immutable
 # image digest supplied by the deployment. Environment-specific configuration uses Secret and

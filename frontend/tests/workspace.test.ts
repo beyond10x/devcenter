@@ -9,6 +9,7 @@ const session = {
   subject: "engineer-1",
   email: "engineer@example.test",
   groups: [],
+  connectors_docs_available: false,
 };
 const agent = {
   id: "agent-1",

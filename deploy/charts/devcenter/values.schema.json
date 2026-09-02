@@ -9,30 +9,75 @@
       "additionalProperties": false,
       "required": ["tenantId", "publicOrigin", "imagePullSecrets", "podLabels"],
       "properties": {
-        "tenantId": {"type": "string"},
-        "publicOrigin": {"type": "string"},
-        "imagePullSecrets": {"type": "array", "items": {"type": "string"}},
-        "podLabels": {"type": "object"}
+        "tenantId": { "type": "string" },
+        "publicOrigin": { "type": "string" },
+        "imagePullSecrets": { "type": "array", "items": { "type": "string" } },
+        "podLabels": { "type": "object" }
       }
     },
-    "devcenter": {"type": "object"},
-    "ingress": {"type": "object"},
-    "components": {"type": "object"},
-    "connectorsCatalogBundle": {"type": "object"},
-    "substrate": {"type": "object"},
-    "secrets": {"type": "object"},
+    "devcenter": { "type": "object" },
+    "ingress": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "enabled",
+        "className",
+        "host",
+        "annotations",
+        "tls",
+        "connectorSetupRoutes",
+        "connectorAdminRoutes",
+        "connectorDocs"
+      ],
+      "properties": {
+        "enabled": { "type": "boolean" },
+        "className": { "type": "string" },
+        "host": { "type": "string" },
+        "annotations": { "type": "object" },
+        "tls": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["enabled", "secretName"],
+          "properties": {
+            "enabled": { "type": "boolean" },
+            "secretName": { "type": "string" }
+          }
+        },
+        "connectorSetupRoutes": { "$ref": "#/$defs/routeToggle" },
+        "connectorAdminRoutes": { "$ref": "#/$defs/routeToggle" },
+        "connectorDocs": { "$ref": "#/$defs/routeToggle" }
+      }
+    },
+    "components": { "type": "object" },
+    "connectorsCatalogBundle": { "type": "object" },
+    "substrate": { "type": "object" },
+    "secrets": { "type": "object" },
     "networkPolicy": {
       "type": "object",
       "additionalProperties": false,
-      "required": ["enabled", "ingressNamespaceSelector", "ingressPodSelector", "allowExternalHttps", "extraEgress"],
+      "required": [
+        "enabled",
+        "ingressNamespaceSelector",
+        "ingressPodSelector",
+        "allowExternalHttps",
+        "extraEgress"
+      ],
       "properties": {
-        "enabled": {"type": "boolean"},
-        "ingressNamespaceSelector": {"type": "object"},
-        "ingressPodSelector": {"type": "object"},
-        "allowExternalHttps": {"type": "boolean"},
-        "extraEgress": {"type": "array", "items": {"type": "object"}}
+        "enabled": { "type": "boolean" },
+        "ingressNamespaceSelector": { "type": "object" },
+        "ingressPodSelector": { "type": "object" },
+        "allowExternalHttps": { "type": "boolean" },
+        "extraEgress": { "type": "array", "items": { "type": "object" } }
       }
     },
-    "serviceMonitor": {"type": "object"}
+    "serviceMonitor": { "type": "object" }
+  },
+  "$defs": {
+    "routeToggle": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["enabled"],
+      "properties": { "enabled": { "type": "boolean" } }
+    }
   }
 }

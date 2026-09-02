@@ -133,6 +133,38 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/connectors/catalog": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get: operations["searchConnectorCatalog"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/connectors/catalog/{provider_ref}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get: operations["describeConnectorCatalogProvider"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/connections": {
         parameters: {
             query?: never;
@@ -689,6 +721,7 @@ export interface components {
             subject: string;
             email?: string | null;
             groups: string[];
+            connectors_docs_available: boolean;
         };
         IdentityProvider: {
             id: string;
@@ -754,6 +787,37 @@ export interface components {
             flow_id: string;
             /** Format: password */
             code: string;
+        };
+        ConnectorSetupProfile: {
+            auth_profile: string;
+            /** @enum {string} */
+            actor: "person" | "application";
+        };
+        ConnectorProviderSummary: {
+            provider_ref: string;
+            authority?: string | null;
+            vendor: string;
+            description: string;
+            audiences: string[];
+            services: string[];
+            operation_count: number;
+            configurable: boolean;
+            setup_profiles: components["schemas"]["ConnectorSetupProfile"][];
+        };
+        ConnectorCatalogPage: {
+            providers: components["schemas"]["ConnectorProviderSummary"][];
+            next_offset?: number | null;
+        };
+        ConnectorCatalogOperation: {
+            operation_ref: string;
+            service: string;
+            description: string;
+            risk: string;
+            exposed: boolean;
+        };
+        ConnectorProviderDescription: {
+            provider: components["schemas"]["ConnectorProviderSummary"];
+            operations: components["schemas"]["ConnectorCatalogOperation"][];
         };
         StartConnection: {
             integration_ref: string;
@@ -1249,6 +1313,65 @@ export interface operations {
             401: components["responses"]["Problem"];
             403: components["responses"]["Problem"];
             422: components["responses"]["Problem"];
+            503: components["responses"]["Unavailable"];
+        };
+    };
+    searchConnectorCatalog: {
+        parameters: {
+            query?: {
+                query?: string;
+                offset?: number;
+                limit?: number;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Stable page of credential-free Connector provider summaries */
+            200: {
+                headers: {
+                    "Cache-Control"?: "no-store";
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ConnectorCatalogPage"];
+                };
+            };
+            401: components["responses"]["Problem"];
+            403: components["responses"]["Problem"];
+            422: components["responses"]["Problem"];
+            502: components["responses"]["Problem"];
+            503: components["responses"]["Unavailable"];
+        };
+    };
+    describeConnectorCatalogProvider: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                provider_ref: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Complete credential-free Connector provider description */
+            200: {
+                headers: {
+                    "Cache-Control"?: "no-store";
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ConnectorProviderDescription"];
+                };
+            };
+            401: components["responses"]["Problem"];
+            403: components["responses"]["Problem"];
+            404: components["responses"]["Problem"];
+            422: components["responses"]["Problem"];
+            502: components["responses"]["Problem"];
             503: components["responses"]["Unavailable"];
         };
     };

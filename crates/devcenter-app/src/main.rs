@@ -51,6 +51,13 @@ struct Args {
     /// Internal hosted Connectors API base.
     #[arg(long, env = "DEV_CENTER_CONNECTORS_API_BASE")]
     connectors_api_base: Option<String>,
+    /// Advertise the Connector-owned documentation routes exposed by this deployment.
+    #[arg(
+        long,
+        env = "DEV_CENTER_CONNECTORS_DOCS_AVAILABLE",
+        default_value_t = false
+    )]
+    connectors_docs_available: bool,
     /// Internal Workspace service origin.
     #[arg(long, env = "DEV_CENTER_WORKSPACE_ORIGIN")]
     workspace_origin: Option<String>,
@@ -120,6 +127,7 @@ async fn main() -> Result<()> {
             database_url: args.database_url,
             agent_platform_origin: args.agent_platform_origin,
             connectors_api_base: args.connectors_api_base,
+            connectors_docs_available: args.connectors_docs_available,
             workspace_origin: args.workspace_origin,
         })?,
     )
