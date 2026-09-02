@@ -102,3 +102,16 @@ then
   exit 1
 fi
 grep -q "devcenter.database.existingSecret is required" "$missing_database_error"
+
+helm template devcenter "$chart" \
+  --namespace devcenter \
+  --values "$values" \
+  --set ingress.enabled=true \
+  --set ingress.host=devcenter.example.invalid \
+  --set ingress.tls.enabled=false \
+  --set ingress.connectorSetupRoutes.enabled=true \
+  --set networkPolicy.enabled=false \
+  > "$rendered"
+
+grep -q 'path: /api/connectors/v1/connect-sessions' "$rendered"
+grep -q 'path: /api/connectors/v1/oauth/gitlab/callback' "$rendered"

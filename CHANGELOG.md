@@ -2,6 +2,11 @@
 
 ## Unreleased
 
+## 0.5.3 - 2026-09-02
+
+- Route public Connector setup and GitLab OAuth callbacks beneath the hosted Connector base path,
+  matching the Connector's same-origin validation and internal API contract.
+
 ## 0.5.2 - 2026-09-02
 
 - Capture Helm's complete OCI push output before extracting the immutable chart digest, including
