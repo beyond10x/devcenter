@@ -44,6 +44,10 @@ ingress:
     secretName: ""
   connectorSetupRoutes:
     enabled: false
+  # Operator CLI routes are sent directly to Connectors, which enforces its own exact Identity
+  # audience, scope, and operator-group policy. Keep this independent from end-user setup routes.
+  connectorAdminRoutes:
+    enabled: false
 
 # Inner services are private ClusterIP workloads. Every enabled component requires an immutable
 # image digest supplied by the deployment. Environment-specific configuration uses Secret and

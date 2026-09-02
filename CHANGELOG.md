@@ -1,5 +1,12 @@
 # Changelog
 
+## 0.5.9 - 2026-09-02
+
+- Compose Connectors 0.4.3 so hosted operators can inspect Integration readiness and supply
+  credential values through the Identity-protected administration API.
+- Expose only the `/api/connectors/v1/admin` prefix as a separately enabled ingress route, leaving
+  Connectors responsible for its exact administrative audience, scope, and operator-group checks.
+
 ## 0.5.8 - 2026-09-02
 
 - Publish executable Todo lifetime and scope shapes to agents, including the required future RFC

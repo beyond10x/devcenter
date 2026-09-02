@@ -110,8 +110,10 @@ helm template devcenter "$chart" \
   --set ingress.host=devcenter.example.invalid \
   --set ingress.tls.enabled=false \
   --set ingress.connectorSetupRoutes.enabled=true \
+  --set ingress.connectorAdminRoutes.enabled=true \
   --set networkPolicy.enabled=false \
   > "$rendered"
 
 grep -q 'path: /api/connectors/v1/connect-sessions' "$rendered"
 grep -q 'path: /api/connectors/v1/oauth/gitlab/callback' "$rendered"
+grep -q 'path: /api/connectors/v1/admin' "$rendered"

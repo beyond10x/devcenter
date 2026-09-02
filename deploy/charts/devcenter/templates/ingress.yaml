@@ -41,6 +41,12 @@ spec:
             backend:
               service: {name: {{ include "devcenter.fullname" . }}-connectors, port: {name: http}}
           {{- end }}
+          {{- if and .Values.ingress.connectorAdminRoutes.enabled (index .Values.components "connectors").enabled }}
+          - path: /api/connectors/v1/admin
+            pathType: Prefix
+            backend:
+              service: {name: {{ include "devcenter.fullname" . }}-connectors, port: {name: http}}
+          {{- end }}
           - path: /
             pathType: Prefix
             backend:
