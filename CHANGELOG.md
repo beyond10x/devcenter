@@ -1,6 +1,12 @@
 # Changelog
 
-## Unreleased
+## 0.5.4 - 2026-09-02
+
+- Let signed-in people inspect and resolve exact agent Connector calls while the BFF keeps
+  short-lived approval authority and one-use evidence out of the browser.
+- Ship a dedicated Devcenter Connector composition which registers the generated Todo factory,
+  applies only deployment-owned operation policy, and persists service events through Eventlog's
+  PostgreSQL adapter.
 
 ## 0.5.3 - 2026-09-02
 

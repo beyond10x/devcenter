@@ -2,7 +2,7 @@
   "openapi": "3.1.0",
   "info": {
     "title": "Devcenter API",
-    "version": "0.5.3",
+    "version": "0.5.4",
     "description": "Authenticated browser/BFF surface for identity, connector custody, agents, and tasks."
   },
   "paths": {
@@ -493,6 +493,60 @@
             }
           },
           "401": { "$ref": "#/components/responses/Problem" }
+        }
+      }
+    },
+    "/api/tasks/{task_id}/approvals": {
+      "get": {
+        "operationId": "listTaskApprovals",
+        "security": [{ "browserSession": [] }, { "identityBearer": [] }],
+        "parameters": [{ "$ref": "#/components/parameters/TaskId" }],
+        "responses": {
+          "200": {
+            "description": "Exact Connector calls awaiting this person's decision",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "array",
+                  "items": { "$ref": "#/components/schemas/TaskApproval" }
+                }
+              }
+            }
+          },
+          "401": { "$ref": "#/components/responses/Problem" },
+          "403": { "$ref": "#/components/responses/Problem" }
+        }
+      }
+    },
+    "/api/tasks/{task_id}/approvals/{approval_id}": {
+      "post": {
+        "operationId": "resolveTaskApproval",
+        "security": [{ "browserSession": [] }, { "identityBearer": [] }],
+        "parameters": [
+          { "$ref": "#/components/parameters/TaskId" },
+          { "$ref": "#/components/parameters/TaskApprovalId" }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": { "$ref": "#/components/schemas/TaskApprovalDecision" }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "The exact pending call accepted this human decision",
+            "content": {
+              "application/json": {
+                "schema": { "$ref": "#/components/schemas/TaskApproval" }
+              }
+            }
+          },
+          "401": { "$ref": "#/components/responses/Problem" },
+          "403": { "$ref": "#/components/responses/Problem" },
+          "404": { "$ref": "#/components/responses/Problem" },
+          "409": { "$ref": "#/components/responses/Problem" }
         }
       }
     },
@@ -1040,6 +1094,12 @@
       },
       "TaskId": {
         "name": "task_id",
+        "in": "path",
+        "required": true,
+        "schema": { "type": "string" }
+      },
+      "TaskApprovalId": {
+        "name": "approval_id",
         "in": "path",
         "required": true,
         "schema": { "type": "string" }
@@ -1704,6 +1764,76 @@
           "attempt_id": { "type": "string" },
           "output": { "type": ["string", "null"] }
         }
+      },
+      "ConnectorOwnerContext": {
+        "type": "object",
+        "required": [
+          "tenant_id",
+          "agent_id",
+          "agent_revision",
+          "authority_snapshot_id",
+          "authority_snapshot_sha256"
+        ],
+        "properties": {
+          "tenant_id": { "type": "string" },
+          "agent_id": { "type": "string" },
+          "agent_revision": { "type": "integer", "minimum": 1 },
+          "authority_snapshot_id": { "type": "string" },
+          "authority_snapshot_sha256": {
+            "type": "string",
+            "pattern": "^[0-9a-f]{64}$"
+          }
+        },
+        "additionalProperties": false
+      },
+      "TaskApproval": {
+        "type": "object",
+        "required": [
+          "id",
+          "task_id",
+          "attempt_id",
+          "call_id",
+          "tool_name",
+          "operation_ref",
+          "connection_ref",
+          "description_ref",
+          "input",
+          "context",
+          "requested_at_ms"
+        ],
+        "properties": {
+          "id": { "type": "string" },
+          "task_id": { "type": "string" },
+          "attempt_id": { "type": "string" },
+          "call_id": { "type": "string" },
+          "tool_name": { "type": "string" },
+          "operation_ref": { "type": "string" },
+          "connection_ref": { "type": "string" },
+          "description_ref": { "type": "string" },
+          "input": true,
+          "context": { "$ref": "#/components/schemas/ConnectorOwnerContext" },
+          "requested_at_ms": { "type": "integer", "minimum": 0 }
+        },
+        "additionalProperties": false
+      },
+      "TaskApprovalDecision": {
+        "oneOf": [
+          {
+            "type": "object",
+            "required": ["decision"],
+            "properties": { "decision": { "const": "approve" } },
+            "additionalProperties": false
+          },
+          {
+            "type": "object",
+            "required": ["decision", "reason"],
+            "properties": {
+              "decision": { "const": "deny" },
+              "reason": { "type": "string", "minLength": 1, "maxLength": 4096 }
+            },
+            "additionalProperties": false
+          }
+        ]
       }
     }
   }

@@ -7,8 +7,8 @@ the included license; application and deployment CLI container images remain pri
 does not publish native binary archives.
 
 The repository deliberately contains no real deployment values. A deployment supplies its tenant,
-hosts, image mirrors, Identity configuration, connector catalogue bundle, storage classes, and
-Secret references separately.
+hosts, image mirrors, Identity configuration, generated-service deployment overlays, connector
+catalogue bundle, storage classes, and Secret references separately.
 
 ## Run locally
 
@@ -75,7 +75,11 @@ The browser receives only an opaque, Secure, HttpOnly session cookie. `Connect C
 Connector-owned OAuth2 PKCE flow: Devcenter retains only an opaque flow id in browser memory while
 the user authorizes, and Connectors owns provider exchange, refresh, and credential custody. Agent
 Platform receives an attempt-bound lease and Harness redeems it only at the provider request
-boundary. Identity remains provider- and service-agnostic throughout.
+boundary. Agent Connector calls use separate attempt-bound invoke authority. If a call requires a
+human decision, the BFF obtains short-lived approval authority, asks Connectors to seal the exact
+operation, connection, description lease, and input, and hands the one-use proof directly to Agent
+Platform. Neither credential reaches the browser. Identity remains provider- and service-agnostic
+throughout.
 
 `DEV_CENTER_IDENTITY_PROVIDERS` contains only opaque Identity-owned IDs and display labels. With
 zero entries, Identity keeps its existing selection behavior; with one, `/auth/sso/start` remains a
@@ -87,9 +91,10 @@ immutable revision, client metadata, pending approval, and audit-reference recor
 requires hosted values to inject the PostgreSQL URL from `devcenter.database.existingSecret`; it is
 never rendered into a ConfigMap. A publication URL is `/mcp/{opaque_id}` and its exact RFC 9728 document is
 `/.well-known/oauth-protected-resource/mcp/{opaque_id}`. Revoked IDs are terminal and are never
-reused. The production MCP bearer and invocation path stays fail-closed until released Identity,
-Agent Platform, and Connectors clients expose exact-resource OAuth claims, workload exchange,
-capability-profile retrieval, grant re-evaluation, and one-time approval issuance.
+reused. The production MCP bearer and invocation path stays fail-closed until released Identity
+clients expose exact-resource OAuth claims and workload exchange. Agent task approvals use the
+released Agent Platform and Connectors seams and remain distinct from MCP publication
+authorization.
 
 ## Deployment CLI
 
@@ -98,6 +103,13 @@ upgrades, verifies the result, and rolls back to an explicit revision. It is dis
 multi-arch Linux container, including `linux/arm64` for Docker on Apple Silicon.
 
 The public chart is released as `oci://ghcr.io/beyond10x/charts/devcenter`.
+
+The release also publishes `ghcr.io/beyond10x/devcenter-connectors`. That component composes the
+generated Todo Connector factory with the ordinary hosted Connectors runtime. A deployment chooses
+the exact operation exposure, risk, approval posture, and Grants in a strict value-free overlay;
+the component chooses Eventlog's PostgreSQL adapter through a Secret-backed database URL. Domain
+commands, validation, projections, read-your-writes behavior, and Connector dispatch remain
+generated or SDK-owned rather than being reimplemented in Devcenter.
 
 Secrets is an inner service of that composition, not a standalone chart dependency. The chart
 accepts a pre-created versioned keyring Secret and a pre-created database Secret. For development it

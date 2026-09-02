@@ -5,7 +5,7 @@ version = 4
 [[package]]
 name = "agent-platform-client"
 version = "0.5.0"
-source = "git+ssh://git@github.com/beyond10x/agent-platform.git?tag=0.5.0#3be3b519292562f386d4f4471d904b8dd05cfecf"
+source = "git+ssh://git@github.com/beyond10x/agent-platform.git?rev=b7dc199b7b5b2e97b84b074f2f825140775083f2#b7dc199b7b5b2e97b84b074f2f825140775083f2"
 dependencies = [
  "agent-platform-core",
  "reqwest 0.13.4",
@@ -18,7 +18,7 @@ dependencies = [
 [[package]]
 name = "agent-platform-core"
 version = "0.5.0"
-source = "git+ssh://git@github.com/beyond10x/agent-platform.git?tag=0.5.0#3be3b519292562f386d4f4471d904b8dd05cfecf"
+source = "git+ssh://git@github.com/beyond10x/agent-platform.git?rev=b7dc199b7b5b2e97b84b074f2f825140775083f2#b7dc199b7b5b2e97b84b074f2f825140775083f2"
 dependencies = [
  "schemars 0.8.22",
  "serde",
@@ -355,7 +355,7 @@ dependencies = [
 [[package]]
 name = "connector-state"
 version = "0.4.0"
-source = "git+ssh://git@github.com/beyond10x/connectors.git?tag=v0.4.0#376c5f40db81b955e286af5521f8f95ed38e2754"
+source = "git+ssh://git@github.com/beyond10x/connectors.git?rev=8100d9bfbfe39c844dc7c0226db94d44d24cb55e#8100d9bfbfe39c844dc7c0226db94d44d24cb55e"
 dependencies = [
  "thiserror",
 ]
@@ -363,7 +363,7 @@ dependencies = [
 [[package]]
 name = "connectors-client"
 version = "0.4.0"
-source = "git+ssh://git@github.com/beyond10x/connectors.git?tag=v0.4.0#376c5f40db81b955e286af5521f8f95ed38e2754"
+source = "git+ssh://git@github.com/beyond10x/connectors.git?rev=8100d9bfbfe39c844dc7c0226db94d44d24cb55e#8100d9bfbfe39c844dc7c0226db94d44d24cb55e"
 dependencies = [
  "protocol",
  "reqwest 0.12.28",
@@ -484,7 +484,7 @@ dependencies = [
 
 [[package]]
 name = "devcenter-app"
-version = "0.5.3"
+version = "0.5.4"
 dependencies = [
  "anyhow",
  "axum",
@@ -498,7 +498,7 @@ dependencies = [
 
 [[package]]
 name = "devcenter-auth"
-version = "0.5.3"
+version = "0.5.4"
 dependencies = [
  "identity-client",
  "tokio",
@@ -506,7 +506,7 @@ dependencies = [
 
 [[package]]
 name = "devcenter-core"
-version = "0.5.3"
+version = "0.5.4"
 dependencies = [
  "devcenter-auth",
  "serde",
@@ -514,7 +514,7 @@ dependencies = [
 
 [[package]]
 name = "devcenter-http"
-version = "0.5.3"
+version = "0.5.4"
 dependencies = [
  "agent-platform-client",
  "agent-platform-core",
@@ -544,7 +544,7 @@ dependencies = [
 
 [[package]]
 name = "devcenter-mcp"
-version = "0.5.3"
+version = "0.5.4"
 dependencies = [
  "serde",
  "serde_json",
@@ -553,7 +553,7 @@ dependencies = [
 
 [[package]]
 name = "devcenter-store"
-version = "0.5.3"
+version = "0.5.4"
 dependencies = [
  "devcenter-mcp",
  "serde",
@@ -566,7 +566,7 @@ dependencies = [
 
 [[package]]
 name = "devcenter-web-assets"
-version = "0.5.3"
+version = "0.5.4"
 dependencies = [
  "mime_guess",
  "rust-embed",
@@ -574,7 +574,7 @@ dependencies = [
 
 [[package]]
 name = "devcenterctl"
-version = "0.5.3"
+version = "0.5.4"
 dependencies = [
  "anyhow",
  "clap",
@@ -623,7 +623,7 @@ dependencies = [
 [[package]]
 name = "domain"
 version = "0.4.0"
-source = "git+ssh://git@github.com/beyond10x/connectors.git?tag=v0.4.0#376c5f40db81b955e286af5521f8f95ed38e2754"
+source = "git+ssh://git@github.com/beyond10x/connectors.git?rev=8100d9bfbfe39c844dc7c0226db94d44d24cb55e#8100d9bfbfe39c844dc7c0226db94d44d24cb55e"
 dependencies = [
  "async-trait",
  "connector-state",
@@ -1569,7 +1569,7 @@ dependencies = [
 [[package]]
 name = "protocol"
 version = "0.4.0"
-source = "git+ssh://git@github.com/beyond10x/connectors.git?tag=v0.4.0#376c5f40db81b955e286af5521f8f95ed38e2754"
+source = "git+ssh://git@github.com/beyond10x/connectors.git?rev=8100d9bfbfe39c844dc7c0226db94d44d24cb55e#8100d9bfbfe39c844dc7c0226db94d44d24cb55e"
 dependencies = [
  "domain",
  "schemars 1.2.2",

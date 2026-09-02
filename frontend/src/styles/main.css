@@ -218,6 +218,7 @@ a {
 .status-pill.running,
 .status-pill.accepted,
 .status-pill.submitting,
+.status-pill.awaiting_approval,
 .status-pill.reconnecting {
   color: #85600f;
   background: #fbf3dd;
@@ -1347,6 +1348,83 @@ a {
 .run-button {
   min-width: 7.4rem;
 }
+.task-approvals-card {
+  margin: 0 1rem 1rem;
+  overflow: hidden;
+  background: #fffaf0;
+  border: 1px solid #ead8ac;
+  border-radius: 0.78rem;
+}
+.task-approvals-card > header,
+.task-approval-heading,
+.task-approval footer {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 1rem;
+}
+.task-approvals-card > header {
+  padding: 0.78rem 0.9rem;
+  color: #5d4516;
+  border-bottom: 1px solid #eadfca;
+}
+.task-approvals-card > header > div {
+  display: flex;
+  align-items: center;
+  gap: 0.55rem;
+}
+.task-approvals-card h3,
+.task-approvals-card p {
+  margin: 0;
+}
+.task-approvals-card h3 {
+  font-size: 0.78rem;
+}
+.task-approvals-card header p,
+.task-approvals-card header > span,
+.task-approval span,
+.task-approval small,
+.task-approval footer > span {
+  color: #796740;
+  font-size: 0.59rem;
+}
+.task-approval {
+  padding: 0.85rem 0.9rem;
+}
+.task-approval + .task-approval {
+  border-top: 1px solid #eadfca;
+}
+.task-approval-heading > div {
+  display: grid;
+  gap: 0.15rem;
+}
+.task-approval-heading strong {
+  font-size: 0.72rem;
+}
+.task-approval pre {
+  max-height: 14rem;
+  padding: 0.7rem;
+  overflow: auto;
+  color: #e8efed;
+  background: #19231f;
+  border-radius: 0.5rem;
+  font:
+    0.64rem/1.55 ui-monospace,
+    monospace;
+  white-space: pre-wrap;
+}
+.task-approval footer > div {
+  display: flex;
+  gap: 0.45rem;
+}
+.task-approval-error {
+  display: flex;
+  align-items: center;
+  gap: 0.45rem;
+  padding: 0 0.9rem 0.85rem;
+  color: #95352d;
+  font-size: 0.64rem;
+}
 .run-card {
   margin: 0 1rem 1rem;
   overflow: hidden;
@@ -1376,6 +1454,7 @@ a {
 .run-running .run-light,
 .run-accepted .run-light,
 .run-submitting .run-light,
+.run-awaiting_approval .run-light,
 .run-reconnecting .run-light {
   background: #e3a838;
   box-shadow: 0 0 0 4px rgb(227 168 56 / 10%);

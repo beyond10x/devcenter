@@ -54,6 +54,9 @@ jobs:
             identity
             agent-platform
             connectors
+            eventlog
+            service-sdk
+            todo
       - name: Authenticate Cargo git dependencies
         env:
           TOKEN: ${{ steps.app-token.outputs.token }}
@@ -77,6 +80,11 @@ jobs:
       - run: cargo fmt --all --check
       - run: cargo clippy --workspace --all-targets --locked -- -D warnings
       - run: cargo test --workspace --locked
+      - name: Gate composed Connectors workspace
+        run: |
+          cargo fmt --manifest-path crates/devcenter-connectors/Cargo.toml --all --check
+          cargo clippy --manifest-path crates/devcenter-connectors/Cargo.toml --all-targets --locked -- -D warnings
+          cargo test --manifest-path crates/devcenter-connectors/Cargo.toml --locked
       - run: bash ci/check-version-consistency.sh
       - run: helm lint deploy/charts/devcenter --values deploy/charts/devcenter/ci/test-values.yaml
       - run: bash ci/check-chart-rollouts.sh
@@ -90,12 +98,14 @@ jobs:
           trap 'rm -f "$marker_file"' EXIT
           printf '%s\n' "$CONFIDENTIAL_MARKERS" > "$marker_file"
           cargo run --locked --bin devcenterctl -- leak-check --root . --deny-file "$marker_file"
-      - name: Build both OCI targets
+      - name: Build all OCI targets
         env:
           TOKEN: ${{ steps.app-token.outputs.token }}
         run: |
           docker build --secret id=github_token,env=TOKEN --target server --tag devcenter:gate .
+          docker build --secret id=github_token,env=TOKEN --target connectors --tag devcenter-connectors:gate .
           docker build --secret id=github_token,env=TOKEN --target ctl --tag devcenterctl:gate .
+          docker run --rm devcenter-connectors:gate --version
           docker run --rm devcenterctl:gate --version
       - name: Smoke-test documented server container
         run: |

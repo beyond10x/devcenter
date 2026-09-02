@@ -61,6 +61,9 @@ jobs:
             identity
             agent-platform
             connectors
+            eventlog
+            service-sdk
+            todo
       - uses: docker/setup-buildx-action@8d2750c68a42422c14e847fe6c8ac0403b4cbd6f # v3
       - uses: docker/login-action@c94ce9fb468520275223c153574b00df6fe4bcc9 # v3
         with:
@@ -97,6 +100,21 @@ jobs:
           secrets: |
             github_token=${{ steps.app-token.outputs.token }}
           tags: ghcr.io/beyond10x/devcenterctl:${{ github.ref_name }}-${{ matrix.arch }}
+      - name: Build and publish composed Connectors image
+        uses: docker/build-push-action@10e90e3645eae34f1e60eeb005ba3a3d33f178e8 # v6
+        with:
+          context: .
+          target: connectors
+          platforms: ${{ matrix.platform }}
+          push: true
+          provenance: mode=max
+          sbom: true
+          cache-from: type=gha,scope=devcenter-connectors-release-${{ matrix.arch }}
+          cache-to: type=gha,mode=max,scope=devcenter-connectors-release-${{ matrix.arch }}
+          build-args: SOURCE_SHA=${{ github.sha }}
+          secrets: |
+            github_token=${{ steps.app-token.outputs.token }}
+          tags: ghcr.io/beyond10x/devcenter-connectors:${{ github.ref_name }}-${{ matrix.arch }}
 
   image-manifests:
     needs: images
@@ -104,6 +122,7 @@ jobs:
     outputs:
       server-digest: ${{ steps.digests.outputs.server }}
       ctl-digest: ${{ steps.digests.outputs.ctl }}
+      connectors-digest: ${{ steps.digests.outputs.connectors }}
     steps:
       - uses: docker/setup-buildx-action@8d2750c68a42422c14e847fe6c8ac0403b4cbd6f # v3
       - uses: docker/login-action@c94ce9fb468520275223c153574b00df6fe4bcc9 # v3
@@ -121,6 +140,10 @@ jobs:
             --tag "ghcr.io/beyond10x/devcenterctl:${GITHUB_REF_NAME}" \
             "ghcr.io/beyond10x/devcenterctl:${GITHUB_REF_NAME}-amd64" \
             "ghcr.io/beyond10x/devcenterctl:${GITHUB_REF_NAME}-arm64"
+          docker buildx imagetools create \
+            --tag "ghcr.io/beyond10x/devcenter-connectors:${GITHUB_REF_NAME}" \
+            "ghcr.io/beyond10x/devcenter-connectors:${GITHUB_REF_NAME}-amd64" \
+            "ghcr.io/beyond10x/devcenter-connectors:${GITHUB_REF_NAME}-arm64"
       - uses: sigstore/cosign-installer@6f9f17788090df1f26f669e9d70d6ae9567deba6 # v4.1.2
       - name: Sign immutable multi-arch images
         id: digests
@@ -131,18 +154,25 @@ jobs:
           ctl_digest=$(docker buildx imagetools inspect \
             "ghcr.io/beyond10x/devcenterctl:${GITHUB_REF_NAME}" \
             --format '{{json .Manifest.Digest}}' | tr -d '"')
+          connectors_digest=$(docker buildx imagetools inspect \
+            "ghcr.io/beyond10x/devcenter-connectors:${GITHUB_REF_NAME}" \
+            --format '{{json .Manifest.Digest}}' | tr -d '"')
           case "$server_digest" in sha256:*) ;; *) exit 1 ;; esac
           case "$ctl_digest" in sha256:*) ;; *) exit 1 ;; esac
+          case "$connectors_digest" in sha256:*) ;; *) exit 1 ;; esac
           cosign sign --yes "ghcr.io/beyond10x/devcenter@${server_digest}"
           cosign sign --yes "ghcr.io/beyond10x/devcenterctl@${ctl_digest}"
+          cosign sign --yes "ghcr.io/beyond10x/devcenter-connectors@${connectors_digest}"
           echo "server=${server_digest}" >> "$GITHUB_OUTPUT"
           echo "ctl=${ctl_digest}" >> "$GITHUB_OUTPUT"
+          echo "connectors=${connectors_digest}" >> "$GITHUB_OUTPUT"
       - name: Verify private package visibility
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
           test "$(gh api /orgs/beyond10x/packages/container/devcenter --jq .visibility)" = private
           test "$(gh api /orgs/beyond10x/packages/container/devcenterctl --jq .visibility)" = private
+          test "$(gh api /orgs/beyond10x/packages/container/devcenter-connectors --jq .visibility)" = private
 
   release-candidate:
     needs: [validate-version, image-manifests]
@@ -162,6 +192,9 @@ jobs:
             identity
             agent-platform
             connectors
+            eventlog
+            service-sdk
+            todo
       - name: Authenticate Cargo git dependencies
         env:
           TOKEN: ${{ steps.app-token.outputs.token }}
@@ -183,6 +216,7 @@ jobs:
       - name: Validate the complete release candidate
         env:
           SERVER_DIGEST: ${{ needs.image-manifests.outputs.server-digest }}
+          CONNECTORS_DIGEST: ${{ needs.image-manifests.outputs.connectors-digest }}
         run: |
           candidate=$(mktemp -d)
           printf '%s\n' \
@@ -195,6 +229,12 @@ jobs:
             "    digest: ${SERVER_DIGEST}" \
             '  database:' \
             '    existingSecret: release-candidate-database' \
+            'components:' \
+            '  connectors:' \
+            '    enabled: true' \
+            '    image:' \
+            '      repository: ghcr.io/beyond10x/devcenter-connectors' \
+            "      digest: ${CONNECTORS_DIGEST}" \
             'networkPolicy:' \
             '  enabled: false' > "$candidate/values.yaml"
           printf '%s\n' \
@@ -206,7 +246,11 @@ jobs:
             '[images.devcenter]' \
             'reference = "ghcr.io/beyond10x/devcenter"' \
             "version = \"${GITHUB_REF_NAME}\"" \
-            "digest = \"${SERVER_DIGEST}\"" > "$candidate/deployment.lock.toml"
+            "digest = \"${SERVER_DIGEST}\"" \
+            '[images.connectors]' \
+            'reference = "ghcr.io/beyond10x/devcenter-connectors"' \
+            "version = \"${GITHUB_REF_NAME}\"" \
+            "digest = \"${CONNECTORS_DIGEST}\"" > "$candidate/deployment.lock.toml"
           helm lint deploy/charts/devcenter --values "$candidate/values.yaml"
           cargo run --locked --bin devcenterctl -- deployment validate \
             --release devcenter \
@@ -215,7 +259,8 @@ jobs:
             --version "$GITHUB_REF_NAME" \
             --values "$candidate/values.yaml" \
             --lock "$candidate/deployment.lock.toml" \
-            --require-component devcenter
+            --require-component devcenter \
+            --require-component connectors
 
   chart:
     needs: release-candidate
@@ -258,6 +303,7 @@ jobs:
         env:
           SERVER_DIGEST: ${{ needs.image-manifests.outputs.server-digest }}
           CTL_DIGEST: ${{ needs.image-manifests.outputs.ctl-digest }}
+          CONNECTORS_DIGEST: ${{ needs.image-manifests.outputs.connectors-digest }}
           CHART_DIGEST: ${{ needs.chart.outputs.digest }}
         run: |
           jq --null-input \
@@ -265,8 +311,9 @@ jobs:
             --arg commit "$GITHUB_SHA" \
             --arg server "$SERVER_DIGEST" \
             --arg ctl "$CTL_DIGEST" \
+            --arg connectors "$CONNECTORS_DIGEST" \
             --arg chart "$CHART_DIGEST" \
-            '{schema:1, version:$version, source_commit:$commit, artifacts:{devcenter:$server, devcenterctl:$ctl, chart:$chart}}' \
+            '{schema:1, version:$version, source_commit:$commit, artifacts:{devcenter:$server, devcenterctl:$ctl, devcenter_connectors:$connectors, chart:$chart}}' \
             > release-manifest.json
       - uses: softprops/action-gh-release@3bb12739c298aeb8a4eeaf626c5b8d85266b0e65 # v2
         with:

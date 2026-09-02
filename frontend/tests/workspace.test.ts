@@ -164,4 +164,105 @@ describe("workspace store", () => {
     expect(workspace.draftFor("agent-1")).toBe("");
     vi.unstubAllGlobals();
   });
+
+  it("shows the exact pending call and sends only the human decision", async () => {
+    class ApprovalEventSource {
+      static readonly CLOSED = 2;
+      readonly CLOSED = 2;
+      readyState = 1;
+      listeners = new Map<string, (event: MessageEvent<string>) => void>();
+      onerror: (() => void) | null = null;
+      constructor(readonly url: string) {
+        queueMicrotask(() => {
+          this.listeners.get("task")?.(
+            new MessageEvent("task", {
+              data: JSON.stringify({
+                event: {
+                  kind: "approval_requested",
+                  approval_id: "approval-1",
+                  call_id: "call-1",
+                  operation_ref: "todo.item.create",
+                  connection_ref: "todo",
+                },
+              }),
+            }),
+          );
+        });
+      }
+      addEventListener(type: string, listener: EventListener) {
+        this.listeners.set(type, listener);
+      }
+      close() {
+        this.readyState = ApprovalEventSource.CLOSED;
+      }
+    }
+    vi.stubGlobal("EventSource", ApprovalEventSource);
+    server.use(
+      http.post("/api/agents/agent-1/tasks", () =>
+        HttpResponse.json(
+          { id: "task-1", agent_id: "agent-1", status: "accepted", attempt_id: "attempt-1" },
+          { status: 202 },
+        ),
+      ),
+      http.get("/api/tasks/task-1/approvals", () =>
+        HttpResponse.json([
+          {
+            id: "approval-1",
+            task_id: "task-1",
+            attempt_id: "attempt-1",
+            call_id: "call-1",
+            tool_name: "todo_item_create",
+            operation_ref: "todo.item.create",
+            connection_ref: "todo",
+            description_ref: "description-1",
+            input: { list_id: "list-1", title: "Ship it" },
+            context: {
+              tenant_id: "tenant-a",
+              agent_id: "agent-1",
+              agent_revision: 1,
+              authority_snapshot_id: "request-1",
+              authority_snapshot_sha256: "a".repeat(64),
+            },
+            requested_at_ms: 1,
+          },
+        ]),
+      ),
+      http.post("/api/tasks/task-1/approvals/approval-1", async ({ request }) => {
+        expect(await request.json()).toEqual({ decision: "approve" });
+        return HttpResponse.json({
+          id: "approval-1",
+          task_id: "task-1",
+          attempt_id: "attempt-1",
+          call_id: "call-1",
+          tool_name: "todo_item_create",
+          operation_ref: "todo.item.create",
+          connection_ref: "todo",
+          description_ref: "description-1",
+          input: { list_id: "list-1", title: "Ship it" },
+          context: {
+            tenant_id: "tenant-a",
+            agent_id: "agent-1",
+            agent_revision: 1,
+            authority_snapshot_id: "request-1",
+            authority_snapshot_sha256: "a".repeat(64),
+          },
+          requested_at_ms: 1,
+        });
+      }),
+    );
+    const workspace = useWorkspaceStore();
+    workspace.setDraft("agent-1", "Add the release Todo.");
+    await workspace.submitTask("agent-1");
+    await vi.waitFor(() => {
+      expect(workspace.runFor("agent-1").approvals?.[0]?.input).toEqual({
+        list_id: "list-1",
+        title: "Ship it",
+      });
+    });
+    expect(workspace.runFor("agent-1").status).toBe("awaiting_approval");
+    await workspace.resolveTaskApproval("agent-1", "approval-1", "approve");
+    expect(workspace.runFor("agent-1").approvals).toEqual([]);
+    expect(workspace.runFor("agent-1").status).toBe("running");
+    vi.unstubAllGlobals();
+  });
 });

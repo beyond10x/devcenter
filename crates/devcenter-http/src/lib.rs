@@ -7,12 +7,12 @@ use std::time::{SystemTime, UNIX_EPOCH};
 
 use agent_platform_client::{
     ActivateRevision, AgentId, AgentPlatformClient, ClientError as AgentPlatformError, CreateAgent,
-    CreateCapabilityProfile as PlatformCreateCapabilityProfile, RevisionSpec, SubmitTask, TaskId,
-    UpdateCapabilityProfile as PlatformUpdateCapabilityProfile,
+    CreateCapabilityProfile as PlatformCreateCapabilityProfile, PendingApproval, ResolveApproval,
+    RevisionSpec, SubmitTask, TaskId, UpdateCapabilityProfile as PlatformUpdateCapabilityProfile,
 };
 use agent_platform_core::{
-    CapabilityMapping, CapabilityProfileId, ConnectorApprovalPosture, ConnectorConnectionSummary,
-    ConnectorEffectClass, ConnectorOperationDescription,
+    ApprovalId, CapabilityMapping, CapabilityProfileId, ConnectorApprovalPosture,
+    ConnectorConnectionSummary, ConnectorEffectClass, ConnectorOperationDescription,
 };
 use axum::body::Body;
 use axum::extract::{Path, Query, State};
@@ -24,7 +24,7 @@ use base64::Engine as _;
 use base64::engine::general_purpose::URL_SAFE_NO_PAD;
 use connectors_client::{ClientError as ConnectorsError, HostedClient};
 use connectors_protocol::{
-    connection,
+    approval, connection,
     operation::{self, OwnerContext},
 };
 use devcenter_auth::{AuthenticationError, Principal};
@@ -46,6 +46,8 @@ const MAX_PROVIDER_CREDENTIAL_BYTES: usize = 64 * 1024;
 const CONNECTORS_AUDIENCE: &str = "urn:b10x:connectors";
 const CONNECTORS_SELF_SCOPE: &str = "connectors.connections.self";
 const CONNECTORS_CATALOG_SCOPE: &str = "connectors.catalog.read";
+const CONNECTORS_APPROVAL_SCOPE: &str = "connectors.approvals.issue";
+const CONNECTOR_APPROVAL_TTL_SECONDS: u64 = 120;
 
 #[derive(Clone)]
 struct AppState {
@@ -216,6 +218,11 @@ fn agent_routes() -> Router<AppState> {
         .route("/api/agents/{agent_id}/tasks", post(submit_prompt))
         .route("/api/tasks/{task_id}", get(get_task))
         .route("/api/tasks/{task_id}/events", get(task_events))
+        .route("/api/tasks/{task_id}/approvals", get(list_task_approvals))
+        .route(
+            "/api/tasks/{task_id}/approvals/{approval_id}",
+            post(resolve_task_approval),
+        )
 }
 
 fn project_routes() -> Router<AppState> {
@@ -1529,6 +1536,145 @@ async fn get_task(
     }
 }
 
+async fn list_task_approvals(
+    State(state): State<AppState>,
+    headers: HeaderMap,
+    Path(task_id): Path<String>,
+) -> Response {
+    let authenticated = match authenticate(&state, &headers, false).await {
+        Ok(authenticated) => authenticated,
+        Err(response) => return response,
+    };
+    let Some(client) = state.agent_platform.as_ref() else {
+        return unavailable("agent_platform_not_configured");
+    };
+    let Ok(task_id) = TaskId::new(task_id) else {
+        return problem(StatusCode::UNPROCESSABLE_ENTITY, "task_id_invalid");
+    };
+    match client
+        .list_task_approvals(authenticated.authorization.as_str(), &task_id)
+        .await
+    {
+        Ok(approvals) => confidential_json(approvals),
+        Err(error) => agent_platform_error(&error),
+    }
+}
+
+#[derive(Deserialize)]
+#[serde(deny_unknown_fields)]
+struct TaskApprovalDecision {
+    decision: TaskApprovalChoice,
+    reason: Option<String>,
+}
+
+#[derive(Deserialize)]
+#[serde(rename_all = "snake_case")]
+enum TaskApprovalChoice {
+    Approve,
+    Deny,
+}
+
+async fn resolve_task_approval(
+    State(state): State<AppState>,
+    headers: HeaderMap,
+    Path((task_id, approval_id)): Path<(String, String)>,
+    Json(decision): Json<TaskApprovalDecision>,
+) -> Response {
+    let authenticated = match authenticate(&state, &headers, true).await {
+        Ok(authenticated) => authenticated,
+        Err(response) => return response,
+    };
+    let Some(client) = state.agent_platform.as_ref() else {
+        return unavailable("agent_platform_not_configured");
+    };
+    let Ok(task_id) = TaskId::new(task_id) else {
+        return problem(StatusCode::UNPROCESSABLE_ENTITY, "task_id_invalid");
+    };
+    let Ok(approval_id) = ApprovalId::new(approval_id) else {
+        return problem(StatusCode::UNPROCESSABLE_ENTITY, "task_approval_id_invalid");
+    };
+    let pending = match client
+        .list_task_approvals(authenticated.authorization.as_str(), &task_id)
+        .await
+    {
+        Ok(approvals) => approvals
+            .into_iter()
+            .find(|approval| approval.id == approval_id),
+        Err(error) => return agent_platform_error(&error),
+    };
+    let Some(pending) = pending else {
+        return problem(StatusCode::NOT_FOUND, "task_approval_not_found");
+    };
+    let resolution = match (decision.decision, decision.reason) {
+        (TaskApprovalChoice::Deny, Some(reason)) => ResolveApproval::Deny { reason },
+        (TaskApprovalChoice::Approve, None) => {
+            let (identity, connectors) = match credential_services(&state) {
+                Ok(services) => services,
+                Err(response) => return response,
+            };
+            let Ok(access) = identity
+                .issue_access_token(
+                    authenticated.authorization.as_str(),
+                    CONNECTORS_AUDIENCE,
+                    CONNECTORS_APPROVAL_SCOPE,
+                )
+                .await
+            else {
+                return unavailable("identity_access_unavailable");
+            };
+            let context = approval_owner_context(&pending);
+            let issued = match connectors
+                .issue_approval(
+                    access.credential.expose_at_authorization_boundary(),
+                    &context,
+                    approval::IssueRequest {
+                        operation_ref: pending.operation_ref.clone(),
+                        connection_ref: pending.connection_ref.clone(),
+                        description_ref: pending.description_ref.clone(),
+                        input: pending.input.clone(),
+                        ttl_seconds: CONNECTOR_APPROVAL_TTL_SECONDS,
+                    },
+                )
+                .await
+            {
+                Ok(issued) => issued,
+                Err(error) => return connector_error(&error, "connector_approval_refused"),
+            };
+            ResolveApproval::Approve {
+                approval_evidence_ref: issued.approval_evidence_ref,
+            }
+        }
+        (TaskApprovalChoice::Approve, Some(_)) | (TaskApprovalChoice::Deny, None) => {
+            return problem(
+                StatusCode::UNPROCESSABLE_ENTITY,
+                "task_approval_decision_invalid",
+            );
+        }
+    };
+    match client
+        .resolve_task_approval(
+            authenticated.authorization.as_str(),
+            &task_id,
+            &approval_id,
+            &resolution,
+        )
+        .await
+    {
+        Ok(approval) => confidential_json(approval),
+        Err(error) => agent_platform_error(&error),
+    }
+}
+
+fn approval_owner_context(approval: &PendingApproval) -> OwnerContext {
+    OwnerContext {
+        tenant_id: approval.context.tenant_id.to_string(),
+        agent_id: approval.context.agent_id.to_string(),
+        agent_revision: approval.context.agent_revision,
+        authority_snapshot_id: approval.context.authority_snapshot_id.to_string(),
+        authority_snapshot_sha256: approval.context.authority_snapshot_sha256.clone(),
+    }
+}
+
 async fn task_events(
     State(state): State<AppState>,
     headers: HeaderMap,
@@ -2208,6 +2354,8 @@ mod tests {
         assert!(contract["paths"]["/api/connections"].is_object());
         assert!(contract["paths"]["/api/capabilities"].is_object());
         assert!(contract["paths"]["/api/capability-profiles"].is_object());
+        assert!(contract["paths"]["/api/tasks/{task_id}/approvals"].is_object());
+        assert!(contract["paths"]["/api/tasks/{task_id}/approvals/{approval_id}"].is_object());
         assert!(contract["paths"]["/.well-known/oauth-protected-resource"].is_object());
     }
 
@@ -2241,6 +2389,7 @@ mod tests {
             "/api/connections",
             "/api/capabilities",
             "/api/capability-profiles",
+            "/api/tasks/task-one/approvals",
         ] {
             let response = test_router(devcenter_auth::Authentication::Unconfigured)
                 .oneshot(Request::builder().uri(path).body(Body::empty()).unwrap())
@@ -2447,6 +2596,20 @@ mod tests {
         assert_eq!(
             select_provider(&providers, Some("unknown")),
             Err("identity_provider_invalid")
+        );
+    }
+
+    #[test]
+    fn browser_approval_decision_cannot_supply_connector_coordinates() {
+        assert!(
+            serde_json::from_value::<TaskApprovalDecision>(json!({"decision": "approve"})).is_ok()
+        );
+        assert!(
+            serde_json::from_value::<TaskApprovalDecision>(json!({
+                "decision": "approve",
+                "operation_ref": "todo.item.delete"
+            }))
+            .is_err()
         );
     }
 }

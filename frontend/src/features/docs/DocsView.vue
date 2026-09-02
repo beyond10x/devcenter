@@ -57,8 +57,10 @@ import { ArrowUpRight, BookOpen, Braces, ShieldCheck } from "@lucide/vue";
           <p>
             The Agents workspace creates an agent, writes its first revision, activates it, and
             accepts prompts as Tasks. Results arrive as ordered server-sent events from
-            <code>/api/tasks/{task_id}/events</code>. Durable workers and recovery remain separate
-            deployment milestones.
+            <code>/api/tasks/{task_id}/events</code>. When an effectful Connector call requires
+            approval, the same workspace displays its exact operation and input, pauses the task,
+            and lets the signed-in person approve or deny it. Approval authority and its one-use
+            proof stay inside the BFF.
           </p>
         </section>
         <section id="api">

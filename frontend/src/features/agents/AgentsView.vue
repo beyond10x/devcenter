@@ -8,7 +8,9 @@ import {
   Plus,
   RefreshCw,
   RotateCw,
+  ShieldCheck,
   Sparkles,
+  X,
 } from "@lucide/vue";
 import { computed, ref, watch } from "vue";
 import { useRoute, useRouter } from "vue-router";
@@ -25,8 +27,11 @@ const run = computed<AgentRun>(() =>
   selected.value ? workspace.runFor(selected.value.id) : { status: "idle", output: "", error: "" },
 );
 const taskActive = computed(() =>
-  ["submitting", "accepted", "running", "reconnecting"].includes(run.value.status),
+  ["submitting", "accepted", "running", "awaiting_approval", "reconnecting"].includes(
+    run.value.status,
+  ),
 );
+const approvals = computed(() => run.value.approvals ?? []);
 
 watch(
   [() => route.params.agentId, () => workspace.agentsState],
@@ -79,11 +84,16 @@ function runLabel() {
     submitting: "Submitting",
     accepted: "Accepted",
     running: "Running",
+    awaiting_approval: "Awaiting approval",
     reconnecting: "Reconnecting",
     succeeded: "Succeeded",
     failed: "Failed",
   };
   return labels[run.value.status] ?? "Ready";
+}
+
+function formatInput(input: unknown) {
+  return JSON.stringify(input, null, 2);
 }
 </script>
 
@@ -215,6 +225,58 @@ function runLabel() {
               {{ taskActive ? runLabel() + "…" : "Run task" }}
             </button>
           </footer>
+        </section>
+
+        <section v-if="approvals.length || run.approvalError" class="task-approvals-card">
+          <header>
+            <div>
+              <ShieldCheck :size="18" />
+              <div>
+                <h3>Human decision required</h3>
+                <p>The task is paused. Review the exact Connector call before it can continue.</p>
+              </div>
+            </div>
+            <span>{{ approvals.length }} pending</span>
+          </header>
+          <article v-for="approval in approvals" :key="approval.id" class="task-approval">
+            <div class="task-approval-heading">
+              <div>
+                <strong>{{ approval.tool_name }}</strong>
+                <span>{{ approval.operation_ref }} · {{ approval.connection_ref }}</span>
+              </div>
+              <small>Call {{ approval.call_id }}</small>
+            </div>
+            <pre>{{ formatInput(approval.input) }}</pre>
+            <footer>
+              <span>Only this displayed input is authorized.</span>
+              <div>
+                <button
+                  class="button small"
+                  type="button"
+                  :disabled="Boolean(run.resolvingApprovalId)"
+                  @click="workspace.resolveTaskApproval(selected.id, approval.id, 'deny')"
+                >
+                  <X :size="14" /> Deny
+                </button>
+                <button
+                  class="button primary small"
+                  type="button"
+                  :disabled="Boolean(run.resolvingApprovalId)"
+                  @click="workspace.resolveTaskApproval(selected.id, approval.id, 'approve')"
+                >
+                  <RotateCw
+                    v-if="run.resolvingApprovalId === approval.id"
+                    :size="14"
+                    class="spinning"
+                  />
+                  <Check v-else :size="14" /> Approve exact call
+                </button>
+              </div>
+            </footer>
+          </article>
+          <p v-if="run.approvalError" class="task-approval-error" role="alert">
+            <CircleAlert :size="16" /> {{ run.approvalError }}
+          </p>
         </section>
 
         <section class="run-card" :class="`run-${run.status}`">

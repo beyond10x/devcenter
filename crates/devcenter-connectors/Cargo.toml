@@ -1,0 +1,41 @@
+[workspace]
+resolver = "3"
+members = ["."]
+
+[package]
+name = "devcenter-connectors"
+version = "0.5.4"
+edition = "2024"
+rust-version = "1.97"
+license = "LicenseRef-B10x-Proprietary"
+repository = "https://github.com/beyond10x/devcenter"
+publish = false
+
+[[bin]]
+name = "devcenter-connectors"
+path = "src/main.rs"
+
+[dependencies]
+anyhow = "1"
+clap = { version = "4.6", features = ["derive", "env"] }
+connectors-runtime = { git = "https://github.com/beyond10x/connectors.git", rev = "8100d9bfbfe39c844dc7c0226db94d44d24cb55e" }
+connectors-service = { package = "service", git = "https://github.com/beyond10x/connectors.git", rev = "8100d9bfbfe39c844dc7c0226db94d44d24cb55e" }
+eventlog-postgres = { git = "https://github.com/beyond10x/eventlog.git", rev = "b7e8f0d87b01c403415546d311952cb155caf16f" }
+serde = { version = "1", features = ["derive"] }
+serde_yaml = "0.9"
+service-connectors = { git = "https://github.com/beyond10x/service-sdk.git", rev = "4961a622831ad578e430d15a7907c7c712947696" }
+todo-generated-service = { git = "https://github.com/beyond10x/todo.git", rev = "69f76a62e36988c1ac54734560698e124461e180" }
+tokio = { version = "1", features = ["macros", "rt-multi-thread", "signal"] }
+
+[workspace.lints.rust]
+unsafe_code = "forbid"
+
+[workspace.lints.clippy]
+all = { level = "warn", priority = -1 }
+pedantic = { level = "warn", priority = -1 }
+module_name_repetitions = "allow"
+missing_errors_doc = "allow"
+must_use_candidate = "allow"
+
+[lints]
+workspace = true

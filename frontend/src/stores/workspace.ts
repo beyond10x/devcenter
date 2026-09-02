@@ -9,19 +9,30 @@ import {
   type ClaudeOAuthStart,
   type IdentityProvider,
   type Session,
+  type TaskApproval,
   type TaskEventEnvelope,
   taskFailureMessage,
 } from "@/api/client";
 
 export type LoadState = "idle" | "loading" | "ready" | "error";
 export type RunState =
-  "idle" | "submitting" | "accepted" | "running" | "succeeded" | "failed" | "reconnecting";
+  | "idle"
+  | "submitting"
+  | "accepted"
+  | "running"
+  | "awaiting_approval"
+  | "succeeded"
+  | "failed"
+  | "reconnecting";
 
 export interface AgentRun {
   status: RunState;
   output: string;
   error: string;
   taskId?: string;
+  approvals?: TaskApproval[];
+  approvalError?: string;
+  resolvingApprovalId?: string;
 }
 
 const streams = new Map<string, EventSource>();
@@ -227,15 +238,29 @@ export const useWorkspaceStore = defineStore("workspace", () => {
           current.status = "running";
           current.output += update.text;
         }
+        if (update.kind === "approval_requested") {
+          current.status = "awaiting_approval";
+          void loadTaskApprovals(agentId, taskId);
+        }
+        if (update.kind === "approval_resolved") {
+          current.status = "running";
+          current.approvals = (current.approvals ?? []).filter(
+            (approval) => approval.id !== update.approval_id,
+          );
+          current.resolvingApprovalId = undefined;
+          current.approvalError = undefined;
+        }
         if (update.kind === "succeeded") {
           current.status = "succeeded";
           current.output = update.output;
+          current.approvals = [];
           events.close();
           streams.delete(agentId);
         }
         if (update.kind === "failed") {
           current.status = "failed";
           current.error = taskFailureMessage(update.failure);
+          current.approvals = [];
           events.close();
           streams.delete(agentId);
         }
@@ -258,6 +283,47 @@ export const useWorkspaceStore = defineStore("workspace", () => {
       }
       runs.value[agentId] = { ...current };
     };
+  }
+
+  async function loadTaskApprovals(agentId: string, taskId: string) {
+    const current = runFor(agentId);
+    try {
+      current.approvals = await api.taskApprovals(taskId);
+      current.approvalError = undefined;
+    } catch (error) {
+      current.approvalError = errorMessage(error);
+    }
+    runs.value[agentId] = { ...current };
+  }
+
+  async function resolveTaskApproval(
+    agentId: string,
+    approvalId: string,
+    decision: "approve" | "deny",
+  ) {
+    const current = runFor(agentId);
+    if (!current.taskId) return;
+    current.resolvingApprovalId = approvalId;
+    current.approvalError = undefined;
+    runs.value[agentId] = { ...current };
+    try {
+      await api.resolveTaskApproval(
+        current.taskId,
+        approvalId,
+        decision === "approve"
+          ? { decision: "approve" }
+          : { decision: "deny", reason: "Denied by the person in Devcenter" },
+      );
+      current.approvals = (current.approvals ?? []).filter(
+        (approval) => approval.id !== approvalId,
+      );
+      current.status = "running";
+    } catch (error) {
+      current.approvalError = errorMessage(error);
+    } finally {
+      current.resolvingApprovalId = undefined;
+      runs.value[agentId] = { ...current };
+    }
   }
 
   function clearNotice() {
@@ -295,6 +361,7 @@ export const useWorkspaceStore = defineStore("workspace", () => {
     setDraft,
     runFor,
     submitTask,
+    resolveTaskApproval,
     clearNotice,
   };
 });

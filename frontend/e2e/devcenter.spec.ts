@@ -212,6 +212,70 @@ test("opens a deep-linked agent and creates a governed worker", async ({ page },
   expect(accessibility.violations).toEqual([]);
 });
 
+test("reviews and approves only the exact suspended agent call", async ({ page }, testInfo) => {
+  test.skip(testInfo.project.name !== "chromium", "Desktop approval behavior");
+  await mockAuthenticatedWorkspace(page);
+  const pending = {
+    id: "approval-1",
+    task_id: "task-1",
+    attempt_id: "attempt-1",
+    call_id: "call-1",
+    tool_name: "todo_item_create",
+    operation_ref: "todo.item.create",
+    connection_ref: "todo",
+    description_ref: "description-1",
+    input: { list_id: "release", title: "Publish the release" },
+    context: {
+      tenant_id: "tenant-1",
+      agent_id: "agent-release",
+      agent_revision: 3,
+      authority_snapshot_id: "request-1",
+      authority_snapshot_sha256: "a".repeat(64),
+    },
+    requested_at_ms: 1_788_260_000_000,
+  };
+  let submittedDecision: unknown;
+  await page.route("**/api/agents/agent-release/tasks", (route) =>
+    route.fulfill({
+      status: 202,
+      json: {
+        id: "task-1",
+        agent_id: "agent-release",
+        status: "accepted",
+        attempt_id: "attempt-1",
+      },
+    }),
+  );
+  await page.route("**/api/tasks/task-1/events", (route) =>
+    route.fulfill({
+      contentType: "text/event-stream",
+      body: `event: task\ndata: ${JSON.stringify({
+        event: {
+          kind: "approval_requested",
+          approval_id: pending.id,
+          call_id: pending.call_id,
+          operation_ref: pending.operation_ref,
+          connection_ref: pending.connection_ref,
+        },
+      })}\n\n`,
+    }),
+  );
+  await page.route("**/api/tasks/task-1/approvals", (route) => route.fulfill({ json: [pending] }));
+  await page.route("**/api/tasks/task-1/approvals/approval-1", async (route) => {
+    submittedDecision = route.request().postDataJSON();
+    await route.fulfill({ json: pending });
+  });
+
+  await page.goto("/agents/agent-release");
+  await page.getByLabel("Task instructions").fill("Create the release Todo.");
+  await page.getByRole("button", { name: "Run task" }).click();
+  await expect(page.getByRole("heading", { name: "Human decision required" })).toBeVisible();
+  await expect(page.getByText("todo.item.create")).toBeVisible();
+  await expect(page.locator(".task-approval pre")).toContainText("Publish the release");
+  await page.getByRole("button", { name: "Approve exact call" }).click();
+  await expect.poll(() => submittedDecision).toEqual({ decision: "approve" });
+});
+
 test("opens a visible repository as a commit-pinned project", async ({ page }, testInfo) => {
   test.skip(testInfo.project.name !== "chromium", "Desktop project behavior");
   await mockAuthenticatedWorkspace(page);

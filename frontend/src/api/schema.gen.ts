@@ -277,6 +277,38 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/tasks/{task_id}/approvals": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get: operations["listTaskApprovals"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/tasks/{task_id}/approvals/{approval_id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post: operations["resolveTaskApproval"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/mcp/publications": {
         parameters: {
             query?: never;
@@ -927,6 +959,34 @@ export interface components {
             attempt_id: string;
             output?: string | null;
         };
+        ConnectorOwnerContext: {
+            tenant_id: string;
+            agent_id: string;
+            agent_revision: number;
+            authority_snapshot_id: string;
+            authority_snapshot_sha256: string;
+        };
+        TaskApproval: {
+            id: string;
+            task_id: string;
+            attempt_id: string;
+            call_id: string;
+            tool_name: string;
+            operation_ref: string;
+            connection_ref: string;
+            description_ref: string;
+            input: unknown;
+            context: components["schemas"]["ConnectorOwnerContext"];
+            requested_at_ms: number;
+        };
+        TaskApprovalDecision: {
+            /** @constant */
+            decision: "approve";
+        } | {
+            /** @constant */
+            decision: "deny";
+            reason: string;
+        };
     };
     responses: {
         /** @description Request refused */
@@ -951,6 +1011,7 @@ export interface components {
     parameters: {
         AgentId: string;
         TaskId: string;
+        TaskApprovalId: string;
         PublicationId: string;
         ProjectId: string;
         ThreadId: string;
@@ -1487,6 +1548,61 @@ export interface operations {
                 };
             };
             401: components["responses"]["Problem"];
+        };
+    };
+    listTaskApprovals: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                task_id: components["parameters"]["TaskId"];
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Exact Connector calls awaiting this person's decision */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["TaskApproval"][];
+                };
+            };
+            401: components["responses"]["Problem"];
+            403: components["responses"]["Problem"];
+        };
+    };
+    resolveTaskApproval: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                task_id: components["parameters"]["TaskId"];
+                approval_id: components["parameters"]["TaskApprovalId"];
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["TaskApprovalDecision"];
+            };
+        };
+        responses: {
+            /** @description The exact pending call accepted this human decision */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["TaskApproval"];
+                };
+            };
+            401: components["responses"]["Problem"];
+            403: components["responses"]["Problem"];
+            404: components["responses"]["Problem"];
+            409: components["responses"]["Problem"];
         };
     };
     listMcpPublications: {

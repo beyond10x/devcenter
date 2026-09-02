@@ -27,6 +27,20 @@ RUN --mount=type=secret,id=github_token,required=true \
     install -D /source/target/release/devcenter /out/devcenter && \
     install -D /source/target/release/devcenterctl /out/devcenterctl
 
+FROM rust:1.97.0-bookworm@sha256:8fa55b2f3ddf97471ab6a767bfa3f37e6bad0986ba823e75fea57e2a2a5c3073 AS connectors-builder
+WORKDIR /source
+COPY crates/devcenter-connectors/Cargo.toml crates/devcenter-connectors/Cargo.lock ./
+COPY crates/devcenter-connectors/src ./src
+RUN --mount=type=secret,id=github_token,required=true \
+    --mount=type=cache,id=b10x-cargo-registry,target=/usr/local/cargo/registry,sharing=locked \
+    --mount=type=cache,id=b10x-cargo-git,target=/usr/local/cargo/git,sharing=locked \
+    --mount=type=cache,id=devcenter-connectors-target,target=/source/target,sharing=locked \
+    token="$(cat /run/secrets/github_token)" && \
+    git config --global url."https://x-access-token:${token}@github.com/".insteadOf "https://github.com/" && \
+    cargo build --locked --release && \
+    git config --global --unset-all url."https://x-access-token:${token}@github.com/".insteadOf && \
+    install -D /source/target/release/devcenter-connectors /out/devcenter-connectors
+
 FROM debian:bookworm-slim@sha256:88200866dfff7ea7f5cbcb6ec7c8a701889efe6fe859fe64d6990e4b07ea4171 AS server
 ARG SOURCE_SHA=unknown
 LABEL org.opencontainers.image.revision=$SOURCE_SHA
@@ -38,6 +52,14 @@ WORKDIR /var/lib/devcenter
 USER 10001:10001
 EXPOSE 8080
 ENTRYPOINT ["/usr/local/bin/devcenter"]
+
+FROM gcr.io/distroless/cc-debian12:nonroot@sha256:adcd20c7b4c988b73cbfbddb26d2eee574571e6d7c9ffea29b3821e0690efb77 AS connectors
+ARG SOURCE_SHA=unknown
+LABEL org.opencontainers.image.revision=$SOURCE_SHA
+COPY --from=connectors-builder /out/devcenter-connectors /usr/local/bin/devcenter-connectors
+VOLUME ["/var/lib/b10x-connectors"]
+EXPOSE 8080
+ENTRYPOINT ["/usr/local/bin/devcenter-connectors"]
 
 FROM alpine/helm:3.19.0@sha256:aef9b56f64e866207d9591d0abd8f6d767b36aadd12edf68f8a719716d9d29c9 AS helm
 FROM ghcr.io/oras-project/oras:v1.3.0@sha256:6ce045ce069a89934d6666b8b49f9c4c0145201bd6de6dbe2aee267814c55468 AS oras

@@ -39,6 +39,9 @@ pnpm --dir frontend test:e2e
 cargo fmt --all --check
 cargo clippy --workspace --all-targets --locked -- -D warnings
 cargo test --workspace --locked
+cargo fmt --manifest-path crates/devcenter-connectors/Cargo.toml --all --check
+cargo clippy --manifest-path crates/devcenter-connectors/Cargo.toml --all-targets --locked -- -D warnings
+cargo test --manifest-path crates/devcenter-connectors/Cargo.toml --locked
 bash ci/check-version-consistency.sh
 helm lint deploy/charts/devcenter --values deploy/charts/devcenter/ci/test-values.yaml
 bash ci/check-chart-rollouts.sh

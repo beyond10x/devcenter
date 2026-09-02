@@ -5,6 +5,8 @@ export type ConnectionStatus = components["schemas"]["ConnectionStatus"];
 export type ClaudeOAuthStart = components["schemas"]["ClaudeOAuthStart"];
 export type Agent = components["schemas"]["Agent"];
 export type Task = components["schemas"]["Task"];
+export type TaskApproval = components["schemas"]["TaskApproval"];
+export type TaskApprovalDecision = components["schemas"]["TaskApprovalDecision"];
 export type CreateAgent = components["schemas"]["CreateAgent"];
 export type IdentityProvider = components["schemas"]["IdentityProvider"];
 export type PublicationState = components["schemas"]["PublicationState"];
@@ -291,6 +293,13 @@ export const api = {
       method: "POST",
       body: JSON.stringify({ prompt, idempotency_key: crypto.randomUUID() }),
     }),
+  taskApprovals: (taskId: string) =>
+    request<TaskApproval[]>(`/api/tasks/${encodeURIComponent(taskId)}/approvals`),
+  resolveTaskApproval: (taskId: string, approvalId: string, decision: TaskApprovalDecision) =>
+    request<TaskApproval>(
+      `/api/tasks/${encodeURIComponent(taskId)}/approvals/${encodeURIComponent(approvalId)}`,
+      { method: "POST", body: JSON.stringify(decision) },
+    ),
 };
 
 const FRIENDLY_ERRORS: Record<string, string> = {
@@ -298,6 +307,9 @@ const FRIENDLY_ERRORS: Record<string, string> = {
   agent_platform_unavailable: "Agent Platform is temporarily unavailable.",
   connectors_unavailable: "The connection service is temporarily unavailable.",
   connectors_invalid_response: "The connection service returned an invalid response.",
+  connector_approval_refused:
+    "The exact call is no longer approvable. Refresh the task before deciding again.",
+  task_approval_not_found: "This approval is no longer pending.",
   connection_start_refused: "This connection cannot be started with your current grant.",
   capability_search_refused: "Capabilities could not be read with your current grant.",
   identity_access_unavailable: "Identity could not authorize this operation.",
@@ -330,6 +342,14 @@ export interface TaskEventEnvelope {
     | { kind: "accepted" }
     | { kind: "running" }
     | { kind: "text_delta"; text: string }
+    | {
+        kind: "approval_requested";
+        approval_id: string;
+        call_id: string;
+        operation_ref: string;
+        connection_ref: string;
+      }
+    | { kind: "approval_resolved"; approval_id: string; approved: boolean }
     | { kind: "succeeded"; output: string }
     | { kind: "failed"; failure?: { code?: string; message?: string } };
 }

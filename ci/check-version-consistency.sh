@@ -7,12 +7,14 @@ chart_version=$(sed -n 's/^version: //p' deploy/charts/devcenter/Chart.yaml)
 chart_app_version=$(sed -n 's/^appVersion: "\([^"]*\)"/\1/p' deploy/charts/devcenter/Chart.yaml)
 frontend_version=$(sed -n 's/^  "version": "\([^"]*\)",/\1/p' frontend/package.json)
 openapi_version=$(sed -n 's/^    "version": "\([^"]*\)",/\1/p' openapi.json)
+connectors_version=$(sed -n 's/^version = "\([^"]*\)"/\1/p' crates/devcenter-connectors/Cargo.toml | head -1)
 
 for named_version in \
   "chart version:$chart_version" \
   "chart appVersion:$chart_app_version" \
   "frontend package:$frontend_version" \
-  "OpenAPI:$openapi_version"
+  "OpenAPI:$openapi_version" \
+  "composed Connectors:$connectors_version"
 do
   name=${named_version%%:*}
   version=${named_version#*:}
