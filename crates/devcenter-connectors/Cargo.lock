@@ -1026,7 +1026,7 @@ dependencies = [
 
 [[package]]
 name = "devcenter-connectors"
-version = "0.5.7"
+version = "0.5.8"
 dependencies = [
  "anyhow",
  "clap",
@@ -4272,7 +4272,7 @@ dependencies = [
 [[package]]
 name = "service-connectors"
 version = "0.1.0"
-source = "git+https://github.com/beyond10x/service-sdk.git?rev=04390a169e9c014876a7c42e5aa20a6d62301156#04390a169e9c014876a7c42e5aa20a6d62301156"
+source = "git+https://github.com/beyond10x/service-sdk.git?rev=2f2aa84fbf4eed2dd4e171151eb8637c0a3a0902#2f2aa84fbf4eed2dd4e171151eb8637c0a3a0902"
 dependencies = [
  "async-trait",
  "eventlog-core",
@@ -4291,7 +4291,7 @@ dependencies = [
 [[package]]
 name = "service-engine"
 version = "0.1.0"
-source = "git+https://github.com/beyond10x/service-sdk.git?rev=04390a169e9c014876a7c42e5aa20a6d62301156#04390a169e9c014876a7c42e5aa20a6d62301156"
+source = "git+https://github.com/beyond10x/service-sdk.git?rev=2f2aa84fbf4eed2dd4e171151eb8637c0a3a0902#2f2aa84fbf4eed2dd4e171151eb8637c0a3a0902"
 dependencies = [
  "serde",
  "serde_json",
@@ -4303,7 +4303,7 @@ dependencies = [
 [[package]]
 name = "service-eventlog"
 version = "0.1.0"
-source = "git+https://github.com/beyond10x/service-sdk.git?rev=04390a169e9c014876a7c42e5aa20a6d62301156#04390a169e9c014876a7c42e5aa20a6d62301156"
+source = "git+https://github.com/beyond10x/service-sdk.git?rev=2f2aa84fbf4eed2dd4e171151eb8637c0a3a0902#2f2aa84fbf4eed2dd4e171151eb8637c0a3a0902"
 dependencies = [
  "eventlog-core",
  "hex",
@@ -4319,7 +4319,7 @@ dependencies = [
 [[package]]
 name = "service-runtime"
 version = "0.1.0"
-source = "git+https://github.com/beyond10x/service-sdk.git?rev=04390a169e9c014876a7c42e5aa20a6d62301156#04390a169e9c014876a7c42e5aa20a6d62301156"
+source = "git+https://github.com/beyond10x/service-sdk.git?rev=2f2aa84fbf4eed2dd4e171151eb8637c0a3a0902#2f2aa84fbf4eed2dd4e171151eb8637c0a3a0902"
 dependencies = [
  "serde",
  "thiserror 2.0.20",
@@ -4886,7 +4886,7 @@ checksum = "1f3ccbac311fea05f86f61904b462b55fb3df8837a366dfc601a0161d0532f20"
 [[package]]
 name = "todo-generated-service"
 version = "0.1.0"
-source = "git+https://github.com/beyond10x/todo.git?rev=4ca3368583293f1963301149596f3f7122506020#4ca3368583293f1963301149596f3f7122506020"
+source = "git+https://github.com/beyond10x/todo.git?rev=7ab0b68ad1c7e3e0afbbc3d1811b8a28cdc55e8b#7ab0b68ad1c7e3e0afbbc3d1811b8a28cdc55e8b"
 dependencies = [
  "service-connectors",
  "service-engine",

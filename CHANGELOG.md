@@ -1,5 +1,12 @@
 # Changelog
 
+## 0.5.8 - 2026-09-02
+
+- Publish executable Todo lifetime and scope shapes to agents, including the required future RFC
+  3339 expiry, instead of exposing opaque type titles that invite invalid guesses.
+- Report malformed or elapsed bounded lifetimes as invalid input after approval rather than the
+  misleading `NotGranted` authorization refusal.
+
 ## 0.5.7 - 2026-09-02
 
 - Admit the exact Identity authority used to issue Connector approval proofs, so an approved

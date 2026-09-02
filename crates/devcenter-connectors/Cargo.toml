@@ -4,7 +4,7 @@ members = ["."]
 
 [package]
 name = "devcenter-connectors"
-version = "0.5.7"
+version = "0.5.8"
 edition = "2024"
 rust-version = "1.97"
 license = "LicenseRef-B10x-Proprietary"
@@ -23,8 +23,8 @@ connectors-service = { package = "service", git = "https://github.com/beyond10x/
 eventlog-postgres = { git = "https://github.com/beyond10x/eventlog.git", rev = "b7e8f0d87b01c403415546d311952cb155caf16f" }
 serde = { version = "1", features = ["derive"] }
 serde_yaml = "0.9"
-service-connectors = { git = "https://github.com/beyond10x/service-sdk.git", rev = "04390a169e9c014876a7c42e5aa20a6d62301156" }
-todo-generated-service = { git = "https://github.com/beyond10x/todo.git", rev = "4ca3368583293f1963301149596f3f7122506020" }
+service-connectors = { git = "https://github.com/beyond10x/service-sdk.git", rev = "2f2aa84fbf4eed2dd4e171151eb8637c0a3a0902" }
+todo-generated-service = { git = "https://github.com/beyond10x/todo.git", rev = "7ab0b68ad1c7e3e0afbbc3d1811b8a28cdc55e8b" }
 tokio = { version = "1", features = ["macros", "rt-multi-thread", "signal"] }
 
 [workspace.lints.rust]

@@ -484,7 +484,7 @@ dependencies = [
 
 [[package]]
 name = "devcenter-app"
-version = "0.5.7"
+version = "0.5.8"
 dependencies = [
  "anyhow",
  "axum",
@@ -498,7 +498,7 @@ dependencies = [
 
 [[package]]
 name = "devcenter-auth"
-version = "0.5.7"
+version = "0.5.8"
 dependencies = [
  "identity-client",
  "tokio",
@@ -506,7 +506,7 @@ dependencies = [
 
 [[package]]
 name = "devcenter-core"
-version = "0.5.7"
+version = "0.5.8"
 dependencies = [
  "devcenter-auth",
  "serde",
@@ -514,7 +514,7 @@ dependencies = [
 
 [[package]]
 name = "devcenter-http"
-version = "0.5.7"
+version = "0.5.8"
 dependencies = [
  "agent-platform-client",
  "agent-platform-core",
@@ -544,7 +544,7 @@ dependencies = [
 
 [[package]]
 name = "devcenter-mcp"
-version = "0.5.7"
+version = "0.5.8"
 dependencies = [
  "serde",
  "serde_json",
@@ -553,7 +553,7 @@ dependencies = [
 
 [[package]]
 name = "devcenter-store"
-version = "0.5.7"
+version = "0.5.8"
 dependencies = [
  "devcenter-mcp",
  "serde",
@@ -566,7 +566,7 @@ dependencies = [
 
 [[package]]
 name = "devcenter-web-assets"
-version = "0.5.7"
+version = "0.5.8"
 dependencies = [
  "mime_guess",
  "rust-embed",
@@ -574,7 +574,7 @@ dependencies = [
 
 [[package]]
 name = "devcenterctl"
-version = "0.5.7"
+version = "0.5.8"
 dependencies = [
  "anyhow",
  "clap",
