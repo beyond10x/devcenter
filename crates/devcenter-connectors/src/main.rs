@@ -166,6 +166,11 @@ async fn compose(
     builder
         .register(todo_generated_service::connector_factory(store)?)
         .context("registering the generated Todo service")?;
+    builder
+        .register(service_catalog::ServiceCatalogFactory::new([
+            todo_generated_service::service_catalog()?,
+        ])?)
+        .context("registering the external generated-service catalog")?;
     for deployment in deployments {
         builder
             .deploy(deployment)
@@ -204,6 +209,10 @@ mod tests {
         "todo.reopen_item",
         "todo.transfer_list",
     ];
+    const CATALOG_OPERATIONS: &[&str] = &[
+        "service_catalog.get_service",
+        "service_catalog.list_services",
+    ];
 
     fn deployment_yaml() -> String {
         let mut operations = String::new();
@@ -238,6 +247,49 @@ mod tests {
                 .collect::<Vec<_>>()
         );
         assert!(deployment.operations.values().all(|policy| policy.expose));
+    }
+
+    #[test]
+    fn generated_catalog_is_an_external_factory_with_a_separate_overlay() {
+        let catalog = todo_generated_service::service_catalog().unwrap();
+        let factory = service_catalog::ServiceCatalogFactory::new([catalog]).unwrap();
+        assert!(factory.catalogs().contains_key("service:todo"));
+
+        let source = concat!(
+            "services:\n",
+            "  - service_ref: service:service-catalog\n",
+            "    provider:\n",
+            "      provider_ref: provider:generated-service-catalog\n",
+            "      authority: catalog.example.invalid\n",
+            "      connection_ref: connection:generated-service-catalog\n",
+            "    operations:\n",
+            "      service_catalog.get_service:\n",
+            "        expose: false\n",
+            "        risk: low\n",
+            "        approval: not_required\n",
+            "        grant_refs: [grant:service-catalog:read]\n",
+            "      service_catalog.list_services:\n",
+            "        expose: false\n",
+            "        risk: low\n",
+            "        approval: not_required\n",
+            "        grant_refs: [grant:service-catalog:read]\n",
+        );
+        let parsed: DeploymentFile = serde_yaml::from_str(source).unwrap();
+        let deployment: ServiceDeployment = parsed.services.into_iter().next().unwrap().into();
+        assert_eq!(deployment.service_ref, "service:service-catalog");
+        assert_eq!(
+            deployment.operations.keys().cloned().collect::<Vec<_>>(),
+            CATALOG_OPERATIONS
+                .iter()
+                .map(ToString::to_string)
+                .collect::<Vec<_>>()
+        );
+        assert!(
+            deployment
+                .operations
+                .values()
+                .all(|policy| !policy.expose && policy.approval == DeploymentApproval::NotRequired)
+        );
     }
 
     #[test]

@@ -5,6 +5,7 @@ import DocsView from "@/features/docs/DocsView.vue";
 import PublicationsView from "@/features/publications/PublicationsView.vue";
 import ProjectsView from "@/features/projects/ProjectsView.vue";
 import ProfilesView from "@/features/profiles/ProfilesView.vue";
+import ServicesView from "@/features/services/ServicesView.vue";
 
 export default createRouter({
   history: createWebHistory(),
@@ -16,6 +17,7 @@ export default createRouter({
     { path: "/agents/:agentId", name: "agent", component: AgentsView },
     { path: "/connectors", name: "connectors", component: ConnectorsView },
     { path: "/connectors/:providerRef", name: "connector", component: ConnectorsView },
+    { path: "/services", name: "services", component: ServicesView },
     {
       path: "/connections",
       redirect: (to) => ({ path: "/connectors", query: { ...to.query, tab: "connections" } }),

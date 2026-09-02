@@ -2,7 +2,7 @@
   "openapi": "3.1.0",
   "info": {
     "title": "Devcenter API",
-    "version": "0.5.10",
+    "version": "0.6.0",
     "description": "Authenticated browser/BFF surface for identity, connector custody, agents, and tasks."
   },
   "paths": {
@@ -289,6 +289,107 @@
           "401": { "$ref": "#/components/responses/Problem" },
           "403": { "$ref": "#/components/responses/Problem" },
           "404": { "$ref": "#/components/responses/Problem" },
+          "422": { "$ref": "#/components/responses/Problem" },
+          "502": { "$ref": "#/components/responses/Problem" },
+          "503": { "$ref": "#/components/responses/Unavailable" }
+        }
+      }
+    },
+    "/api/services": {
+      "get": {
+        "operationId": "listGeneratedServices",
+        "security": [{ "browserSession": [] }, { "identityBearer": [] }],
+        "responses": {
+          "200": {
+            "description": "Exact generated services activated in this composition",
+            "headers": {
+              "Cache-Control": { "schema": { "const": "no-store" } }
+            },
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/GeneratedServicePage"
+                }
+              }
+            }
+          },
+          "401": { "$ref": "#/components/responses/Problem" },
+          "403": { "$ref": "#/components/responses/Problem" },
+          "502": { "$ref": "#/components/responses/Problem" },
+          "503": { "$ref": "#/components/responses/Unavailable" }
+        }
+      }
+    },
+    "/api/services/catalog": {
+      "post": {
+        "operationId": "getGeneratedServiceCatalog",
+        "security": [{ "browserSession": [] }, { "identityBearer": [] }],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/GeneratedServiceCatalogRequest"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Exact SDK-generated service-catalog/1 document",
+            "headers": {
+              "Cache-Control": { "schema": { "const": "no-store" } }
+            },
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/GeneratedServiceCatalog"
+                }
+              }
+            }
+          },
+          "401": { "$ref": "#/components/responses/Problem" },
+          "403": { "$ref": "#/components/responses/Problem" },
+          "404": { "$ref": "#/components/responses/Problem" },
+          "422": { "$ref": "#/components/responses/Problem" },
+          "502": { "$ref": "#/components/responses/Problem" },
+          "503": { "$ref": "#/components/responses/Unavailable" }
+        }
+      }
+    },
+    "/api/services/invoke": {
+      "post": {
+        "operationId": "invokeGeneratedService",
+        "description": "Describe and invoke one catalog-admitted operation while Connector leases, access tokens, and approval evidence remain server-side.",
+        "security": [{ "browserSession": [] }, { "identityBearer": [] }],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/GeneratedServiceInvokeRequest"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Credential-free generated service result",
+            "headers": {
+              "Cache-Control": { "schema": { "const": "no-store" } }
+            },
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/GeneratedServiceInvocation"
+                }
+              }
+            }
+          },
+          "401": { "$ref": "#/components/responses/Problem" },
+          "403": { "$ref": "#/components/responses/Problem" },
+          "404": { "$ref": "#/components/responses/Problem" },
+          "409": { "$ref": "#/components/responses/Problem" },
           "422": { "$ref": "#/components/responses/Problem" },
           "502": { "$ref": "#/components/responses/Problem" },
           "503": { "$ref": "#/components/responses/Unavailable" }
@@ -1487,6 +1588,132 @@
               "$ref": "#/components/schemas/ConnectorCatalogOperation"
             }
           }
+        },
+        "additionalProperties": false
+      },
+      "GeneratedServiceSummary": {
+        "type": "object",
+        "required": ["service_ref", "display_name", "description", "digest"],
+        "properties": {
+          "service_ref": {
+            "type": "string",
+            "pattern": "^service:[a-z0-9_-]+$"
+          },
+          "display_name": { "type": "string" },
+          "description": { "type": "string" },
+          "digest": { "type": "string", "pattern": "^[a-f0-9]{64}$" }
+        },
+        "additionalProperties": false
+      },
+      "GeneratedServicePage": {
+        "type": "object",
+        "required": ["services"],
+        "properties": {
+          "services": {
+            "type": "array",
+            "items": { "$ref": "#/components/schemas/GeneratedServiceSummary" }
+          }
+        },
+        "additionalProperties": false
+      },
+      "GeneratedServiceCatalogRequest": {
+        "type": "object",
+        "required": ["service_ref"],
+        "properties": {
+          "service_ref": {
+            "type": "string",
+            "pattern": "^service:[a-z0-9_-]+$"
+          }
+        },
+        "additionalProperties": false
+      },
+      "GeneratedServiceCatalog": {
+        "type": "object",
+        "required": [
+          "format",
+          "service_ref",
+          "display_name",
+          "description",
+          "semantic_catalog",
+          "authentication",
+          "operations"
+        ],
+        "properties": {
+          "format": { "const": "service-catalog/1" },
+          "service_ref": {
+            "type": "string",
+            "pattern": "^service:[a-z0-9_-]+$"
+          },
+          "display_name": { "type": "string" },
+          "description": { "type": "string" },
+          "semantic_catalog": {
+            "type": "object",
+            "required": ["format"],
+            "properties": { "format": { "const": "ess-browser-catalog/1" } },
+            "additionalProperties": true
+          },
+          "authentication": {
+            "type": "object",
+            "required": ["source", "realm_policy"],
+            "properties": {
+              "source": { "const": "session" },
+              "realm_policy": {
+                "type": "string",
+                "enum": ["required", "optional", "forbidden"]
+              }
+            },
+            "additionalProperties": false
+          },
+          "operations": {
+            "type": "array",
+            "items": {
+              "type": "object",
+              "required": [
+                "name",
+                "operation_ref",
+                "semantic_ref",
+                "kind",
+                "effect",
+                "input_schema",
+                "output_schema"
+              ],
+              "properties": {
+                "name": { "type": "string" },
+                "operation_ref": { "type": "string" },
+                "semantic_ref": { "type": "string" },
+                "kind": { "type": "string", "enum": ["intent", "query"] },
+                "effect": { "type": "string", "enum": ["read", "write"] },
+                "input_schema": {
+                  "type": "object",
+                  "additionalProperties": true
+                },
+                "output_schema": {
+                  "type": "object",
+                  "additionalProperties": true
+                }
+              },
+              "additionalProperties": false
+            }
+          }
+        },
+        "additionalProperties": false
+      },
+      "GeneratedServiceInvokeRequest": {
+        "type": "object",
+        "required": ["operation_ref", "input", "confirmed"],
+        "properties": {
+          "operation_ref": { "type": "string", "maxLength": 512 },
+          "input": { "type": "object", "additionalProperties": true },
+          "confirmed": { "type": "boolean" }
+        },
+        "additionalProperties": false
+      },
+      "GeneratedServiceInvocation": {
+        "type": "object",
+        "required": ["output", "connector_audit_ref"],
+        "properties": {
+          "output": true,
+          "connector_audit_ref": { "type": "string" }
         },
         "additionalProperties": false
       },

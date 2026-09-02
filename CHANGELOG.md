@@ -1,5 +1,14 @@
 # Changelog
 
+## 0.6.0 - 2026-09-02
+
+- Compose Todo 0.2.1 and the Service SDK 0.2.3 external catalog factory through Connectors'
+  ordinary factory seam, without adding generated-service concepts to Connectors.
+- Add an authenticated generated-services BFF which retains descriptions, connections, access
+  tokens, and approval evidence server-side and accepts only catalog-admitted, realm-free inputs.
+- Reuse the SDK-owned Vue service console in Devcenter so the same generated widget powers each
+  service's standalone docs and the live product binding.
+
 ## 0.5.10 - 2026-09-02
 
 - Make the complete Connector catalog the default `/connectors` workspace, with bounded provider

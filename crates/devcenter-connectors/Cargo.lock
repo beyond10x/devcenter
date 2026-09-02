@@ -1026,7 +1026,7 @@ dependencies = [
 
 [[package]]
 name = "devcenter-connectors"
-version = "0.5.10"
+version = "0.6.0"
 dependencies = [
  "anyhow",
  "clap",
@@ -1035,6 +1035,7 @@ dependencies = [
  "serde",
  "serde_yaml",
  "service",
+ "service-catalog",
  "service-connectors",
  "todo-generated-service",
  "tokio",
@@ -4273,8 +4274,8 @@ dependencies = [
 
 [[package]]
 name = "service-catalog"
-version = "0.2.1"
-source = "git+https://github.com/beyond10x/service-sdk.git?rev=a77ee35356994ff9ce3cb51247fc7716692a4180#a77ee35356994ff9ce3cb51247fc7716692a4180"
+version = "0.2.3"
+source = "git+https://github.com/beyond10x/service-sdk.git?rev=a4da0cace5b4e197a2599c0063292e86fa8d9e96#a4da0cace5b4e197a2599c0063292e86fa8d9e96"
 dependencies = [
  "async-trait",
  "hex",
@@ -4288,8 +4289,8 @@ dependencies = [
 
 [[package]]
 name = "service-connectors"
-version = "0.2.1"
-source = "git+https://github.com/beyond10x/service-sdk.git?rev=a77ee35356994ff9ce3cb51247fc7716692a4180#a77ee35356994ff9ce3cb51247fc7716692a4180"
+version = "0.2.3"
+source = "git+https://github.com/beyond10x/service-sdk.git?rev=a4da0cace5b4e197a2599c0063292e86fa8d9e96#a4da0cace5b4e197a2599c0063292e86fa8d9e96"
 dependencies = [
  "async-trait",
  "eventlog-core",
@@ -4307,8 +4308,8 @@ dependencies = [
 
 [[package]]
 name = "service-engine"
-version = "0.2.1"
-source = "git+https://github.com/beyond10x/service-sdk.git?rev=a77ee35356994ff9ce3cb51247fc7716692a4180#a77ee35356994ff9ce3cb51247fc7716692a4180"
+version = "0.2.3"
+source = "git+https://github.com/beyond10x/service-sdk.git?rev=a4da0cace5b4e197a2599c0063292e86fa8d9e96#a4da0cace5b4e197a2599c0063292e86fa8d9e96"
 dependencies = [
  "serde",
  "serde_json",
@@ -4319,8 +4320,8 @@ dependencies = [
 
 [[package]]
 name = "service-eventlog"
-version = "0.2.1"
-source = "git+https://github.com/beyond10x/service-sdk.git?rev=a77ee35356994ff9ce3cb51247fc7716692a4180#a77ee35356994ff9ce3cb51247fc7716692a4180"
+version = "0.2.3"
+source = "git+https://github.com/beyond10x/service-sdk.git?rev=a4da0cace5b4e197a2599c0063292e86fa8d9e96#a4da0cace5b4e197a2599c0063292e86fa8d9e96"
 dependencies = [
  "eventlog-core",
  "hex",
@@ -4335,8 +4336,8 @@ dependencies = [
 
 [[package]]
 name = "service-runtime"
-version = "0.2.1"
-source = "git+https://github.com/beyond10x/service-sdk.git?rev=a77ee35356994ff9ce3cb51247fc7716692a4180#a77ee35356994ff9ce3cb51247fc7716692a4180"
+version = "0.2.3"
+source = "git+https://github.com/beyond10x/service-sdk.git?rev=a4da0cace5b4e197a2599c0063292e86fa8d9e96#a4da0cace5b4e197a2599c0063292e86fa8d9e96"
 dependencies = [
  "serde",
  "thiserror 2.0.20",
@@ -4903,7 +4904,7 @@ checksum = "1f3ccbac311fea05f86f61904b462b55fb3df8837a366dfc601a0161d0532f20"
 [[package]]
 name = "todo-generated-service"
 version = "0.1.0"
-source = "git+https://github.com/beyond10x/todo.git?rev=5f0b484f76abd5db0a0255b1f83eab6612f70466#5f0b484f76abd5db0a0255b1f83eab6612f70466"
+source = "git+https://github.com/beyond10x/todo.git?rev=385936478edbd86c15a1aac7a50e97a056c00388#385936478edbd86c15a1aac7a50e97a056c00388"
 dependencies = [
  "service-catalog",
  "service-connectors",

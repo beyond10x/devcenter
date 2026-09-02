@@ -181,6 +181,69 @@ const reviewGitlabOperations = [
     exposed: false,
   },
 ];
+const reviewServiceCatalog = {
+  format: "service-catalog/1",
+  service_ref: "service:todo",
+  display_name: "Todo",
+  description: "Shared scoped lists and intent-driven items.",
+  semantic_catalog: {
+    format: "ess-browser-catalog/1",
+    system: "todo",
+    entities: [
+      {
+        name: "todo.list.TodoList",
+        display: "Todo list",
+        initial: "active",
+        states: ["active", "archived", "expired"],
+        transitions: [
+          { name: "archive", from: ["active"], to: "archived" },
+          { name: "expire", from: ["active", "archived"], to: "expired" },
+        ],
+      },
+    ],
+    views: [
+      {
+        name: "todo.list.VisibleLists",
+        display: "Visible lists",
+        consistency: "read_your_writes",
+        fields: [
+          { name: "list_id", wire: "list-id" },
+          { name: "title", wire: "title" },
+          { name: "state", wire: "state" },
+        ],
+      },
+    ],
+  },
+  authentication: { source: "session", realm_policy: "optional" },
+  operations: [
+    {
+      name: "create_list",
+      operation_ref: "todo.create_list",
+      semantic_ref: "todo.list.CreateList",
+      kind: "intent",
+      effect: "write",
+      input_schema: {
+        type: "object",
+        properties: {
+          list_id: { type: "string", title: "List ID" },
+          title: { type: "string", title: "Title" },
+        },
+        required: ["list_id", "title"],
+        additionalProperties: false,
+      },
+      output_schema: { type: "object" },
+    },
+    {
+      name: "list_visible_lists",
+      operation_ref: "todo.list_visible_lists",
+      semantic_ref: "todo.list.VisibleLists",
+      kind: "query",
+      effect: "read",
+      input_schema: { type: "object", properties: {}, additionalProperties: false },
+      output_schema: { type: "array" },
+    },
+  ],
+};
 
 function sendJson(response: ServerResponse, status: number, value: unknown) {
   response.statusCode = status;
@@ -482,6 +545,52 @@ export function reviewApi(): Plugin {
           }
           if (path === "/api/connectors/claude-code" && method === "GET") {
             sendJson(response, 200, { provider: "claude-code", connected });
+            return;
+          }
+          if (path === "/api/services" && method === "GET") {
+            sendJson(response, 200, {
+              services: [
+                {
+                  service_ref: reviewServiceCatalog.service_ref,
+                  display_name: reviewServiceCatalog.display_name,
+                  description: reviewServiceCatalog.description,
+                  digest: "a".repeat(64),
+                },
+              ],
+            });
+            return;
+          }
+          if (path === "/api/services/catalog" && method === "POST") {
+            const submitted = await readJson(request);
+            if (submitted.service_ref !== reviewServiceCatalog.service_ref) {
+              sendJson(response, 404, { code: "service_operation_not_found" });
+              return;
+            }
+            sendJson(response, 200, reviewServiceCatalog);
+            return;
+          }
+          if (path === "/api/services/invoke" && method === "POST") {
+            const submitted = await readJson(request);
+            if (submitted.operation_ref === "todo.list_visible_lists") {
+              sendJson(response, 200, {
+                output: [{ list_id: "release", title: "Release service console", state: "active" }],
+                connector_audit_ref: "audit:review:query",
+              });
+              return;
+            }
+            if (submitted.operation_ref === "todo.create_list" && submitted.confirmed === true) {
+              sendJson(response, 200, {
+                output: {
+                  outcome: "applied",
+                  events: ["todo.list.ListCreated"],
+                  through_version: 1,
+                  replayed: false,
+                },
+                connector_audit_ref: "audit:review:intent",
+              });
+              return;
+            }
+            sendJson(response, 409, { code: "service_write_confirmation_required" });
             return;
           }
           if (path === "/api/connectors/catalog" && method === "GET") {

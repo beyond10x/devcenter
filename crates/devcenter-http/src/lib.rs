@@ -46,8 +46,11 @@ const MAX_PROVIDER_CREDENTIAL_BYTES: usize = 64 * 1024;
 const CONNECTORS_AUDIENCE: &str = "urn:b10x:connectors";
 const CONNECTORS_SELF_SCOPE: &str = "connectors.connections.self";
 const CONNECTORS_CATALOG_SCOPE: &str = "connectors.catalog.read";
+const CONNECTORS_INVOKE_SCOPE: &str = "connectors.invoke";
 const CONNECTORS_APPROVAL_SCOPE: &str = "connectors.approvals.issue";
 const CONNECTOR_APPROVAL_TTL_SECONDS: u64 = 120;
+const SERVICE_CATALOG_LIST_OPERATION: &str = "service_catalog.list_services";
+const SERVICE_CATALOG_GET_OPERATION: &str = "service_catalog.get_service";
 
 #[derive(Clone)]
 struct AppState {
@@ -115,6 +118,7 @@ pub fn router_with_store(
     Ok(frontend_routes()
         .merge(publication_routes())
         .merge(connection_routes())
+        .merge(service_routes())
         .merge(agent_routes())
         .merge(project_routes())
         .route("/mcp/{publication_id}", post(mcp))
@@ -128,6 +132,7 @@ fn frontend_routes() -> Router<AppState> {
         .route("/agents/{agent_id}", get(app))
         .route("/connectors", get(app))
         .route("/connectors/{provider_ref}", get(app))
+        .route("/services", get(app))
         .route("/connections", get(legacy_connections))
         .route("/projects", get(app))
         .route("/projects/{project_id}", get(app))
@@ -217,6 +222,13 @@ fn connection_routes() -> Router<AppState> {
             "/api/capability-profiles/{profile_id}",
             axum::routing::patch(update_capability_profile),
         )
+}
+
+fn service_routes() -> Router<AppState> {
+    Router::new()
+        .route("/api/services", get(list_generated_services))
+        .route("/api/services/catalog", post(get_generated_service_catalog))
+        .route("/api/services/invoke", post(invoke_generated_service))
 }
 
 async fn legacy_connections() -> Redirect {
@@ -691,6 +703,313 @@ async fn describe_catalog_provider(
         },
         Err(error) => connector_error(&error, "catalog_describe_refused"),
     }
+}
+
+#[derive(Debug, Deserialize)]
+#[serde(deny_unknown_fields)]
+struct GeneratedServiceCatalogRequest {
+    service_ref: String,
+}
+
+#[derive(Debug, Deserialize)]
+#[serde(deny_unknown_fields)]
+struct GeneratedServiceInvokeRequest {
+    operation_ref: String,
+    input: Value,
+    confirmed: bool,
+}
+
+async fn list_generated_services(State(state): State<AppState>, headers: HeaderMap) -> Response {
+    let authenticated = match authenticate(&state, &headers, false).await {
+        Ok(authenticated) => authenticated,
+        Err(response) => return response,
+    };
+    match invoke_connector_operation(
+        &state,
+        &authenticated,
+        SERVICE_CATALOG_LIST_OPERATION,
+        json!({}),
+        false,
+    )
+    .await
+    {
+        Ok((output, _)) if output.get("services").is_some_and(Value::is_array) => {
+            confidential_json(output)
+        }
+        Ok(_) => unavailable("service_catalog_invalid"),
+        Err(response) => response,
+    }
+}
+
+async fn get_generated_service_catalog(
+    State(state): State<AppState>,
+    headers: HeaderMap,
+    Json(request): Json<GeneratedServiceCatalogRequest>,
+) -> Response {
+    let authenticated = match authenticate(&state, &headers, true).await {
+        Ok(authenticated) => authenticated,
+        Err(response) => return response,
+    };
+    if !valid_service_ref(&request.service_ref) {
+        return problem(
+            StatusCode::UNPROCESSABLE_ENTITY,
+            "service_catalog_ref_invalid",
+        );
+    }
+    match load_service_catalog(&state, &authenticated, &request.service_ref).await {
+        Ok(catalog) => confidential_json(catalog),
+        Err(response) => response,
+    }
+}
+
+async fn invoke_generated_service(
+    State(state): State<AppState>,
+    headers: HeaderMap,
+    Json(request): Json<GeneratedServiceInvokeRequest>,
+) -> Response {
+    let authenticated = match authenticate(&state, &headers, true).await {
+        Ok(authenticated) => authenticated,
+        Err(response) => return response,
+    };
+    let Some(service_name) = request
+        .operation_ref
+        .split_once('.')
+        .map(|(service, _)| service)
+    else {
+        return problem(
+            StatusCode::UNPROCESSABLE_ENTITY,
+            "service_operation_ref_invalid",
+        );
+    };
+    let service_ref = format!("service:{service_name}");
+    if !valid_service_ref(&service_ref)
+        || !valid_connector_ref(&request.operation_ref)
+        || !request.input.is_object()
+    {
+        return problem(
+            StatusCode::UNPROCESSABLE_ENTITY,
+            "service_operation_input_invalid",
+        );
+    }
+    let catalog = match load_service_catalog(&state, &authenticated, &service_ref).await {
+        Ok(catalog) => catalog,
+        Err(response) => return response,
+    };
+    let Some(effect) = catalog
+        .get("operations")
+        .and_then(Value::as_array)
+        .and_then(|operations| {
+            operations.iter().find_map(|operation| {
+                (operation.get("operation_ref").and_then(Value::as_str)
+                    == Some(request.operation_ref.as_str()))
+                .then(|| operation.get("effect").and_then(Value::as_str))
+                .flatten()
+            })
+        })
+    else {
+        return problem(StatusCode::NOT_FOUND, "service_operation_not_found");
+    };
+    if effect == "write" && !request.confirmed {
+        return problem(StatusCode::CONFLICT, "service_write_confirmation_required");
+    }
+    if !matches!(effect, "read" | "write") {
+        return unavailable("service_catalog_invalid");
+    }
+    match invoke_connector_operation(
+        &state,
+        &authenticated,
+        &request.operation_ref,
+        request.input,
+        request.confirmed,
+    )
+    .await
+    {
+        Ok((output, connector_audit_ref)) => confidential_json(json!({
+            "output": output,
+            "connector_audit_ref": connector_audit_ref
+        })),
+        Err(response) => response,
+    }
+}
+
+async fn load_service_catalog(
+    state: &AppState,
+    authenticated: &AuthenticatedSession,
+    service_ref: &str,
+) -> Result<Value, Response> {
+    let (catalog, _) = invoke_connector_operation(
+        state,
+        authenticated,
+        SERVICE_CATALOG_GET_OPERATION,
+        json!({"service_ref": service_ref}),
+        false,
+    )
+    .await?;
+    if catalog.get("format").and_then(Value::as_str) != Some("service-catalog/1")
+        || catalog.get("service_ref").and_then(Value::as_str) != Some(service_ref)
+        || catalog
+            .pointer("/semantic_catalog/format")
+            .and_then(Value::as_str)
+            != Some("ess-browser-catalog/1")
+        || catalog
+            .pointer("/authentication/source")
+            .and_then(Value::as_str)
+            != Some("session")
+        || !catalog.get("operations").is_some_and(Value::is_array)
+    {
+        return Err(unavailable("service_catalog_invalid"));
+    }
+    Ok(catalog)
+}
+
+async fn invoke_connector_operation(
+    state: &AppState,
+    authenticated: &AuthenticatedSession,
+    operation_ref: &str,
+    input: Value,
+    confirmed: bool,
+) -> Result<(Value, String), Response> {
+    let (identity, connectors) = credential_services(state)?;
+    let catalog_access = identity
+        .issue_access_token(
+            authenticated.authorization.as_str(),
+            CONNECTORS_AUDIENCE,
+            CONNECTORS_CATALOG_SCOPE,
+        )
+        .await
+        .map_err(|_| unavailable("identity_access_unavailable"))?;
+    let context = connector_owner_context(state, authenticated);
+    let described = connectors
+        .operation(
+            catalog_access.credential.expose_at_authorization_boundary(),
+            &context,
+            operation::OperationRequest::Describe(operation::DescribeRequest {
+                operation_ref: operation_ref.to_owned(),
+            }),
+        )
+        .await
+        .map_err(|error| connector_error(&error, "service_operation_describe_refused"))?;
+    let Some(operation::OperationResult::Describe(description)) = described.response else {
+        return Err(operation_refusal(
+            described.error.as_ref(),
+            "service_operation_describe_refused",
+        ));
+    };
+    if description.operation_ref != operation_ref || description.connections.len() != 1 {
+        return Err(unavailable("service_operation_binding_invalid"));
+    }
+    let connection_ref = description.connections[0].connection_ref.clone();
+    let approval_evidence_ref = if description.approval == operation::ApprovalPosture::Required {
+        if !confirmed {
+            return Err(problem(
+                StatusCode::CONFLICT,
+                "service_write_confirmation_required",
+            ));
+        }
+        let approval_access = identity
+            .issue_access_token(
+                authenticated.authorization.as_str(),
+                CONNECTORS_AUDIENCE,
+                CONNECTORS_APPROVAL_SCOPE,
+            )
+            .await
+            .map_err(|_| unavailable("identity_access_unavailable"))?;
+        let issued = connectors
+            .issue_approval(
+                approval_access
+                    .credential
+                    .expose_at_authorization_boundary(),
+                &context,
+                approval::IssueRequest {
+                    operation_ref: operation_ref.to_owned(),
+                    connection_ref: connection_ref.clone(),
+                    description_ref: description.description_ref.clone(),
+                    input: input.clone(),
+                    ttl_seconds: CONNECTOR_APPROVAL_TTL_SECONDS,
+                },
+            )
+            .await
+            .map_err(|error| connector_error(&error, "service_approval_refused"))?;
+        Some(issued.approval_evidence_ref)
+    } else {
+        None
+    };
+    let invoke_access = identity
+        .issue_access_token(
+            authenticated.authorization.as_str(),
+            CONNECTORS_AUDIENCE,
+            CONNECTORS_INVOKE_SCOPE,
+        )
+        .await
+        .map_err(|_| unavailable("identity_access_unavailable"))?;
+    let invoked = connectors
+        .operation(
+            invoke_access.credential.expose_at_authorization_boundary(),
+            &context,
+            operation::OperationRequest::Invoke(operation::InvokeRequest {
+                operation_ref: operation_ref.to_owned(),
+                connection_ref,
+                description_ref: description.description_ref,
+                input,
+                approval_evidence_ref,
+            }),
+        )
+        .await
+        .map_err(|error| connector_error(&error, "service_invocation_refused"))?;
+    match invoked.response {
+        Some(operation::OperationResult::Invoke(invocation))
+            if invocation.operation_ref == operation_ref =>
+        {
+            Ok((invocation.output, invocation.connector_audit_ref))
+        }
+        _ => Err(operation_refusal(
+            invoked.error.as_ref(),
+            "service_invocation_refused",
+        )),
+    }
+}
+
+fn operation_refusal(error: Option<&operation::OperationError>, fallback: &str) -> Response {
+    let Some(error) = error else {
+        return problem(StatusCode::BAD_GATEWAY, fallback);
+    };
+    match error.code {
+        operation::OperationErrorCode::NotFound => {
+            problem(StatusCode::NOT_FOUND, "service_operation_not_found")
+        }
+        operation::OperationErrorCode::InvalidInput => problem(
+            StatusCode::UNPROCESSABLE_ENTITY,
+            "service_operation_input_invalid",
+        ),
+        operation::OperationErrorCode::NotGranted => {
+            problem(StatusCode::FORBIDDEN, "service_operation_not_granted")
+        }
+        operation::OperationErrorCode::StaleAuthority
+        | operation::OperationErrorCode::ApprovalRequired
+        | operation::OperationErrorCode::ApprovalDenied => {
+            problem(StatusCode::CONFLICT, "service_operation_conflict")
+        }
+        operation::OperationErrorCode::Unavailable => unavailable("service_operation_unavailable"),
+        operation::OperationErrorCode::ResultTooLarge
+        | operation::OperationErrorCode::Protocol
+        | operation::OperationErrorCode::OutcomeUnknown => {
+            problem(StatusCode::BAD_GATEWAY, fallback)
+        }
+    }
+}
+
+fn valid_service_ref(value: &str) -> bool {
+    value.strip_prefix("service:").is_some_and(|name| {
+        !name.is_empty()
+            && name.len() <= 128
+            && name.bytes().all(|byte| {
+                byte.is_ascii_lowercase() || byte.is_ascii_digit() || matches!(byte, b'-' | b'_')
+            })
+    })
+}
+
+fn valid_connector_ref(value: &str) -> bool {
+    !value.is_empty() && value.len() <= 512 && value.bytes().all(|byte| byte.is_ascii_graphic())
 }
 
 async fn list_repositories(State(state): State<AppState>, headers: HeaderMap) -> Response {
@@ -2441,6 +2760,7 @@ mod tests {
             "/agents/agent-1",
             "/connectors",
             "/connectors/gitlab",
+            "/services",
             "/docs",
             "/docs/",
         ] {
@@ -2474,6 +2794,7 @@ mod tests {
         let script = String::from_utf8(script.bytes.into_owned()).unwrap();
         assert!(script.contains("/api/connectors/claude-code/oauth/start"));
         assert!(script.contains("/api/connectors/claude-code/oauth/complete"));
+        assert!(script.contains("/api/services/invoke"));
         assert!(!script.contains("id=\"credential\""));
         assert!(script.contains("claude-opus-5"));
         assert!(!script.contains("claude-opus-4-1"));
@@ -2514,6 +2835,9 @@ mod tests {
         assert!(contract["paths"]["/api/connectors/claude-code/oauth/complete"].is_object());
         assert!(contract["paths"]["/api/connectors/catalog"].is_object());
         assert!(contract["paths"]["/api/connectors/catalog/{provider_ref}"].is_object());
+        assert!(contract["paths"]["/api/services"].is_object());
+        assert!(contract["paths"]["/api/services/catalog"].is_object());
+        assert!(contract["paths"]["/api/services/invoke"].is_object());
         assert!(contract["paths"]["/api/connections"].is_object());
         assert!(contract["paths"]["/api/capabilities"].is_object());
         assert!(contract["paths"]["/api/capability-profiles"].is_object());
@@ -2587,6 +2911,7 @@ mod tests {
             "/api/connectors/claude-code",
             "/api/connectors/catalog",
             "/api/connectors/catalog/gitlab",
+            "/api/services",
             "/api/connections",
             "/api/capabilities",
             "/api/capability-profiles",
@@ -2810,6 +3135,32 @@ mod tests {
             serde_json::from_value::<TaskApprovalDecision>(json!({
                 "decision": "approve",
                 "operation_ref": "todo.item.delete"
+            }))
+            .is_err()
+        );
+    }
+
+    #[test]
+    fn generated_service_requests_cannot_supply_authentication_coordinates() {
+        assert!(
+            serde_json::from_value::<GeneratedServiceCatalogRequest>(json!({
+                "service_ref": "service:todo"
+            }))
+            .is_ok()
+        );
+        assert!(
+            serde_json::from_value::<GeneratedServiceCatalogRequest>(json!({
+                "service_ref": "service:todo",
+                "realm": "default"
+            }))
+            .is_err()
+        );
+        assert!(
+            serde_json::from_value::<GeneratedServiceInvokeRequest>(json!({
+                "operation_ref": "todo.create_list",
+                "input": {},
+                "confirmed": true,
+                "tenant_id": "tenant-from-browser"
             }))
             .is_err()
         );

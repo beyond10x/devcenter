@@ -1,4 +1,5 @@
 import type { components } from "./schema.gen";
+import { assertServiceCatalog, type ServiceCatalog } from "@b10x/service-console-vue";
 
 export type Session = components["schemas"]["Session"];
 export type ConnectionStatus = components["schemas"]["ConnectionStatus"];
@@ -18,6 +19,9 @@ export type ConnectorCatalogOperation = components["schemas"]["ConnectorCatalogO
 export type ConnectorProviderDescription = components["schemas"]["ConnectorProviderDescription"];
 export type ConnectorProviderSummary = components["schemas"]["ConnectorProviderSummary"];
 export type ConnectorSetupProfile = components["schemas"]["ConnectorSetupProfile"];
+export type GeneratedServiceSummary = components["schemas"]["GeneratedServiceSummary"];
+export type GeneratedServicePage = components["schemas"]["GeneratedServicePage"];
+export type { ServiceCatalog };
 export interface RepositoryCandidate {
   forge_instance_ref: string;
   project_ref: string;
@@ -244,6 +248,15 @@ export const api = {
     request<ConnectorProviderDescription>(
       `/api/connectors/catalog/${encodeURIComponent(providerRef)}`,
     ),
+  generatedServices: () => request<GeneratedServicePage>("/api/services"),
+  generatedServiceCatalog: async (serviceRef: string) => {
+    const catalog = await request<unknown>("/api/services/catalog", {
+      method: "POST",
+      body: JSON.stringify({ service_ref: serviceRef }),
+    });
+    assertServiceCatalog(catalog);
+    return catalog;
+  },
   startConnection: (integrationRef: string, label: string, authProfile?: string) =>
     request<ConnectSession>("/api/connections", {
       method: "POST",

@@ -44,6 +44,60 @@ const project = {
   pinned_commit: "0123456789abcdef0123456789abcdef01234567",
   web_url: "https://gitlab.example.test/foundation/devcenter",
 };
+const todoCatalog = {
+  format: "service-catalog/1",
+  service_ref: "service:todo",
+  display_name: "Todo",
+  description: "Shared scoped lists and intent-driven items.",
+  semantic_catalog: {
+    format: "ess-browser-catalog/1",
+    entities: [
+      {
+        name: "todo.list.TodoList",
+        display: "Todo list",
+        initial: "active",
+        transitions: [{ name: "archive", from: ["active"], to: "archived" }],
+      },
+    ],
+    views: [
+      {
+        name: "todo.list.VisibleLists",
+        display: "Visible lists",
+        consistency: "read_your_writes",
+        fields: [{ name: "list_id", wire: "list-id" }],
+      },
+    ],
+  },
+  authentication: { source: "session", realm_policy: "optional" },
+  operations: [
+    {
+      name: "create_list",
+      operation_ref: "todo.create_list",
+      semantic_ref: "todo.list.CreateList",
+      kind: "intent",
+      effect: "write",
+      input_schema: {
+        type: "object",
+        properties: {
+          list_id: { type: "string", title: "List ID" },
+          title: { type: "string", title: "Title" },
+        },
+        required: ["list_id", "title"],
+        additionalProperties: false,
+      },
+      output_schema: { type: "object" },
+    },
+    {
+      name: "list_visible_lists",
+      operation_ref: "todo.list_visible_lists",
+      semantic_ref: "todo.list.VisibleLists",
+      kind: "query",
+      effect: "read",
+      input_schema: { type: "object", properties: {}, additionalProperties: false },
+      output_schema: { type: "array" },
+    },
+  ],
+};
 
 async function mockAuthenticatedWorkspace(page: Page) {
   await page.route(/^https?:\/\/[^/]+\/api\//, async (route) => {
@@ -63,6 +117,43 @@ async function mockAuthenticatedWorkspace(page: Page) {
     }
     if (path === "/api/connectors/claude-code") {
       await route.fulfill({ json: { provider: "claude-code", connected: false } });
+      return;
+    }
+    if (path === "/api/services" && request.method() === "GET") {
+      await route.fulfill({
+        json: {
+          services: [
+            {
+              service_ref: "service:todo",
+              display_name: "Todo",
+              description: todoCatalog.description,
+              digest: "a".repeat(64),
+            },
+          ],
+        },
+      });
+      return;
+    }
+    if (path === "/api/services/catalog" && request.method() === "POST") {
+      expect(request.postDataJSON()).toEqual({ service_ref: "service:todo" });
+      await route.fulfill({ json: todoCatalog });
+      return;
+    }
+    if (path === "/api/services/invoke" && request.method() === "POST") {
+      const submitted = request.postDataJSON() as {
+        operation_ref: string;
+        input: Record<string, unknown>;
+        confirmed: boolean;
+      };
+      await route.fulfill({
+        json: {
+          output:
+            submitted.operation_ref === "todo.list_visible_lists"
+              ? [{ list_id: "release", title: "Release service console", state: "active" }]
+              : { outcome: "applied", through_version: 1, replayed: false },
+          connector_audit_ref: "audit:test",
+        },
+      });
       return;
     }
     if (path === "/api/connectors/catalog") {
@@ -263,6 +354,27 @@ test("opens a deep-linked agent and creates a governed worker", async ({ page },
   await expect(page.getByRole("status")).toContainText("created and activated");
   const accessibility = await new AxeBuilder({ page }).withTags(["wcag2a", "wcag2aa"]).analyze();
   expect(accessibility.violations).toEqual([]);
+});
+
+test("runs the SDK-generated Todo console through the live BFF binding", async ({
+  page,
+}, testInfo) => {
+  test.skip(testInfo.project.name !== "chromium", "Desktop generated-service behavior");
+  await mockAuthenticatedWorkspace(page);
+  await page.goto("/services");
+
+  await expect(page.getByRole("heading", { name: "Services" })).toBeVisible();
+  await expect(page.getByRole("heading", { name: "Todo", exact: true })).toBeVisible();
+  await page.getByRole("button", { name: /list_visible_lists/ }).click();
+  await page.getByRole("button", { name: "Run query" }).click();
+  await expect(page.getByText("Release service console")).toBeVisible();
+
+  await page.getByRole("button", { name: /create_list/ }).click();
+  await page.getByLabel("List ID *").fill("service-console");
+  await page.getByLabel("Title *").fill("Ship the generated console");
+  await page.getByLabel("Confirm this state-changing intent").check();
+  await page.getByRole("button", { name: "Send intent" }).click();
+  await expect(page.getByText(/through_version/).first()).toBeVisible();
 });
 
 test("reviews and approves only the exact suspended agent call", async ({ page }, testInfo) => {

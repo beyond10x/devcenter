@@ -81,6 +81,16 @@ operation, connection, description lease, and input, and hands the one-use proof
 Platform. Neither credential reaches the browser. Identity remains provider- and service-agnostic
 throughout.
 
+The generated-services workspace uses the ordinary Connector composition seam twice: Todo
+contributes its generated domain factory, while Service SDK contributes a separate external catalog
+factory containing Todo's exact `service-catalog/1`. Devcenter's BFF reads that catalog, verifies
+every requested operation against it, and keeps Connector descriptions, connection selection,
+ephemeral access tokens, and approval evidence server-side. The browser imports the exact
+`@b10x/service-console-vue` package used by each synthesized service's standalone generated docs;
+only the binding changes from disposable demo mode to the authenticated live endpoint. Tenant and
+user are login facts, the Devcenter realm is absent (`None`), and no realm selector appears in a
+route, request body, header, or browser-client argument.
+
 `DEV_CENTER_IDENTITY_PROVIDERS` contains only opaque Identity-owned IDs and display labels. With
 zero entries, Identity keeps its existing selection behavior; with one, `/auth/sso/start` remains a
 single-click flow; with several, Devcenter requires an explicit choice. It never uses email for
@@ -106,7 +116,8 @@ The public chart is released as `oci://ghcr.io/beyond10x/charts/devcenter`.
 
 The release also publishes the `connectors-<version>` image in the private
 `ghcr.io/beyond10x/devcenter` package. That component composes the generated Todo Connector factory
-with the ordinary hosted Connectors runtime. A deployment chooses the exact operation exposure,
+and the SDK-owned external service-catalog factory with the ordinary hosted Connectors runtime. A
+deployment chooses the exact operation exposure,
 risk, approval posture, and Grants in a strict value-free overlay; the component chooses Eventlog's
 PostgreSQL adapter through a Secret-backed database URL. Domain commands, validation, projections,
 read-your-writes behavior, and Connector dispatch remain generated or SDK-owned rather than being

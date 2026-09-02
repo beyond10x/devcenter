@@ -165,6 +165,55 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/services": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get: operations["listGeneratedServices"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/services/catalog": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post: operations["getGeneratedServiceCatalog"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/services/invoke": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** @description Describe and invoke one catalog-admitted operation while Connector leases, access tokens, and approval evidence remain server-side. */
+        post: operations["invokeGeneratedService"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/connections": {
         parameters: {
             query?: never;
@@ -819,6 +868,63 @@ export interface components {
             provider: components["schemas"]["ConnectorProviderSummary"];
             operations: components["schemas"]["ConnectorCatalogOperation"][];
         };
+        GeneratedServiceSummary: {
+            service_ref: string;
+            display_name: string;
+            description: string;
+            digest: string;
+        };
+        GeneratedServicePage: {
+            services: components["schemas"]["GeneratedServiceSummary"][];
+        };
+        GeneratedServiceCatalogRequest: {
+            service_ref: string;
+        };
+        GeneratedServiceCatalog: {
+            /** @constant */
+            format: "service-catalog/1";
+            service_ref: string;
+            display_name: string;
+            description: string;
+            semantic_catalog: {
+                /** @constant */
+                format: "ess-browser-catalog/1";
+            } & {
+                [key: string]: unknown;
+            };
+            authentication: {
+                /** @constant */
+                source: "session";
+                /** @enum {string} */
+                realm_policy: "required" | "optional" | "forbidden";
+            };
+            operations: {
+                name: string;
+                operation_ref: string;
+                semantic_ref: string;
+                /** @enum {string} */
+                kind: "intent" | "query";
+                /** @enum {string} */
+                effect: "read" | "write";
+                input_schema: {
+                    [key: string]: unknown;
+                };
+                output_schema: {
+                    [key: string]: unknown;
+                };
+            }[];
+        };
+        GeneratedServiceInvokeRequest: {
+            operation_ref: string;
+            input: {
+                [key: string]: unknown;
+            };
+            confirmed: boolean;
+        };
+        GeneratedServiceInvocation: {
+            output: unknown;
+            connector_audit_ref: string;
+        };
         StartConnection: {
             integration_ref: string;
             label: string;
@@ -1370,6 +1476,94 @@ export interface operations {
             401: components["responses"]["Problem"];
             403: components["responses"]["Problem"];
             404: components["responses"]["Problem"];
+            422: components["responses"]["Problem"];
+            502: components["responses"]["Problem"];
+            503: components["responses"]["Unavailable"];
+        };
+    };
+    listGeneratedServices: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Exact generated services activated in this composition */
+            200: {
+                headers: {
+                    "Cache-Control"?: "no-store";
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["GeneratedServicePage"];
+                };
+            };
+            401: components["responses"]["Problem"];
+            403: components["responses"]["Problem"];
+            502: components["responses"]["Problem"];
+            503: components["responses"]["Unavailable"];
+        };
+    };
+    getGeneratedServiceCatalog: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["GeneratedServiceCatalogRequest"];
+            };
+        };
+        responses: {
+            /** @description Exact SDK-generated service-catalog/1 document */
+            200: {
+                headers: {
+                    "Cache-Control"?: "no-store";
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["GeneratedServiceCatalog"];
+                };
+            };
+            401: components["responses"]["Problem"];
+            403: components["responses"]["Problem"];
+            404: components["responses"]["Problem"];
+            422: components["responses"]["Problem"];
+            502: components["responses"]["Problem"];
+            503: components["responses"]["Unavailable"];
+        };
+    };
+    invokeGeneratedService: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["GeneratedServiceInvokeRequest"];
+            };
+        };
+        responses: {
+            /** @description Credential-free generated service result */
+            200: {
+                headers: {
+                    "Cache-Control"?: "no-store";
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["GeneratedServiceInvocation"];
+                };
+            };
+            401: components["responses"]["Problem"];
+            403: components["responses"]["Problem"];
+            404: components["responses"]["Problem"];
+            409: components["responses"]["Problem"];
             422: components["responses"]["Problem"];
             502: components["responses"]["Problem"];
             503: components["responses"]["Unavailable"];
