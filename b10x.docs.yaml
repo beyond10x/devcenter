@@ -47,6 +47,9 @@ surfaces:
   - kind: uses
     label: The Devcenter chart composes the Secrets service and its development database
     target: secrets/docs
+  - kind: uses
+    label: Devcenter consumes Workspace client and core crates at an exact revision.
+    target: workspace/docs
   routeBase: /docs/devcenter/
   sections: []
   source:
