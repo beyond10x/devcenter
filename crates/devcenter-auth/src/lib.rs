@@ -89,16 +89,45 @@ impl Authentication {
 
     /// Verify a token for one exact MCP publication resource.
     ///
-    /// Production remains unavailable until Identity's official client returns the OAuth client,
-    /// authorization, executor, and exact-resource claims required by the MCP authority flow.
+    /// Production accepts only Identity's short-lived exact-resource access authority carrying the
+    /// MCP call scope for the same human actor and subject.
     pub async fn verify_publication(
         &self,
         authorization: Option<&str>,
-        _resource: &str,
+        resource: &str,
     ) -> Result<Principal, AuthenticationError> {
         match self {
             Self::DevelopmentBearer(_) => self.verify(authorization).await,
-            Self::Unconfigured | Self::Identity(_) => Err(AuthenticationError::Unavailable),
+            Self::Unconfigured => Err(AuthenticationError::Unavailable),
+            Self::Identity(client) => {
+                let authorization = authorization.ok_or(AuthenticationError::Invalid)?;
+                client
+                    .resolve_access_token(authorization, resource)
+                    .await
+                    .map_err(|error| match error {
+                        identity_client::ClientError::Transport(_) => {
+                            AuthenticationError::Unavailable
+                        }
+                        _ => AuthenticationError::Invalid,
+                    })
+                    .and_then(|authority| {
+                        if authority.principal_kind != "human"
+                            || authority.actor.subject != authority.subject
+                            || !authority
+                                .scope
+                                .split_ascii_whitespace()
+                                .any(|scope| scope == "mcp.tools.call")
+                        {
+                            return Err(AuthenticationError::Invalid);
+                        }
+                        Ok(Principal {
+                            tenant_id: authority.tenant_id,
+                            subject: authority.subject,
+                            email: authority.email,
+                            groups: authority.groups,
+                        })
+                    })
+            }
         }
     }
 

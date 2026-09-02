@@ -9,7 +9,8 @@ missing_database_error=$(mktemp)
 invalid_docs_error=$(mktemp)
 invalid_identity_cli_error=$(mktemp)
 invalid_connector_client_error=$(mktemp)
-trap 'rm -f "$rendered" "$missing_database_error" "$invalid_docs_error" "$invalid_identity_cli_error" "$invalid_connector_client_error"' EXIT
+invalid_kubernetes_access_error=$(mktemp)
+trap 'rm -f "$rendered" "$missing_database_error" "$invalid_docs_error" "$invalid_identity_cli_error" "$invalid_connector_client_error" "$invalid_kubernetes_access_error"' EXIT
 
 grants_checksum() {
   helm template devcenter "$chart" \
@@ -124,6 +125,40 @@ grep -q 'chown 65532:65532 /var/run/substrate-tls/tls.crt /var/run/substrate-tls
 grep -q 'chown 65532:65532 /var/lib/substrate /var/run/substrate /var/run/substrate-tls' "$rendered"
 grep -q 'name: tls-source' "$rendered"
 grep -q 'DEV_CENTER_CONNECTORS_DOCS_AVAILABLE: "false"' "$rendered"
+
+helm template devcenter "$chart" \
+  --namespace devcenter \
+  --values "$values" \
+  --set connectorsKubernetesAccess.enabled=true \
+  --set 'connectorsKubernetesAccess.namespaces[0]=devcenter' \
+  --set 'connectorsKubernetesAccess.namespaces[1]=latest' \
+  --set 'connectorsKubernetesAccess.apiServerCidrs[0]=172.20.0.1/32' \
+  > "$rendered"
+
+test "$(grep -c '^kind: Role$' "$rendered")" -eq 2
+test "$(grep -c '^kind: RoleBinding$' "$rendered")" -eq 2
+grep -q '^  namespace: devcenter$' "$rendered"
+grep -q '^  namespace: latest$' "$rendered"
+grep -q 'resources: \["deployments"\]' "$rendered"
+grep -q 'resources: \["pods", "events"\]' "$rendered"
+grep -q 'resources: \["pods/log"\]' "$rendered"
+grep -q 'cidr: "172.20.0.1/32"' "$rendered"
+if grep -A12 '^kind: Role$' "$rendered" | grep -Eq 'secrets|create|delete|patch|update'; then
+  echo "namespace read Role unexpectedly grants sensitive or mutating authority" >&2
+  exit 1
+fi
+
+if helm template devcenter "$chart" \
+  --namespace devcenter \
+  --values "$values" \
+  --set connectorsKubernetesAccess.enabled=true \
+  --set 'connectorsKubernetesAccess.apiServerCidrs[0]=172.20.0.1/32' \
+  >/dev/null 2>"$invalid_kubernetes_access_error"
+then
+  echo "chart unexpectedly rendered Kubernetes access without exact namespaces" >&2
+  exit 1
+fi
+grep -q "connectorsKubernetesAccess.namespaces must contain at least one exact namespace" "$invalid_kubernetes_access_error"
 
 if helm template devcenter "$chart" \
   --namespace devcenter \

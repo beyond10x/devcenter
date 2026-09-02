@@ -11,7 +11,14 @@ import {
 } from "@lucide/vue";
 import { computed, nextTick, onMounted, ref } from "vue";
 import { useRoute } from "vue-router";
-import { api, errorMessage, type ConnectorConnection } from "@/api/client";
+import {
+  api,
+  errorMessage,
+  type ConnectSession,
+  type ConnectorConnection,
+  type ConnectorProviderDescription,
+  type ConnectorSetupProfile,
+} from "@/api/client";
 import { useWorkspaceStore } from "@/stores/workspace";
 
 const workspace = useWorkspaceStore();
@@ -26,6 +33,30 @@ const popupBlocked = ref(false);
 const providerConnections = ref<ConnectorConnection[]>([]);
 const providerLoading = ref(false);
 const providerError = ref("");
+const curatedDetails = ref<Record<string, ConnectorProviderDescription>>({});
+const curatedSessions = ref<Record<string, ConnectSession>>({});
+const curatedStarting = ref("");
+const curatedError = ref("");
+const curatedProviders = [
+  {
+    providerRef: "gitlab",
+    name: "GitLab",
+    mark: "G",
+    description: "Repository discovery, source context, reviews, and governed publication.",
+  },
+  {
+    providerRef: "slack",
+    name: "Slack",
+    mark: "S",
+    description: "Live personal conversations and approval-gated collaboration actions.",
+  },
+  {
+    providerRef: "grafana",
+    name: "Grafana",
+    mark: "G",
+    description: "Deployment-managed dashboards, Prometheus metrics, and observability context.",
+  },
+] as const;
 const highlightedConnection = computed(() =>
   typeof route.query.connection === "string" ? route.query.connection : undefined,
 );
@@ -80,7 +111,20 @@ async function loadProviderConnections() {
   providerLoading.value = true;
   providerError.value = "";
   try {
-    providerConnections.value = await api.connections();
+    const [connections, ...providers] = await Promise.allSettled([
+      api.connections(),
+      ...curatedProviders.map((provider) => api.connectorCatalogProvider(provider.providerRef)),
+    ]);
+    if (connections.status === "rejected") throw connections.reason;
+    providerConnections.value = connections.value;
+    curatedDetails.value = Object.fromEntries(
+      providers.flatMap((result, index) => {
+        const provider = curatedProviders[index];
+        return result.status === "fulfilled" && provider
+          ? [[provider.providerRef, result.value] as const]
+          : [];
+      }),
+    );
     await nextTick();
     if (highlightedConnection.value) {
       document.getElementById(`connection-${highlightedConnection.value}`)?.scrollIntoView({
@@ -91,6 +135,54 @@ async function loadProviderConnections() {
     providerError.value = errorMessage(cause);
   } finally {
     providerLoading.value = false;
+  }
+}
+
+function curatedConnection(providerRef: string) {
+  return providerConnections.value.find(
+    (connection) =>
+      connection.state !== "revoked" &&
+      (connection.integration_ref === providerRef ||
+        connection.integration_ref.endsWith(`:${providerRef}`) ||
+        connection.integration_ref.endsWith(`/${providerRef}`)),
+  );
+}
+
+function curatedProfile(providerRef: string): ConnectorSetupProfile | undefined {
+  const profiles = curatedDetails.value[providerRef]?.provider.setup_profiles ?? [];
+  return profiles.find((profile) => profile.actor === "person") ?? profiles[0];
+}
+
+async function connectCurated(providerRef: string, name: string) {
+  const profile = curatedProfile(providerRef);
+  if (!profile) return;
+  curatedStarting.value = providerRef;
+  curatedError.value = "";
+  try {
+    const session = await api.startConnection(providerRef, `My ${name}`, profile.auth_profile);
+    curatedSessions.value = { ...curatedSessions.value, [providerRef]: session };
+    if (session.browser_completion_url) {
+      window.open(session.browser_completion_url, "_blank", "noopener,noreferrer");
+    }
+    if (session.state === "pending") void pollCurated(providerRef, session.connect_session_ref, 0);
+    if (session.state === "completed") await loadProviderConnections();
+  } catch (cause) {
+    curatedError.value = errorMessage(cause);
+  } finally {
+    curatedStarting.value = "";
+  }
+}
+
+async function pollCurated(providerRef: string, sessionRef: string, attempt: number) {
+  if (attempt >= 60) return;
+  await new Promise((resolve) => window.setTimeout(resolve, 2_000));
+  try {
+    const session = await api.connectionSession(sessionRef);
+    curatedSessions.value = { ...curatedSessions.value, [providerRef]: session };
+    if (session.state === "pending") void pollCurated(providerRef, sessionRef, attempt + 1);
+    if (session.state === "completed") await loadProviderConnections();
+  } catch (cause) {
+    curatedError.value = errorMessage(cause);
   }
 }
 
@@ -300,6 +392,53 @@ onMounted(() => void loadProviderConnections());
         /></a>
       </aside>
     </div>
+
+    <section class="provider-connection-section curated-connections">
+      <header>
+        <div>
+          <p class="eyebrow">First-class integrations</p>
+          <h2>Engineering essentials</h2>
+          <p>Guided setup for the integrations Devcenter understands especially well.</p>
+        </div>
+      </header>
+      <p v-if="curatedError" class="form-error" role="alert">
+        <CircleAlert :size="16" /> {{ curatedError }}
+      </p>
+      <div class="provider-connection-grid curated-grid">
+        <article
+          v-for="provider in curatedProviders"
+          :key="provider.providerRef"
+          class="provider-connection-card"
+        >
+          <span class="provider-mark">{{ provider.mark }}</span>
+          <div>
+            <strong>{{ provider.name }}</strong>
+            <p>{{ provider.description }}</p>
+          </div>
+          <span v-if="curatedConnection(provider.providerRef)" class="status-pill succeeded">
+            Connected
+          </span>
+          <button
+            v-else-if="curatedProfile(provider.providerRef)"
+            class="button small"
+            type="button"
+            :disabled="
+              curatedStarting === provider.providerRef ||
+              curatedSessions[provider.providerRef]?.state === 'pending'
+            "
+            @click="connectCurated(provider.providerRef, provider.name)"
+          >
+            <KeyRound :size="15" />
+            {{
+              curatedSessions[provider.providerRef]?.state === "pending"
+                ? "Waiting…"
+                : `Connect ${provider.name}`
+            }}
+          </button>
+          <span v-else class="status-pill">Deployment managed</span>
+        </article>
+      </div>
+    </section>
 
     <section class="provider-connection-section">
       <header>

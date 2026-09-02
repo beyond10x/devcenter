@@ -9,6 +9,7 @@ import {
   type ClaudeOAuthStart,
   type IdentityProvider,
   type Session,
+  type Task,
   type TaskApproval,
   type TaskEventEnvelope,
   taskFailureMessage,
@@ -49,6 +50,7 @@ export const useWorkspaceStore = defineStore("workspace", () => {
   const selectedAgentId = ref<string>();
   const drafts = ref<Record<string, string>>({});
   const runs = ref<Record<string, AgentRun>>({});
+  const taskHistory = ref<Record<string, Task[]>>({});
   const connectionState = ref<LoadState>("idle");
   const connected = ref(false);
   const connectionError = ref("");
@@ -100,6 +102,7 @@ export const useWorkspaceStore = defineStore("workspace", () => {
         selectedAgentId.value = nextAgents[0]?.id;
       }
       agentsState.value = "ready";
+      if (selectedAgentId.value) await loadAgentTasks(selectedAgentId.value);
     } catch (error) {
       agentsState.value = "error";
       agentsError.value = errorMessage(error);
@@ -184,6 +187,38 @@ export const useWorkspaceStore = defineStore("workspace", () => {
 
   function selectAgent(agentId: string) {
     selectedAgentId.value = agentId;
+    void loadAgentTasks(agentId);
+  }
+
+  async function loadAgentTasks(agentId: string) {
+    try {
+      const tasks = await api.agentTasks(agentId);
+      taskHistory.value[agentId] = tasks;
+      const active = [...tasks]
+        .reverse()
+        .find((task) => ["accepted", "running", "awaiting_approval"].includes(task.status));
+      if (active) {
+        runs.value[agentId] = {
+          status: active.status as RunState,
+          output: active.output ?? "",
+          error: "",
+          taskId: active.id,
+        };
+        streamTask(agentId, active.id);
+      }
+    } catch {
+      // The live composer remains usable if history is temporarily unavailable.
+    }
+  }
+
+  function historyFor(agentId: string): Task[] {
+    return taskHistory.value[agentId] ?? [];
+  }
+
+  function updateHistory(agentId: string, taskId: string, changes: Partial<Task>) {
+    taskHistory.value[agentId] = historyFor(agentId).map((task) =>
+      task.id === taskId ? { ...task, ...changes } : task,
+    );
   }
 
   function draftFor(agentId: string): string {
@@ -211,6 +246,7 @@ export const useWorkspaceStore = defineStore("workspace", () => {
         error: "",
         taskId: task.id,
       };
+      taskHistory.value[agentId] = [...historyFor(agentId), task];
       streamTask(agentId, task.id);
     } catch (error) {
       runs.value[agentId] = {
@@ -256,6 +292,7 @@ export const useWorkspaceStore = defineStore("workspace", () => {
           current.approvals = [];
           events.close();
           streams.delete(agentId);
+          updateHistory(agentId, taskId, { status: "succeeded", output: update.output });
         }
         if (update.kind === "failed") {
           current.status = "failed";
@@ -263,6 +300,14 @@ export const useWorkspaceStore = defineStore("workspace", () => {
           current.approvals = [];
           events.close();
           streams.delete(agentId);
+          updateHistory(agentId, taskId, {
+            status: "failed",
+            failure_code: update.failure?.code,
+            failure_message: update.failure?.message,
+          });
+        }
+        if (!["succeeded", "failed"].includes(update.kind)) {
+          updateHistory(agentId, taskId, { status: current.status, output: current.output });
         }
         runs.value[agentId] = { ...current };
       } catch {
@@ -339,6 +384,7 @@ export const useWorkspaceStore = defineStore("workspace", () => {
     agents,
     agentsError,
     capabilityProfiles,
+    taskHistory,
     selectedAgentId,
     selectedAgent,
     connectionState,
@@ -357,6 +403,8 @@ export const useWorkspaceStore = defineStore("workspace", () => {
     disconnect,
     createAgent,
     selectAgent,
+    loadAgentTasks,
+    historyFor,
     draftFor,
     setDraft,
     runFor,

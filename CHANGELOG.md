@@ -1,5 +1,17 @@
 # Changelog
 
+## 0.8.0 - 2026-09-03
+
+- Turn agent tasks into persistent, principal-owned chat histories with a compact roster and a
+  familiar conversation composer.
+- Add personal capability profiles, guarded/read-only presets, explicit shared-profile visibility,
+  and immutable MCP publication from the profile's current Connector capability snapshot.
+- Let deployments grant the embedded Connectors service a strict read-only Kubernetes view of
+  explicitly named namespaces, with an equally explicit API-server network aperture.
+- Consume Identity 0.5.2, Agent Platform 0.6.1, and Connectors 0.5.2 for multi-provider sign-in,
+  exact-resource MCP authentication, owner-scoped task history, generic catalog connections, and
+  curated integration support.
+
 ## 0.7.1 - 2026-09-02
 
 - Consume released Connectors 0.4.5 for the BFF client and protocol contracts while retaining the

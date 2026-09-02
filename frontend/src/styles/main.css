@@ -1061,6 +1061,37 @@ a {
   margin: 0.15rem 0 0;
   font-size: 1.2rem;
 }
+.view-header-actions,
+.profile-name-editor {
+  display: flex;
+  align-items: center;
+  gap: 0.55rem;
+}
+.profile-name-editor {
+  margin-top: 0.15rem;
+}
+.profile-name-editor input {
+  min-width: min(24rem, 48vw);
+  padding: 0.4rem 0.5rem;
+  color: var(--ink);
+  background: var(--surface-muted);
+  border: 1px solid var(--line);
+  border-radius: 0.5rem;
+  font-size: 1.05rem;
+  font-weight: 700;
+}
+.profile-audience-label,
+.profile-personal-note {
+  color: var(--muted);
+  font-size: 0.62rem;
+}
+.profile-personal-note {
+  padding: 0.7rem;
+  margin: 0;
+  background: var(--surface-muted);
+  border: 1px solid var(--line);
+  border-radius: 0.55rem;
+}
 .permission-toolbar {
   display: grid;
   gap: 0.65rem;
@@ -1312,7 +1343,7 @@ a {
   align-items: start;
   gap: 1.1rem;
   margin-top: 1.4rem;
-  grid-template-columns: 17rem minmax(0, 1fr);
+  grid-template-columns: 12.5rem minmax(0, 1fr);
 }
 .roster-card,
 .task-workspace,
@@ -1473,6 +1504,11 @@ a {
   min-width: 0;
   overflow: hidden;
 }
+.task-workspace:not(.workspace-placeholder) {
+  display: flex;
+  min-height: calc(100vh - 11rem);
+  flex-direction: column;
+}
 .agent-workspace-header {
   display: flex;
   align-items: center;
@@ -1607,6 +1643,105 @@ a {
 }
 .run-button {
   min-width: 7.4rem;
+}
+.agent-chat-panel {
+  min-height: 24rem;
+  flex: 1;
+  overflow: auto;
+  background: linear-gradient(180deg, var(--surface-muted), var(--surface));
+  border-bottom: 1px solid var(--line);
+}
+.agent-chat-empty {
+  display: grid;
+  min-height: 24rem;
+  place-content: center;
+  justify-items: center;
+  padding: 2rem;
+  color: var(--muted);
+  text-align: center;
+}
+.agent-chat-empty h3 {
+  margin: 0.65rem 0 0;
+  color: var(--ink);
+  font-size: 0.88rem;
+}
+.agent-chat-empty p {
+  max-width: 28rem;
+  margin: 0.35rem 0 0;
+  font-size: 0.67rem;
+  line-height: 1.55;
+}
+.agent-chat-transcript {
+  display: grid;
+  gap: 1.4rem;
+  max-width: 54rem;
+  padding: 1.4rem;
+  margin: 0 auto;
+}
+.agent-chat-turn {
+  display: grid;
+  gap: 0.75rem;
+}
+.chat-message {
+  display: grid;
+  gap: 0.4rem;
+  max-width: min(46rem, 88%);
+}
+.chat-message > span,
+.chat-message > small {
+  color: var(--muted);
+  font-size: 0.56rem;
+  font-weight: 700;
+}
+.chat-message > p {
+  padding: 0.75rem 0.85rem;
+  margin: 0;
+  border-radius: 0.8rem;
+  font-size: 0.75rem;
+  line-height: 1.65;
+  white-space: pre-wrap;
+}
+.user-message {
+  justify-self: end;
+}
+.user-message > span {
+  text-align: right;
+}
+.user-message > p {
+  color: #fff;
+  background: var(--accent);
+  border-bottom-right-radius: 0.2rem;
+}
+.assistant-message {
+  justify-self: start;
+}
+.assistant-message > p {
+  background: var(--surface);
+  border: 1px solid var(--line);
+  border-bottom-left-radius: 0.2rem;
+  box-shadow: 0 3px 12px rgb(26 48 42 / 4%);
+}
+.assistant-message .assistant-error {
+  color: var(--danger);
+  background: var(--danger-soft);
+}
+.assistant-waiting {
+  display: flex;
+  align-items: center;
+  gap: 0.4rem;
+  color: var(--muted);
+}
+.agent-chat-composer {
+  padding: 0.8rem;
+  background: var(--surface);
+}
+.agent-chat-composer .task-prompt {
+  width: 100%;
+  min-height: 5rem;
+  margin: 0;
+}
+.agent-chat-composer .composer-footer {
+  padding: 0.65rem 0 0;
 }
 .task-approvals-card {
   margin: 0 1rem 1rem;
@@ -1867,7 +2002,8 @@ a {
   font-weight: 730;
 }
 .field input,
-.field textarea {
+.field textarea,
+.field select {
   width: 100%;
   padding: 0.7rem 0.75rem;
   color: var(--ink);
@@ -1878,7 +2014,8 @@ a {
   line-height: 1.55;
 }
 .field input:focus,
-.field textarea:focus {
+.field textarea:focus,
+.field select:focus {
   background: var(--surface);
   border-color: #8fb9ad;
   outline: 3px solid rgb(23 107 91 / 9%);
@@ -2289,7 +2426,7 @@ a {
     grid-template-columns: minmax(0, 1fr) minmax(20rem, 0.7fr);
   }
   .workspace-grid {
-    grid-template-columns: 14rem minmax(0, 1fr);
+    grid-template-columns: 11.5rem minmax(0, 1fr);
   }
   .connections-layout {
     grid-template-columns: minmax(0, 1fr);

@@ -32,6 +32,7 @@ const taskActive = computed(() =>
   ),
 );
 const approvals = computed(() => run.value.approvals ?? []);
+const history = computed(() => (selected.value ? workspace.historyFor(selected.value.id) : []));
 
 watch(
   [() => route.params.agentId, () => workspace.agentsState],
@@ -78,7 +79,7 @@ function formatDate(value: number) {
   }).format(value);
 }
 
-function runLabel() {
+function statusLabel(status: string) {
   const labels: Record<string, string> = {
     idle: "Ready",
     submitting: "Submitting",
@@ -89,7 +90,20 @@ function runLabel() {
     succeeded: "Succeeded",
     failed: "Failed",
   };
-  return labels[run.value.status] ?? "Ready";
+  return labels[status] ?? "Ready";
+}
+
+function runLabel() {
+  return statusLabel(run.value.status);
+}
+
+function taskOutput(task: (typeof history.value)[number]) {
+  return task.id === run.value.taskId ? run.value.output || task.output : task.output;
+}
+
+function taskError(task: (typeof history.value)[number]) {
+  if (task.id === run.value.taskId && run.value.error) return run.value.error;
+  return task.failure_message;
 }
 
 function formatInput(input: unknown) {
@@ -192,39 +206,36 @@ function formatInput(input: unknown) {
           </div>
         </header>
 
-        <section class="composer-card">
-          <div class="composer-heading">
-            <div>
-              <h3>What should this agent accomplish?</h3>
-              <p>Give it a concrete outcome and the context needed to produce evidence.</p>
-            </div>
-            <span class="connection-indicator" :class="{ connected: workspace.connected }">
-              <span></span>{{ workspace.connected ? "Model connected" : "Connection unchecked" }}
-            </span>
+        <section class="agent-chat-panel" aria-live="polite">
+          <div v-if="!history.length" class="agent-chat-empty">
+            <Sparkles :size="22" />
+            <h3>Start a conversation</h3>
+            <p>Ask for an outcome. Each turn retains its exact agent revision and authority.</p>
           </div>
-          <label class="sr-only" :for="`prompt-${selected.id}`">Task instructions</label>
-          <textarea
-            :id="`prompt-${selected.id}`"
-            class="task-prompt"
-            :value="workspace.draftFor(selected.id)"
-            rows="7"
-            placeholder="Prepare the next release. Verify every gate, summarize notable changes, and stop before publication."
-            :disabled="taskActive"
-            @input="workspace.setDraft(selected.id, ($event.target as HTMLTextAreaElement).value)"
-          ></textarea>
-          <footer class="composer-footer">
-            <span>Authority is revalidated for every attempt.</span>
-            <button
-              class="button primary run-button"
-              type="button"
-              :disabled="taskActive || !workspace.draftFor(selected.id).trim()"
-              @click="workspace.submitTask(selected.id)"
-            >
-              <RotateCw v-if="taskActive" :size="17" class="spinning" />
-              <ArrowUp v-else :size="17" />
-              {{ taskActive ? runLabel() + "…" : "Run task" }}
-            </button>
-          </footer>
+          <div v-else class="agent-chat-transcript">
+            <article v-for="task in history" :key="task.id" class="agent-chat-turn">
+              <div class="chat-message user-message">
+                <span>You</span>
+                <p>{{ task.prompt }}</p>
+              </div>
+              <div class="chat-message assistant-message">
+                <span>{{ selected.name }} · {{ statusLabel(task.status) }}</span>
+                <p v-if="taskOutput(task)" class="assistant-output">{{ taskOutput(task) }}</p>
+                <p v-else-if="taskError(task)" class="assistant-error">{{ taskError(task) }}</p>
+                <p v-else class="assistant-waiting">
+                  <RotateCw
+                    v-if="task.id === run.taskId && taskActive"
+                    :size="14"
+                    class="spinning"
+                  />
+                  {{
+                    task.id === run.taskId && taskActive ? runLabel() + "…" : "No output recorded."
+                  }}
+                </p>
+                <small>Task {{ task.id.slice(0, 12) }}</small>
+              </div>
+            </article>
+          </div>
         </section>
 
         <section v-if="approvals.length || run.approvalError" class="task-approvals-card">
@@ -279,30 +290,35 @@ function formatInput(input: unknown) {
           </p>
         </section>
 
-        <section class="run-card" :class="`run-${run.status}`">
-          <header class="run-header">
-            <div>
-              <span class="run-light"></span>
-              <h3>Latest attempt</h3>
-            </div>
-            <span class="status-pill" :class="run.status">{{ runLabel() }}</span>
-          </header>
-          <div v-if="run.status === 'idle'" class="run-empty">
-            <div class="terminal-mark"><span></span><span></span><span></span></div>
-            <p>Task output will appear here as ordered events arrive.</p>
-          </div>
-          <div v-else class="run-output-wrap">
-            <div class="run-meta" aria-live="polite">
-              <span v-if="run.taskId">Task {{ run.taskId.slice(0, 12) }}</span>
-              <span>{{ runLabel() }}</span>
-            </div>
-            <pre class="run-output" tabindex="0">{{
-              run.output || (run.error ? "" : "Waiting for output…")
-            }}</pre>
-            <p v-if="run.error" class="run-error" role="alert">
-              <CircleAlert :size="16" /> {{ run.error }}
-            </p>
-          </div>
+        <section class="agent-chat-composer">
+          <label class="sr-only" :for="`prompt-${selected.id}`">Message {{ selected.name }}</label>
+          <textarea
+            :id="`prompt-${selected.id}`"
+            class="task-prompt"
+            :value="workspace.draftFor(selected.id)"
+            rows="3"
+            placeholder="Message this agent…"
+            :disabled="taskActive"
+            @input="workspace.setDraft(selected.id, ($event.target as HTMLTextAreaElement).value)"
+            @keydown.ctrl.enter.prevent="workspace.submitTask(selected.id)"
+            @keydown.meta.enter.prevent="workspace.submitTask(selected.id)"
+          ></textarea>
+          <footer class="composer-footer">
+            <span class="connection-indicator" :class="{ connected: workspace.connected }">
+              <span></span>{{ workspace.connected ? "Model connected" : "Connection unchecked" }} ·
+              Authority revalidated every turn
+            </span>
+            <button
+              class="button primary run-button"
+              type="button"
+              :disabled="taskActive || !workspace.draftFor(selected.id).trim()"
+              @click="workspace.submitTask(selected.id)"
+            >
+              <RotateCw v-if="taskActive" :size="17" class="spinning" />
+              <ArrowUp v-else :size="17" />
+              {{ taskActive ? runLabel() + "…" : "Send" }}
+            </button>
+          </footer>
         </section>
       </main>
 

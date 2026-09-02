@@ -2,7 +2,7 @@
   "openapi": "3.1.0",
   "info": {
     "title": "Devcenter API",
-    "version": "0.7.1",
+    "version": "0.8.0",
     "description": "Authenticated browser/BFF surface for identity, connector custody, agents, and tasks."
   },
   "paths": {
@@ -625,6 +625,26 @@
       }
     },
     "/api/agents/{agent_id}/tasks": {
+      "get": {
+        "operationId": "listAgentTasks",
+        "security": [{ "browserSession": [] }, { "identityBearer": [] }],
+        "parameters": [{ "$ref": "#/components/parameters/AgentId" }],
+        "responses": {
+          "200": {
+            "description": "Personal task history for this agent",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "array",
+                  "items": { "$ref": "#/components/schemas/Task" }
+                }
+              }
+            }
+          },
+          "401": { "$ref": "#/components/responses/Problem" },
+          "403": { "$ref": "#/components/responses/Problem" }
+        }
+      },
       "post": {
         "operationId": "submitAgentTask",
         "security": [{ "browserSession": [] }, { "identityBearer": [] }],
@@ -1852,9 +1872,13 @@
       },
       "CreateCapabilityProfile": {
         "type": "object",
-        "required": ["name", "mappings"],
+        "required": ["name", "audience", "mappings"],
         "properties": {
           "name": { "type": "string" },
+          "audience": {
+            "type": "string",
+            "enum": ["personal", "tenant"]
+          },
           "mappings": {
             "type": "array",
             "items": { "$ref": "#/components/schemas/CapabilityMapping" }
@@ -1881,6 +1905,7 @@
           "id",
           "tenant_id",
           "name",
+          "audience",
           "revision",
           "mappings",
           "compiled",
@@ -1892,6 +1917,10 @@
           "id": { "type": "string" },
           "tenant_id": { "type": "string" },
           "name": { "type": "string" },
+          "audience": {
+            "type": "string",
+            "enum": ["personal", "tenant"]
+          },
           "revision": { "type": "integer", "minimum": 1 },
           "mappings": {
             "type": "array",
@@ -2169,14 +2198,27 @@
       },
       "Task": {
         "type": "object",
-        "required": ["id", "agent_id", "status", "attempt_id"],
+        "required": [
+          "id",
+          "agent_id",
+          "status",
+          "attempt_id",
+          "prompt",
+          "accepted_at_ms"
+        ],
         "properties": {
           "id": { "type": "string" },
           "agent_id": { "type": "string" },
           "status": { "type": "string" },
           "attempt_id": { "type": "string" },
-          "output": { "type": ["string", "null"] }
-        }
+          "prompt": { "type": "string" },
+          "output": { "type": ["string", "null"] },
+          "failure_code": { "type": ["string", "null"] },
+          "failure_message": { "type": ["string", "null"] },
+          "accepted_at_ms": { "type": "integer", "minimum": 0 },
+          "completed_at_ms": { "type": ["integer", "null"], "minimum": 0 }
+        },
+        "additionalProperties": false
       },
       "ConnectorOwnerContext": {
         "type": "object",

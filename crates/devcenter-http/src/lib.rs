@@ -8,12 +8,13 @@ use std::time::{SystemTime, UNIX_EPOCH};
 use agent_platform_client::{
     ActivateRevision, AgentId, AgentPlatformClient, ClientError as AgentPlatformError, CreateAgent,
     CreateCapabilityProfile as PlatformCreateCapabilityProfile, PendingApproval, ResolveApproval,
-    RevisionSpec, SubmitTask, TaskId, UpdateCapabilityProfile as PlatformUpdateCapabilityProfile,
+    RevisionSpec, SubmitTask, Task, TaskId,
+    UpdateCapabilityProfile as PlatformUpdateCapabilityProfile,
 };
 use agent_platform_core::{
-    ApprovalId, CapabilityMapping, CapabilityPosture, CapabilityProfileId,
-    ConnectorApprovalPosture, ConnectorConnectionSummary, ConnectorEffectClass,
-    ConnectorOperationDescription,
+    ApprovalId, CapabilityMapping, CapabilityPosture, CapabilityProfileAudience,
+    CapabilityProfileId, ConnectorApprovalPosture, ConnectorConnectionSummary,
+    ConnectorEffectClass, ConnectorOperationDescription,
 };
 use axum::body::Body;
 use axum::extract::{Path, Query, State};
@@ -30,8 +31,11 @@ use connectors_protocol::{
 };
 use devcenter_auth::{AuthenticationError, Principal};
 use devcenter_core::{Config, IdentityProvider};
-use devcenter_mcp::{Outcome as McpOutcome, Request as McpRequest, Toolset};
-use devcenter_store::{PublicationState, Store, StoreError};
+use devcenter_mcp::{
+    ApprovalPosture as McpApprovalPosture, CompiledTool, Effect as McpEffect,
+    Outcome as McpOutcome, Request as McpRequest, Toolset,
+};
+use devcenter_store::{Publication, PublicationRevision, PublicationState, Store, StoreError};
 use serde::{Deserialize, Serialize};
 use serde_json::{Value, json};
 use sha2::{Digest, Sha256};
@@ -239,7 +243,10 @@ async fn legacy_connections() -> Redirect {
 fn agent_routes() -> Router<AppState> {
     Router::new()
         .route("/api/agents", get(list_agents).post(create_managed_agent))
-        .route("/api/agents/{agent_id}/tasks", post(submit_prompt))
+        .route(
+            "/api/agents/{agent_id}/tasks",
+            get(list_agent_tasks).post(submit_prompt),
+        )
         .route("/api/tasks/{task_id}", get(get_task))
         .route("/api/tasks/{task_id}/events", get(task_events))
         .route("/api/tasks/{task_id}/approvals", get(list_task_approvals))
@@ -380,9 +387,10 @@ async fn metrics() -> impl IntoResponse {
 }
 
 async fn resource_metadata(State(state): State<AppState>) -> Json<Value> {
+    let origin = state.config.public_origin.trim_end_matches('/');
     Json(json!({
-        "resource": format!("{}/mcp", state.config.public_origin.trim_end_matches('/')),
-        "authorization_servers": [format!("{}/identity", state.config.public_origin.trim_end_matches('/'))],
+        "resource": format!("{origin}/mcp"),
+        "authorization_servers": [origin],
         "bearer_methods_supported": ["header"]
     }))
 }
@@ -394,10 +402,11 @@ async fn publication_resource_metadata(
     if !valid_opaque_id(&publication_id) {
         return StatusCode::NOT_FOUND.into_response();
     }
+    let origin = state.config.public_origin.trim_end_matches('/');
     let resource = publication_resource(&state, &publication_id);
     confidential_json(json!({
         "resource": resource,
-        "authorization_servers": [format!("{}/identity", state.config.public_origin.trim_end_matches('/'))],
+        "authorization_servers": [origin],
         "bearer_methods_supported": ["header"],
         "scopes_supported": ["mcp.tools.call"],
         "resource_name": "Devcenter capability publication"
@@ -1722,6 +1731,7 @@ async fn list_capability_profiles(State(state): State<AppState>, headers: Header
 #[serde(deny_unknown_fields)]
 struct CreateCapabilityProfileRequest {
     name: String,
+    audience: CapabilityProfileAudience,
     mappings: Vec<CapabilityMapping>,
 }
 
@@ -1779,6 +1789,7 @@ async fn create_capability_profile(
         };
     let request = PlatformCreateCapabilityProfile {
         name: request.name,
+        audience: request.audience,
         mappings: request.mappings,
         operation_descriptions,
     };
@@ -2103,6 +2114,77 @@ struct SubmitPrompt {
     idempotency_key: String,
 }
 
+#[derive(Serialize)]
+struct AgentTaskSummary {
+    id: String,
+    agent_id: String,
+    status: String,
+    attempt_id: String,
+    prompt: String,
+    output: Option<String>,
+    failure_code: Option<String>,
+    failure_message: Option<String>,
+    accepted_at_ms: u64,
+    completed_at_ms: Option<u64>,
+}
+
+fn agent_task_summary(task: Task) -> AgentTaskSummary {
+    let prompt = task
+        .input
+        .get("prompt")
+        .and_then(Value::as_str)
+        .unwrap_or_default()
+        .to_owned();
+    AgentTaskSummary {
+        id: task.id.to_string(),
+        agent_id: task.agent_id.to_string(),
+        status: serde_json::to_value(task.status)
+            .ok()
+            .and_then(|value| value.as_str().map(str::to_owned))
+            .unwrap_or_else(|| "unknown".to_owned()),
+        attempt_id: task.attempt_id.to_string(),
+        prompt,
+        output: task.output,
+        failure_code: task.failure.as_ref().map(|failure| failure.code.clone()),
+        failure_message: task.failure.map(|failure| failure.message),
+        accepted_at_ms: task.accepted_at_ms,
+        completed_at_ms: task.completed_at_ms,
+    }
+}
+
+async fn list_agent_tasks(
+    State(state): State<AppState>,
+    headers: HeaderMap,
+    Path(agent_id): Path<String>,
+) -> Response {
+    let authenticated = match authenticate(&state, &headers, false).await {
+        Ok(authenticated) => authenticated,
+        Err(response) => return response,
+    };
+    let Some(client) = state.agent_platform.as_ref() else {
+        return unavailable("agent_platform_not_configured");
+    };
+    let Ok(agent_id) = AgentId::new(agent_id) else {
+        return problem(StatusCode::UNPROCESSABLE_ENTITY, "agent_id_invalid");
+    };
+    match client
+        .list_tasks(authenticated.authorization.as_str())
+        .await
+    {
+        Ok(mut tasks) => {
+            tasks.retain(|task| task.agent_id == agent_id);
+            tasks.sort_by_key(|task| task.accepted_at_ms);
+            confidential_json(
+                tasks
+                    .into_iter()
+                    .map(agent_task_summary)
+                    .collect::<Vec<_>>(),
+            )
+        }
+        Err(error) => agent_platform_error(&error),
+    }
+}
+
 async fn submit_prompt(
     State(state): State<AppState>,
     headers: HeaderMap,
@@ -2135,7 +2217,7 @@ async fn submit_prompt(
         )
         .await
     {
-        Ok(task) => (StatusCode::ACCEPTED, Json(task)).into_response(),
+        Ok(task) => (StatusCode::ACCEPTED, Json(agent_task_summary(task))).into_response(),
         Err(error) => agent_platform_error(&error),
     }
 }
@@ -2419,11 +2501,136 @@ async fn list_publications(State(state): State<AppState>, headers: HeaderMap) ->
     }
 }
 
-async fn create_publication(State(state): State<AppState>, headers: HeaderMap) -> Response {
-    if let Err(response) = authenticate(&state, &headers, true).await {
-        return response;
+#[derive(Deserialize)]
+#[serde(deny_unknown_fields)]
+struct CreatePublication {
+    profile_id: String,
+}
+
+async fn create_publication(
+    State(state): State<AppState>,
+    headers: HeaderMap,
+    Json(request): Json<CreatePublication>,
+) -> Response {
+    let authenticated = match authenticate(&state, &headers, true).await {
+        Ok(authenticated) => authenticated,
+        Err(response) => return response,
+    };
+    let Some(client) = state.agent_platform.as_ref() else {
+        return unavailable("agent_platform_not_configured");
+    };
+    let Ok(profile_id) = CapabilityProfileId::new(request.profile_id) else {
+        return problem(
+            StatusCode::UNPROCESSABLE_ENTITY,
+            "capability_profile_id_invalid",
+        );
+    };
+    let profiles = match client
+        .list_capability_profiles(authenticated.authorization.as_str())
+        .await
+    {
+        Ok(profiles) => profiles,
+        Err(error) => return agent_platform_error(&error),
+    };
+    let profiles: Vec<CapabilityProfileSnapshot> = match serde_json::from_value(profiles) {
+        Ok(profiles) => profiles,
+        Err(_) => return unavailable("agent_platform_profile_invalid"),
+    };
+    let Some(profile) = profiles
+        .into_iter()
+        .find(|profile| profile.id == profile_id)
+    else {
+        return problem(StatusCode::NOT_FOUND, "capability_profile_not_found");
+    };
+    let descriptions = match capability_snapshot(&state, &authenticated, &profile.mappings).await {
+        Ok(descriptions) => descriptions,
+        Err(response) => return response,
+    };
+    let Ok(tools) = publication_tools(&profile.mappings, &descriptions) else {
+        return unavailable("agent_platform_profile_invalid");
+    };
+    let Ok(toolset) = Toolset::compile(tools) else {
+        return unavailable("publication_projection_invalid");
+    };
+    let Ok(publication_id) = random_token(18).map(|token| format!("pub_{token}")) else {
+        return unavailable("publication_id_unavailable");
+    };
+    let Ok(profile_revision) = i64::try_from(profile.revision) else {
+        return unavailable("agent_platform_profile_invalid");
+    };
+    let now = now_millis();
+    let publication = Publication {
+        publication_id: publication_id.clone(),
+        tenant_id: authenticated.principal.tenant_id.clone(),
+        owner_subject: authenticated.principal.subject.clone(),
+        profile_id: profile_id.to_string(),
+        active_revision: 1,
+        toolset_digest: toolset.digest().to_owned(),
+        state: PublicationState::Active,
+        created_at_ms: now,
+        updated_at_ms: now,
+    };
+    let revision = PublicationRevision {
+        publication_id,
+        revision: 1,
+        profile_revision,
+        toolset_digest: toolset.digest().to_owned(),
+        tools: toolset.tools().to_vec(),
+        created_at_ms: now,
+    };
+    match state
+        .publications
+        .create_publication(&publication, &revision)
+        .await
+    {
+        Ok(()) => (StatusCode::CREATED, Json(publication)).into_response(),
+        Err(_) => unavailable("publication_store_unavailable"),
     }
-    unavailable("agent_platform_capability_profiles_unavailable")
+}
+
+fn publication_tools(
+    mappings: &[CapabilityMapping],
+    descriptions: &[ConnectorOperationDescription],
+) -> Result<Vec<CompiledTool>, ()> {
+    mappings
+        .iter()
+        .filter(|mapping| mapping.posture != CapabilityPosture::Deny)
+        .map(|mapping| {
+            let description = descriptions
+                .iter()
+                .find(|description| description.operation_ref == mapping.operation_ref)
+                .ok_or(())?;
+            let connection_id = mapping.connection_ref.clone().or_else(|| {
+                let [connection] = description.connections.as_slice() else {
+                    return None;
+                };
+                Some(connection.connection_ref.clone())
+            });
+            let effect = match description.effect {
+                ConnectorEffectClass::ReadOnly => McpEffect::ReadOnly,
+                ConnectorEffectClass::Mutating => McpEffect::Mutation,
+                ConnectorEffectClass::Destructive => McpEffect::Destructive,
+            };
+            let approval = if mapping.posture == CapabilityPosture::ApprovalRequired
+                || description.approval == ConnectorApprovalPosture::Required
+            {
+                McpApprovalPosture::Required
+            } else {
+                McpApprovalPosture::NotRequired
+            };
+            Ok(CompiledTool {
+                name: mapping.tool_name.clone(),
+                title: description.title.clone(),
+                description: description.description.clone(),
+                operation_ref: description.operation_ref.clone(),
+                connection_id: connection_id.ok_or(())?,
+                input_schema: description.input_schema.clone(),
+                output_schema: description.output_schema.clone(),
+                effect,
+                approval,
+            })
+        })
+        .collect()
 }
 
 async fn get_publication(
@@ -2451,9 +2658,6 @@ async fn change_publication_state(
         Ok(authenticated) => authenticated,
         Err(response) => return response,
     };
-    if request.state == PublicationState::Revoked {
-        return unavailable("identity_publication_revocation_unavailable");
-    }
     if let Err(response) =
         owned_publication(&state, &authenticated.principal, &publication_id).await
     {
@@ -2503,7 +2707,7 @@ async fn list_publication_clients(
 async fn revoke_publication_client(
     State(state): State<AppState>,
     headers: HeaderMap,
-    Path((publication_id, _authorization_id)): Path<(String, String)>,
+    Path((publication_id, authorization_id)): Path<(String, String)>,
 ) -> Response {
     let authenticated = match authenticate(&state, &headers, true).await {
         Ok(authenticated) => authenticated,
@@ -2514,7 +2718,20 @@ async fn revoke_publication_client(
     {
         return response;
     }
-    unavailable("identity_client_revocation_unavailable")
+    match state
+        .publications
+        .revoke_client(
+            &publication_id,
+            &authorization_id,
+            &authenticated.principal.subject,
+            now_millis(),
+        )
+        .await
+    {
+        Ok(()) => StatusCode::NO_CONTENT.into_response(),
+        Err(StoreError::Conflict) => problem(StatusCode::NOT_FOUND, "publication_client_not_found"),
+        Err(_) => unavailable("publication_store_unavailable"),
+    }
 }
 
 async fn list_publication_approvals(
@@ -2701,11 +2918,8 @@ fn bearer_authorization(headers: &HeaderMap) -> Result<Zeroizing<String>, ()> {
     Ok(Zeroizing::new(authorization.to_owned()))
 }
 
-fn publication_resource(state: &AppState, publication_id: &str) -> String {
-    format!(
-        "{}/mcp/{publication_id}",
-        state.config.public_origin.trim_end_matches('/')
-    )
+fn publication_resource(state: &AppState, _publication_id: &str) -> String {
+    format!("{}/mcp", state.config.public_origin.trim_end_matches('/'))
 }
 
 fn valid_opaque_id(value: &str) -> bool {
@@ -3355,6 +3569,58 @@ mod tests {
         let mut advanced = description;
         advanced.description_ref = "description:todo:advanced".to_owned();
         assert!(!capability_profile_is_current(&profile, &[advanced]));
+    }
+
+    #[test]
+    fn publication_projection_excludes_denied_tools_and_requires_exact_connections() {
+        let descriptions = vec![ConnectorOperationDescription {
+            operation_ref: "todo.get_list".to_owned(),
+            title: "Get list".to_owned(),
+            description: "Read one Todo list".to_owned(),
+            input_schema: json!({"type": "object"}),
+            output_schema: json!({"type": "object"}),
+            effect: ConnectorEffectClass::ReadOnly,
+            approval: ConnectorApprovalPosture::NotRequired,
+            connections: vec![ConnectorConnectionSummary {
+                connection_ref: "connection:todo".to_owned(),
+                label: "Todo".to_owned(),
+                provider: "provider:todo".to_owned(),
+                audiences: Vec::new(),
+                purpose: None,
+            }],
+            description_ref: "description:todo:current".to_owned(),
+        }];
+        let mappings = vec![
+            CapabilityMapping {
+                operation_ref: "todo.get_list".to_owned(),
+                tool_name: "get_list".to_owned(),
+                connection_ref: None,
+                context: None,
+                posture: CapabilityPosture::Allow,
+            },
+            CapabilityMapping {
+                operation_ref: "todo.delete_list".to_owned(),
+                tool_name: "delete_list".to_owned(),
+                connection_ref: None,
+                context: None,
+                posture: CapabilityPosture::Deny,
+            },
+        ];
+
+        let tools = publication_tools(&mappings, &descriptions).unwrap();
+        assert_eq!(tools.len(), 1);
+        assert_eq!(tools[0].name, "get_list");
+        assert_eq!(tools[0].connection_id, "connection:todo");
+
+        let mut ambiguous = descriptions;
+        ambiguous[0].connections.push(ConnectorConnectionSummary {
+            connection_ref: "connection:todo:other".to_owned(),
+            label: "Other Todo".to_owned(),
+            provider: "provider:todo".to_owned(),
+            audiences: Vec::new(),
+            purpose: None,
+        });
+        assert!(publication_tools(&mappings, &ambiguous).is_err());
     }
 
     #[test]

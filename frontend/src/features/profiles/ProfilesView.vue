@@ -8,6 +8,7 @@ import {
   RefreshCw,
   ShieldAlert,
   ShieldCheck,
+  X,
 } from "@lucide/vue";
 import { computed, onMounted, ref, watch } from "vue";
 import { useRoute, useRouter } from "vue-router";
@@ -31,6 +32,11 @@ const selectedId = ref<string | undefined>(
 );
 const loading = ref(true);
 const mutating = ref(false);
+const showCreate = ref(false);
+const createName = ref("");
+const createAudience = ref<CapabilityProfile["audience"]>("personal");
+const createPreset = ref<"guarded" | "read_only" | "empty">("guarded");
+const editingName = ref("");
 const error = ref("");
 const notice = ref("");
 const postureOptions: { value: CapabilityPosture; label: string }[] = [
@@ -40,6 +46,7 @@ const postureOptions: { value: CapabilityPosture; label: string }[] = [
 ];
 
 const selected = computed(() => profiles.value.find((profile) => profile.id === selectedId.value));
+const canManageTenantProfiles = computed(() => workspace.session?.groups.includes("operator"));
 const postureByOperation = computed(
   () =>
     new Map(
@@ -109,17 +116,49 @@ function chooseProfile(profileId: string) {
 }
 
 async function createProfile() {
+  const name = createName.value.trim();
+  if (!name) {
+    error.value = "Give the capability profile a name.";
+    return;
+  }
   mutating.value = true;
   error.value = "";
   try {
-    const mappings = capabilities.value.map((capability) =>
-      mapping(capability, capability.approval === "required" ? "approval_required" : "allow"),
-    );
-    const profile = await api.createCapabilityProfile("Engineering default", mappings);
+    const mappings = capabilities.value.map((capability) => {
+      let posture: CapabilityPosture = "deny";
+      if (createPreset.value !== "empty" && capability.effect === "read_only") posture = "allow";
+      if (createPreset.value === "guarded" && capability.effect !== "read_only") {
+        posture = "approval_required";
+      }
+      return mapping(capability, posture);
+    });
+    const audience = canManageTenantProfiles.value ? createAudience.value : "personal";
+    const profile = await api.createCapabilityProfile(name, audience, mappings);
     profiles.value.unshift(profile);
     selectedId.value = profile.id;
     workspace.capabilityProfiles = profiles.value;
     notice.value = "Capability profile created.";
+    showCreate.value = false;
+    createName.value = "";
+    createAudience.value = "personal";
+  } catch (cause) {
+    error.value = errorMessage(cause);
+  } finally {
+    mutating.value = false;
+  }
+}
+
+async function renameProfile() {
+  const profile = selected.value;
+  const name = editingName.value.trim();
+  if (!profile || !name || name === profile.name) return;
+  mutating.value = true;
+  error.value = "";
+  try {
+    const changed = await api.updateCapabilityProfile(profile, profile.mappings, name);
+    profiles.value = profiles.value.map((item) => (item.id === changed.id ? changed : item));
+    workspace.capabilityProfiles = profiles.value;
+    notice.value = "Capability profile renamed.";
   } catch (cause) {
     error.value = errorMessage(cause);
   } finally {
@@ -175,6 +214,13 @@ watch(
     }
   },
 );
+watch(
+  selected,
+  (profile) => {
+    editingName.value = profile?.name ?? "";
+  },
+  { immediate: true },
+);
 </script>
 
 <template>
@@ -185,9 +231,14 @@ watch(
         <h1>Set the agent authority posture</h1>
         <p>Every setting stays beneath your current Connector grants and connected accounts.</p>
       </div>
-      <button class="button quiet" type="button" :disabled="loading" @click="load">
-        <RefreshCw :size="16" :class="{ spinning: loading }" /> Refresh
-      </button>
+      <div class="view-header-actions">
+        <button class="button quiet" type="button" :disabled="loading" @click="load">
+          <RefreshCw :size="16" :class="{ spinning: loading }" /> Refresh
+        </button>
+        <button class="button primary" type="button" @click="showCreate = true">
+          <Plus :size="16" /> New profile
+        </button>
+      </div>
     </header>
 
     <p v-if="error" class="form-error" role="alert"><CircleAlert :size="16" /> {{ error }}</p>
@@ -201,9 +252,9 @@ watch(
         class="button primary"
         type="button"
         :disabled="mutating || !capabilities.length"
-        @click="createProfile"
+        @click="showCreate = true"
       >
-        <Plus :size="16" /> Create engineering default
+        <Plus :size="16" /> Create a personal profile
       </button>
     </section>
 
@@ -219,7 +270,10 @@ watch(
           <span class="publication-icon"><ShieldCheck :size="17" /></span>
           <span
             ><strong>{{ profile.name }}</strong
-            ><small>Revision {{ profile.revision }}</small></span
+            ><small
+              >{{ profile.audience === "personal" ? "Personal" : "Shared template" }} · Revision
+              {{ profile.revision }}</small
+            ></span
           >
         </button>
       </aside>
@@ -229,6 +283,30 @@ watch(
           <div>
             <p class="eyebrow">{{ selected.id }}</p>
             <h2>{{ selected.name }}</h2>
+            <div class="profile-name-editor">
+              <label class="sr-only" for="profile-name-edit">Profile name</label>
+              <input
+                id="profile-name-edit"
+                v-model="editingName"
+                maxlength="160"
+                :disabled="mutating"
+              />
+              <button
+                class="button quiet small"
+                type="button"
+                :disabled="mutating || !editingName.trim() || editingName.trim() === selected.name"
+                @click="renameProfile"
+              >
+                Save name
+              </button>
+            </div>
+            <small class="profile-audience-label">
+              {{
+                selected.audience === "personal"
+                  ? "Only you can bind this profile"
+                  : "Shared tenant template"
+              }}
+            </small>
           </div>
           <span class="status-pill active">revision {{ selected.revision }}</span>
         </header>
@@ -298,6 +376,80 @@ watch(
           No callable capabilities are visible through the current connections.
         </p>
       </main>
+    </div>
+
+    <div
+      v-if="showCreate"
+      class="dialog-layer"
+      role="presentation"
+      @mousedown.self="showCreate = false"
+    >
+      <section class="dialog" role="dialog" aria-modal="true" aria-labelledby="new-profile-title">
+        <header class="dialog-header">
+          <span class="dialog-icon"><ShieldCheck :size="22" /></span>
+          <div>
+            <p class="eyebrow">New capability profile</p>
+            <h2 id="new-profile-title">Choose a safe starting posture</h2>
+          </div>
+          <button
+            class="icon-button"
+            type="button"
+            aria-label="Close"
+            :disabled="mutating"
+            @click="showCreate = false"
+          >
+            <X :size="19" />
+          </button>
+        </header>
+        <form class="form-stack" @submit.prevent="createProfile">
+          <div class="field">
+            <label for="profile-name">Name</label>
+            <input
+              id="profile-name"
+              v-model="createName"
+              maxlength="160"
+              placeholder="My engineering tools"
+              autocomplete="off"
+            />
+          </div>
+          <div class="field">
+            <label for="profile-preset">Starting posture</label>
+            <select id="profile-preset" v-model="createPreset">
+              <option value="guarded">Reads allowed; every write requires approval</option>
+              <option value="read_only">Read-only; all effectful operations denied</option>
+              <option value="empty">Deny everything</option>
+            </select>
+            <small>You can review every operation before assigning this profile to an agent.</small>
+          </div>
+          <div v-if="canManageTenantProfiles" class="field">
+            <label for="profile-audience">Visibility</label>
+            <select id="profile-audience" v-model="createAudience">
+              <option value="personal">Personal · only I can bind it</option>
+              <option value="tenant">Shared template · visible to the tenant</option>
+            </select>
+          </div>
+          <p v-else class="profile-personal-note">
+            New profiles are personal to your verified identity.
+          </p>
+          <footer class="dialog-actions">
+            <button
+              class="button quiet"
+              type="button"
+              :disabled="mutating"
+              @click="showCreate = false"
+            >
+              Cancel
+            </button>
+            <button
+              class="button primary"
+              type="submit"
+              :disabled="mutating || !capabilities.length"
+            >
+              {{ mutating ? "Creating…" : "Create profile" }}
+            </button>
+          </footer>
+        </form>
+      </section>
     </div>
   </div>
 </template>

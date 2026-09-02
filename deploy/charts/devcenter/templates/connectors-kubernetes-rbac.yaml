@@ -1,0 +1,49 @@
+{{- if .Values.connectorsKubernetesAccess.enabled }}
+{{- if not (index .Values.components "connectors").enabled }}
+{{- fail "connectorsKubernetesAccess.enabled requires components.connectors.enabled" }}
+{{- end }}
+{{- if not .Values.connectorsKubernetesAccess.namespaces }}
+{{- fail "connectorsKubernetesAccess.namespaces must contain at least one exact namespace" }}
+{{- end }}
+{{- $connectorsServiceAccount := default (printf "%s-connectors" (include "devcenter.fullname" .)) (index .Values.components "connectors").serviceAccountName }}
+{{- range $index, $namespace := .Values.connectorsKubernetesAccess.namespaces }}
+{{- if gt $index 0 }}
+---
+{{- end }}
+apiVersion: rbac.authorization.k8s.io/v1
+kind: Role
+metadata:
+  name: {{ include "devcenter.fullname" $ }}-connectors-read
+  namespace: {{ $namespace }}
+  labels:
+    {{- include "devcenter.labels" $ | nindent 4 }}
+    app.kubernetes.io/component: connectors
+rules:
+  - apiGroups: ["apps"]
+    resources: ["deployments"]
+    verbs: ["get", "list"]
+  - apiGroups: [""]
+    resources: ["pods", "events"]
+    verbs: ["get", "list"]
+  - apiGroups: [""]
+    resources: ["pods/log"]
+    verbs: ["get"]
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: RoleBinding
+metadata:
+  name: {{ include "devcenter.fullname" $ }}-connectors-read
+  namespace: {{ $namespace }}
+  labels:
+    {{- include "devcenter.labels" $ | nindent 4 }}
+    app.kubernetes.io/component: connectors
+roleRef:
+  apiGroup: rbac.authorization.k8s.io
+  kind: Role
+  name: {{ include "devcenter.fullname" $ }}-connectors-read
+subjects:
+  - kind: ServiceAccount
+    name: {{ $connectorsServiceAccount }}
+    namespace: {{ $.Release.Namespace }}
+{{- end }}
+{{- end }}

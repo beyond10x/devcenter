@@ -126,8 +126,10 @@ export interface CapabilityMapping {
 export interface CapabilityProfile {
   id: string;
   name: string;
+  audience: "personal" | "tenant";
   revision: number;
   mappings: CapabilityMapping[];
+  created_by: string;
   created_at_ms: number;
   updated_at_ms: number;
 }
@@ -277,17 +279,25 @@ export const api = {
     request<ConnectSession>(`/api/connect-sessions/${encodeURIComponent(sessionRef)}`),
   capabilities: () => request<Capability[]>("/api/capabilities"),
   capabilityProfiles: () => request<CapabilityProfile[]>("/api/capability-profiles"),
-  createCapabilityProfile: (name: string, mappings: CapabilityMapping[]) =>
+  createCapabilityProfile: (
+    name: string,
+    audience: CapabilityProfile["audience"],
+    mappings: CapabilityMapping[],
+  ) =>
     request<CapabilityProfile>("/api/capability-profiles", {
       method: "POST",
-      body: JSON.stringify({ name, mappings }),
+      body: JSON.stringify({ name, audience, mappings }),
     }),
-  updateCapabilityProfile: (profile: CapabilityProfile, mappings: CapabilityMapping[]) =>
+  updateCapabilityProfile: (
+    profile: CapabilityProfile,
+    mappings: CapabilityMapping[],
+    name = profile.name,
+  ) =>
     request<CapabilityProfile>(`/api/capability-profiles/${encodeURIComponent(profile.id)}`, {
       method: "PATCH",
       body: JSON.stringify({
         expected_revision: profile.revision,
-        name: profile.name,
+        name,
         mappings,
       }),
     }),
@@ -323,6 +333,8 @@ export const api = {
     }),
   disconnect: () => request<ConnectionStatus>("/api/connectors/claude-code", { method: "DELETE" }),
   agents: () => request<Agent[]>("/api/agents"),
+  agentTasks: (agentId: string) =>
+    request<Task[]>(`/api/agents/${encodeURIComponent(agentId)}/tasks`),
   createAgent: (agent: CreateAgent) =>
     request<Agent>("/api/agents", { method: "POST", body: JSON.stringify(agent) }),
   submitTask: (agentId: string, prompt: string) =>

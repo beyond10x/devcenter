@@ -317,7 +317,7 @@ export interface paths {
             path?: never;
             cookie?: never;
         };
-        get?: never;
+        get: operations["listAgentTasks"];
         put?: never;
         post: operations["submitAgentTask"];
         delete?: never;
@@ -981,6 +981,8 @@ export interface components {
         };
         CreateCapabilityProfile: {
             name: string;
+            /** @enum {string} */
+            audience: "personal" | "tenant";
             mappings: components["schemas"]["CapabilityMapping"][];
         };
         UpdateCapabilityProfile: {
@@ -992,6 +994,8 @@ export interface components {
             id: string;
             tenant_id: string;
             name: string;
+            /** @enum {string} */
+            audience: "personal" | "tenant";
             revision: number;
             mappings: components["schemas"]["CapabilityMapping"][];
             compiled: Record<string, never>;
@@ -1127,7 +1131,12 @@ export interface components {
             agent_id: string;
             status: string;
             attempt_id: string;
+            prompt: string;
             output?: string | null;
+            failure_code?: string | null;
+            failure_message?: string | null;
+            accepted_at_ms: number;
+            completed_at_ms?: number | null;
         };
         ConnectorOwnerContext: {
             tenant_id: string;
@@ -1787,6 +1796,30 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["Agent"];
+                };
+            };
+            401: components["responses"]["Problem"];
+            403: components["responses"]["Problem"];
+        };
+    };
+    listAgentTasks: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                agent_id: components["parameters"]["AgentId"];
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Personal task history for this agent */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Task"][];
                 };
             };
             401: components["responses"]["Problem"];

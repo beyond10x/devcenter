@@ -34,8 +34,10 @@ interface ReviewCapabilityMapping {
 interface ReviewCapabilityProfile {
   id: string;
   name: string;
+  audience: "personal" | "tenant";
   revision: number;
   mappings: ReviewCapabilityMapping[];
+  created_by: string;
   created_at_ms: number;
   updated_at_ms: number;
 }
@@ -104,6 +106,7 @@ const capabilityProfiles: ReviewCapabilityProfile[] = [
   {
     id: "profile-release-operations",
     name: "Release operations",
+    audience: "personal",
     revision: 4,
     mappings: [
       {
@@ -125,6 +128,7 @@ const capabilityProfiles: ReviewCapabilityProfile[] = [
         posture: "approval_required",
       },
     ],
+    created_by: "review-engineer",
     created_at_ms: 1_788_260_000_000,
     updated_at_ms: 1_788_260_000_000,
   },
@@ -564,10 +568,12 @@ export function reviewApi(): Plugin {
             const created: ReviewCapabilityProfile = {
               id: `profile-review-${String(nextCapabilityProfile++)}`,
               name: typeof submitted.name === "string" ? submitted.name : "Engineering default",
+              audience: submitted.audience === "tenant" ? "tenant" : "personal",
               revision: 1,
               mappings: Array.isArray(submitted.mappings)
                 ? (submitted.mappings as ReviewCapabilityMapping[])
                 : [],
+              created_by: "review-engineer",
               created_at_ms: now,
               updated_at_ms: now,
             };
@@ -788,10 +794,19 @@ export function reviewApi(): Plugin {
             sendJson(response, 200, { provider: "claude-code", connected });
             return;
           }
+          if (/^\/api\/agents\/[^/]+\/tasks$/.test(path) && method === "GET") {
+            sendJson(response, 200, []);
+            return;
+          }
           if (/^\/api\/agents\/[^/]+\/tasks$/.test(path) && method === "POST") {
+            const submitted = await readJson(request);
             sendJson(response, 202, {
               id: `task-review-${String(Date.now())}`,
+              agent_id: path.split("/")[3],
               status: "accepted",
+              attempt_id: "attempt-review",
+              prompt: typeof submitted.prompt === "string" ? submitted.prompt : "",
+              accepted_at_ms: Date.now(),
             });
             return;
           }

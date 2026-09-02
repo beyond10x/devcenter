@@ -214,6 +214,15 @@ connectorsCatalogBundle:
   sourcePath: /bundle
   mountPath: /var/lib/connectors/catalog
 
+# Optional, namespace-exact in-cluster read authority for the hosted Kubernetes Connector.
+# This deliberately excludes Secrets, ConfigMaps, writes, rollout restarts, and cluster-scoped
+# resources. Connector policy must separately admit the same namespaces for the caller.
+connectorsKubernetesAccess:
+  enabled: false
+  namespaces: []
+  # Exact Kubernetes API endpoint CIDRs used only when networkPolicy.enabled is true.
+  apiServerCidrs: []
+
 # Secrets is composed here rather than through a standalone chart. Deployment automation creates
 # both referenced Secrets: one with a PostgreSQL DSN/password and one versioned KEK keyring.
 secrets:

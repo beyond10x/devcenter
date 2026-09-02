@@ -147,6 +147,7 @@ async function mockAuthenticatedWorkspace(page: Page) {
   let capabilityProfile = {
     id: "profile-release",
     name: "Release profile",
+    audience: "personal",
     revision: 3,
     mappings: [
       {
@@ -162,6 +163,7 @@ async function mockAuthenticatedWorkspace(page: Page) {
         posture: "approval_required",
       },
     ],
+    created_by: "actor-1",
     created_at_ms: 1_788_260_000_000,
     updated_at_ms: 1_788_260_000_000,
   };
@@ -498,17 +500,20 @@ test("reviews and approves only the exact suspended agent call", async ({ page }
     requested_at_ms: 1_788_260_000_000,
   };
   let submittedDecision: unknown;
-  await page.route("**/api/agents/agent-release/tasks", (route) =>
-    route.fulfill({
+  await page.route("**/api/agents/agent-release/tasks", (route) => {
+    if (route.request().method() === "GET") return route.fulfill({ json: [] });
+    return route.fulfill({
       status: 202,
       json: {
         id: "task-1",
         agent_id: "agent-release",
         status: "accepted",
         attempt_id: "attempt-1",
+        prompt: "Create the release Todo.",
+        accepted_at_ms: 1_788_260_000_000,
       },
-    }),
-  );
+    });
+  });
   await page.route("**/api/tasks/task-1/events", (route) =>
     route.fulfill({
       contentType: "text/event-stream",
@@ -530,8 +535,8 @@ test("reviews and approves only the exact suspended agent call", async ({ page }
   });
 
   await page.goto("/agents/agent-release");
-  await page.getByLabel("Task instructions").fill("Create the release Todo.");
-  await page.getByRole("button", { name: "Run task" }).click();
+  await page.getByLabel("Message Release steward").fill("Create the release Todo.");
+  await page.getByRole("button", { name: "Send" }).click();
   await expect(page.getByRole("heading", { name: "Human decision required" })).toBeVisible();
   await expect(page.getByText("todo.item.create")).toBeVisible();
   await expect(page.locator(".task-approval pre")).toContainText("Publish the release");

@@ -2,7 +2,7 @@
   "$schema": "https://json-schema.org/draft/2020-12/schema",
   "type": "object",
   "additionalProperties": false,
-  "required": ["global", "devcenter", "components", "secrets", "substrate"],
+  "required": ["global", "devcenter", "components", "connectorsKubernetesAccess", "secrets", "substrate"],
   "properties": {
     "global": {
       "type": "object",
@@ -54,6 +54,28 @@
     },
     "components": { "type": "object" },
     "connectorsCatalogBundle": { "type": "object" },
+    "connectorsKubernetesAccess": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["enabled", "namespaces", "apiServerCidrs"],
+      "properties": {
+        "enabled": { "type": "boolean" },
+        "namespaces": {
+          "type": "array",
+          "uniqueItems": true,
+          "items": {
+            "type": "string",
+            "pattern": "^[a-z0-9]([-a-z0-9]*[a-z0-9])?$",
+            "maxLength": 63
+          }
+        },
+        "apiServerCidrs": {
+          "type": "array",
+          "uniqueItems": true,
+          "items": { "type": "string", "minLength": 3, "maxLength": 49 }
+        }
+      }
+    },
     "substrate": { "type": "object" },
     "secrets": { "type": "object" },
     "networkPolicy": {

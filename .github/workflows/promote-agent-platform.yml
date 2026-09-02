@@ -1,0 +1,161 @@
+name: Promote Agent Platform runtime
+
+on:
+  workflow_dispatch:
+    inputs:
+      version:
+        description: Exact released Agent Platform version
+        required: true
+        type: string
+      source_commit:
+        description: Exact Agent Platform commit peeled from the release tag
+        required: true
+        type: string
+
+permissions:
+  contents: read
+  packages: write
+  id-token: write
+
+concurrency:
+  group: promote-agent-platform-${{ inputs.version }}
+  cancel-in-progress: false
+
+jobs:
+  verify:
+    if: github.actor == 'b10x-bot[bot]'
+    runs-on: ubuntu-latest
+    steps:
+      - name: Agent Platform release token
+        id: app-token
+        uses: actions/create-github-app-token@fee1f7d63c2ff003460e3d139729b119787bc349 # v2
+        with:
+          app-id: ${{ secrets.B10X_BOT_APP_ID }}
+          private-key: ${{ secrets.B10X_BOT_PRIVATE_KEY }}
+          owner: beyond10x
+          repositories: agent-platform
+      - name: Verify the exact released source
+        env:
+          GH_TOKEN: ${{ steps.app-token.outputs.token }}
+          SOURCE_COMMIT: ${{ inputs.source_commit }}
+          VERSION: ${{ inputs.version }}
+        run: |
+          grep -Eq '^[0-9]+\.[0-9]+\.[0-9]+$' <<<"$VERSION"
+          grep -Eq '^[0-9a-f]{40}$' <<<"$SOURCE_COMMIT"
+          tag_object=$(gh api "/repos/beyond10x/agent-platform/git/ref/tags/${VERSION}" --jq .object)
+          tag_type=$(jq -r .type <<<"$tag_object")
+          tag_sha=$(jq -r .sha <<<"$tag_object")
+          if [ "$tag_type" = tag ]; then
+            tag_sha=$(gh api "/repos/beyond10x/agent-platform/git/tags/${tag_sha}" --jq .object.sha)
+          fi
+          test "$tag_sha" = "$SOURCE_COMMIT"
+          default_branch=$(gh api /repos/beyond10x/agent-platform --jq .default_branch)
+          comparison=$(gh api "/repos/beyond10x/agent-platform/compare/${SOURCE_COMMIT}...${default_branch}" --jq .status)
+          case "$comparison" in identical|ahead) ;; *) exit 1 ;; esac
+          cargo_toml=$(gh api "/repos/beyond10x/agent-platform/contents/Cargo.toml?ref=${SOURCE_COMMIT}" --jq .content | base64 --decode)
+          source_version=$(sed -n 's/^version = "\([^"]*\)"/\1/p' <<<"$cargo_toml" | head -1)
+          test "$source_version" = "$VERSION"
+
+  images:
+    needs: verify
+    name: image (${{ matrix.arch }})
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - arch: amd64
+            platform: linux/amd64
+            runner: ubuntu-latest
+          - arch: arm64
+            platform: linux/arm64
+            runner: ubuntu-24.04-arm
+    runs-on: ${{ matrix.runner }}
+    steps:
+      - name: Token for Agent Platform and private dependencies
+        id: app-token
+        uses: actions/create-github-app-token@fee1f7d63c2ff003460e3d139729b119787bc349 # v2
+        with:
+          app-id: ${{ secrets.B10X_BOT_APP_ID }}
+          private-key: ${{ secrets.B10X_BOT_PRIVATE_KEY }}
+          owner: beyond10x
+          repositories: |
+            agent-platform
+            connectors
+            harness
+            identity
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+        with:
+          repository: beyond10x/agent-platform
+          ref: ${{ inputs.source_commit }}
+          path: source
+          token: ${{ steps.app-token.outputs.token }}
+          persist-credentials: false
+      - uses: docker/setup-buildx-action@8d2750c68a42422c14e847fe6c8ac0403b4cbd6f # v3
+      - uses: docker/login-action@c94ce9fb468520275223c153574b00df6fe4bcc9 # v3
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+      - uses: docker/build-push-action@10e90e3645eae34f1e60eeb005ba3a3d33f178e8 # v6
+        with:
+          context: source
+          platforms: ${{ matrix.platform }}
+          push: true
+          provenance: mode=max
+          sbom: true
+          cache-from: type=gha,scope=agent-platform-promotion-${{ matrix.arch }}
+          cache-to: type=gha,mode=max,scope=agent-platform-promotion-${{ matrix.arch }}
+          build-args: SOURCE_SHA=${{ inputs.source_commit }}
+          secrets: github_token=${{ steps.app-token.outputs.token }}
+          tags: ghcr.io/beyond10x/devcenter:agent-platform-${{ inputs.version }}-${{ matrix.arch }}
+
+  manifest:
+    needs: images
+    runs-on: ubuntu-latest
+    steps:
+      - uses: docker/setup-buildx-action@8d2750c68a42422c14e847fe6c8ac0403b4cbd6f # v3
+      - uses: docker/login-action@c94ce9fb468520275223c153574b00df6fe4bcc9 # v3
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+      - uses: sigstore/cosign-installer@6f9f17788090df1f26f669e9d70d6ae9567deba6 # v4.1.2
+      - name: Publish and sign the immutable runtime
+        id: artifact
+        env:
+          VERSION: ${{ inputs.version }}
+        run: |
+          image="ghcr.io/beyond10x/devcenter:agent-platform-${VERSION}"
+          docker buildx imagetools create --tag "$image" "${image}-amd64" "${image}-arm64"
+          digest=$(docker buildx imagetools inspect "$image" --format '{{json .Manifest.Digest}}' | tr -d '"')
+          case "$digest" in sha256:*) ;; *) exit 1 ;; esac
+          cosign sign --yes "ghcr.io/beyond10x/devcenter@${digest}"
+          echo "digest=$digest" >> "$GITHUB_OUTPUT"
+      - name: Verify the target package remains private
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: test "$(gh api /orgs/beyond10x/packages/container/devcenter --jq .visibility)" = private
+      - name: Write release manifest
+        env:
+          DIGEST: ${{ steps.artifact.outputs.digest }}
+          SOURCE_COMMIT: ${{ inputs.source_commit }}
+          VERSION: ${{ inputs.version }}
+        run: |
+          jq --null-input --arg version "$VERSION" --arg commit "$SOURCE_COMMIT" --arg image "$DIGEST" \
+            '{schema:1, version:$version, source_commit:$commit, artifacts:{agent_platform_runtime:$image}}' \
+            > release-manifest.json
+      - name: Agent Platform release token
+        id: release-token
+        uses: actions/create-github-app-token@fee1f7d63c2ff003460e3d139729b119787bc349 # v2
+        with:
+          app-id: ${{ secrets.B10X_BOT_APP_ID }}
+          private-key: ${{ secrets.B10X_BOT_PRIVATE_KEY }}
+          owner: beyond10x
+          repositories: agent-platform
+      - name: Announce the immutable Agent Platform release
+        env:
+          GH_TOKEN: ${{ steps.release-token.outputs.token }}
+          VERSION: ${{ inputs.version }}
+        run: |
+          gh release create "$VERSION" release-manifest.json --repo beyond10x/agent-platform \
+            --verify-tag --title "Agent Platform ${VERSION}" --generate-notes

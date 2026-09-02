@@ -99,12 +99,14 @@ account linking.
 The MCP publication store supports SQLite and PostgreSQL and owns only credential-free publication,
 immutable revision, client metadata, pending approval, and audit-reference records. The chart
 requires hosted values to inject the PostgreSQL URL from `devcenter.database.existingSecret`; it is
-never rendered into a ConfigMap. A publication URL is `/mcp/{opaque_id}` and its exact RFC 9728 document is
-`/.well-known/oauth-protected-resource/mcp/{opaque_id}`. Revoked IDs are terminal and are never
-reused. The production MCP bearer and invocation path stays fail-closed until released Identity
-clients expose exact-resource OAuth claims and workload exchange. Agent task approvals use the
-released Agent Platform and Connectors seams and remain distinct from MCP publication
-authorization.
+never rendered into a ConfigMap. A publication URL is `/mcp/{opaque_id}` and its publication-specific
+RFC 9728 discovery document is `/.well-known/oauth-protected-resource/mcp/{opaque_id}`. All
+publications share the deployment's exact `/mcp` audience while the opaque path and immutable
+projection retain publication isolation. Revoked IDs are terminal and are never reused. Identity
+0.5.2 validates the short-lived human bearer and `mcp.tools.call` scope for discovery and tool
+listing; invocation remains fail-closed until the released authority seam supports a narrowed
+exchange into current Connector authority. Agent task approvals remain distinct from MCP
+publication authorization.
 
 ## Deployment CLI
 
