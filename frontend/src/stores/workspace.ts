@@ -5,10 +5,12 @@ import {
   api,
   errorMessage,
   type Agent,
+  type CapabilityProfile,
   type ClaudeOAuthStart,
   type IdentityProvider,
   type Session,
   type TaskEventEnvelope,
+  taskFailureMessage,
 } from "@/api/client";
 
 export type LoadState = "idle" | "loading" | "ready" | "error";
@@ -32,6 +34,7 @@ export const useWorkspaceStore = defineStore("workspace", () => {
   const agentsState = ref<LoadState>("idle");
   const agents = ref<Agent[]>([]);
   const agentsError = ref("");
+  const capabilityProfiles = ref<CapabilityProfile[]>([]);
   const selectedAgentId = ref<string>();
   const drafts = ref<Record<string, string>>({});
   const runs = ref<Record<string, AgentRun>>({});
@@ -51,7 +54,7 @@ export const useWorkspaceStore = defineStore("workspace", () => {
     try {
       session.value = await api.session();
       sessionState.value = "ready";
-      await Promise.allSettled([loadAgents(), loadConnection()]);
+      await Promise.allSettled([loadAgents(), loadCapabilityProfiles(), loadConnection()]);
     } catch (error) {
       if (error instanceof ApiError && error.status === 401) {
         sessionState.value = "idle";
@@ -90,6 +93,10 @@ export const useWorkspaceStore = defineStore("workspace", () => {
       agentsState.value = "error";
       agentsError.value = errorMessage(error);
     }
+  }
+
+  async function loadCapabilityProfiles() {
+    capabilityProfiles.value = await api.capabilityProfiles();
   }
 
   async function loadConnection() {
@@ -228,7 +235,7 @@ export const useWorkspaceStore = defineStore("workspace", () => {
         }
         if (update.kind === "failed") {
           current.status = "failed";
-          current.error = update.failure?.message ?? "The task failed without a reason.";
+          current.error = taskFailureMessage(update.failure);
           events.close();
           streams.delete(agentId);
         }
@@ -265,6 +272,7 @@ export const useWorkspaceStore = defineStore("workspace", () => {
     agentsState,
     agents,
     agentsError,
+    capabilityProfiles,
     selectedAgentId,
     selectedAgent,
     connectionState,
@@ -275,6 +283,7 @@ export const useWorkspaceStore = defineStore("workspace", () => {
     bootstrap,
     logout,
     loadAgents,
+    loadCapabilityProfiles,
     loadConnection,
     startOAuth,
     completeOAuth,

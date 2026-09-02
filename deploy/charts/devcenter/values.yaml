@@ -42,6 +42,8 @@ ingress:
   tls:
     enabled: true
     secretName: ""
+  connectorSetupRoutes:
+    enabled: false
 
 # Inner services are private ClusterIP workloads. Every enabled component requires an immutable
 # image digest supplied by the deployment. Environment-specific configuration uses Secret and

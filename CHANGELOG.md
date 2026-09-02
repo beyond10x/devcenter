@@ -2,6 +2,20 @@
 
 ## Unreleased
 
+## 0.5.0 - 2026-09-02
+
+- Show every Connector connection visible to the current Identity session and support GitLab OAuth
+  or personal-token setup without placing credential bytes in Devcenter.
+- Add governed capability profiles backed by exact, credential-free Connector operation snapshots,
+  and bind new agents to a selected profile.
+- Compose the released Workspace service for grant-derived repository discovery, exact default
+  branch handling, project chat, workflow admission, central AEP navigation, and authenticated
+  Substrate HTTPS access.
+- Preserve structured model-execution failures and make durable Agent Platform and Workspace state
+  available through generic chart persistence.
+- Validate deployment locks, chart renders, immutable component pins, and provider-reported default
+  branch release heads before publication or mutation, with bounded rollout diagnostics and timeout.
+
 ## 0.4.7 - 2026-09-01
 
 - Keep Identity and publication storage mandatory for readiness while allowing explicitly absent

@@ -90,6 +90,54 @@ export interface WorkflowRun {
   failure_code?: string | null;
   created_at_ms: number;
 }
+export type CapabilityPosture = "allow" | "approval_required" | "deny";
+export interface CapabilityConnection {
+  connection_ref: string;
+  label: string;
+  provider: string;
+  audiences: string[];
+  purpose?: string | null;
+}
+export interface Capability {
+  operation_ref: string;
+  title: string;
+  effect: "read_only" | "mutating" | "destructive";
+  approval: "not_required" | "required";
+  connections: CapabilityConnection[];
+}
+export interface CapabilityMapping {
+  operation_ref: string;
+  tool_name: string;
+  connection_ref?: string;
+  context?: string;
+  posture: CapabilityPosture;
+}
+export interface CapabilityProfile {
+  id: string;
+  name: string;
+  revision: number;
+  mappings: CapabilityMapping[];
+  created_at_ms: number;
+  updated_at_ms: number;
+}
+export interface ConnectorConnection {
+  connection_ref: string;
+  integration_ref: string;
+  label: string;
+  state: "created" | "authorized" | "callable" | "degraded" | "revoked";
+  scope?: "tenant" | "principal";
+  actor?: "app" | "user";
+  auth_profile?: string;
+}
+export interface ConnectSession {
+  connect_session_ref: string;
+  integration_ref: string;
+  state: "pending" | "completed" | "expired" | "failed";
+  expires_at_unix_ms: number;
+  completion_endpoint?: string;
+  browser_completion_url?: string;
+  connection_ref?: string;
+}
 
 export class ApiError extends Error {
   constructor(
@@ -176,6 +224,34 @@ export const api = {
         idempotency_key: crypto.randomUUID(),
       }),
     }),
+  connections: () => request<ConnectorConnection[]>("/api/connections"),
+  startConnection: (integrationRef: string, label: string, authProfile?: string) =>
+    request<ConnectSession>("/api/connections", {
+      method: "POST",
+      body: JSON.stringify({
+        integration_ref: integrationRef,
+        label,
+        auth_profile: authProfile,
+      }),
+    }),
+  connectionSession: (sessionRef: string) =>
+    request<ConnectSession>(`/api/connect-sessions/${encodeURIComponent(sessionRef)}`),
+  capabilities: () => request<Capability[]>("/api/capabilities"),
+  capabilityProfiles: () => request<CapabilityProfile[]>("/api/capability-profiles"),
+  createCapabilityProfile: (name: string, mappings: CapabilityMapping[]) =>
+    request<CapabilityProfile>("/api/capability-profiles", {
+      method: "POST",
+      body: JSON.stringify({ name, mappings }),
+    }),
+  updateCapabilityProfile: (profile: CapabilityProfile, mappings: CapabilityMapping[]) =>
+    request<CapabilityProfile>(`/api/capability-profiles/${encodeURIComponent(profile.id)}`, {
+      method: "PATCH",
+      body: JSON.stringify({
+        expected_revision: profile.revision,
+        name: profile.name,
+        mappings,
+      }),
+    }),
   publications: () => request<Publication[]>("/api/mcp/publications"),
   publishProfile: (profileId: string) =>
     request<Publication>("/api/mcp/publications", {
@@ -221,6 +297,9 @@ const FRIENDLY_ERRORS: Record<string, string> = {
   agent_platform_not_configured: "Agent Platform is not configured for this environment.",
   agent_platform_unavailable: "Agent Platform is temporarily unavailable.",
   connectors_unavailable: "The connection service is temporarily unavailable.",
+  connectors_invalid_response: "The connection service returned an invalid response.",
+  connection_start_refused: "This connection cannot be started with your current grant.",
+  capability_search_refused: "Capabilities could not be read with your current grant.",
   identity_access_unavailable: "Identity could not authorize this operation.",
   claude_connection_start_refused: "Claude authorization could not be started.",
   claude_connection_refused: "The authorization code was refused or expired.",
@@ -252,5 +331,21 @@ export interface TaskEventEnvelope {
     | { kind: "running" }
     | { kind: "text_delta"; text: string }
     | { kind: "succeeded"; output: string }
-    | { kind: "failed"; failure?: { message?: string } };
+    | { kind: "failed"; failure?: { code?: string; message?: string } };
+}
+
+const TASK_FAILURES: Record<string, string> = {
+  model_credential_unavailable:
+    "Connect a user-bound model in Connections, then retry with a new task.",
+  model_provider_unavailable: "The model provider is temporarily unavailable. Retry shortly.",
+  model_provider_rate_limited: "The model provider rate-limited this task. Retry later.",
+  model_route_refused: "The selected model route refused this task.",
+  model_request_too_large: "This request is too large for the selected model route.",
+  execution_interrupted: "The service restarted before this task finished. Submit it again.",
+};
+
+export function taskFailureMessage(failure?: { code?: string; message?: string }): string {
+  const friendly = failure?.code ? TASK_FAILURES[failure.code] : undefined;
+  if (friendly) return friendly;
+  return failure?.message ?? "The task failed without a reason.";
 }

@@ -1,5 +1,6 @@
 use anyhow::{Context, Result, bail};
 use clap::{Args, Parser, Subcommand};
+use devcenterctl::deployment::{DeploymentLock, validate_rendered};
 use devcenterctl::leak;
 use std::{
     path::{Path, PathBuf},
@@ -25,6 +26,8 @@ enum Action {
     Mirror(Mirror),
     #[command(subcommand)]
     Release(ReleaseAction),
+    #[command(subcommand)]
+    Deployment(DeploymentAction),
     #[command(subcommand)]
     Bundle(BundleAction),
 }
@@ -65,7 +68,7 @@ struct HelmTarget {
     version: Option<String>,
     #[arg(long)]
     values: PathBuf,
-    #[arg(long, default_value = "10m")]
+    #[arg(long, default_value = "5m")]
     timeout: String,
     #[arg(long)]
     create_namespace: bool,
@@ -102,6 +105,24 @@ enum ReleaseAction {
     Verify(ReleaseVerify),
 }
 
+#[derive(Debug, Subcommand)]
+enum DeploymentAction {
+    /// Render a chart and prove that all workloads match the deployment lock.
+    Validate(DeploymentValidate),
+}
+
+#[derive(Debug, Args)]
+struct DeploymentValidate {
+    #[command(flatten)]
+    target: HelmTarget,
+    /// Immutable deployment lock to compare with the rendered chart.
+    #[arg(long)]
+    lock: PathBuf,
+    /// Component that must be enabled in the rendered release. Repeat as needed.
+    #[arg(long = "require-component")]
+    required_components: Vec<String>,
+}
+
 #[derive(Debug, Args)]
 struct ReleaseVerify {
     #[arg(long)]
@@ -132,6 +153,7 @@ fn main() -> Result<()> {
         Action::Rollback(args) => rollback(&args),
         Action::Mirror(args) => mirror(&args),
         Action::Release(ReleaseAction::Verify(args)) => release_verify(&args),
+        Action::Deployment(DeploymentAction::Validate(args)) => deployment_validate(&args),
         Action::Bundle(BundleAction::Validate(args)) => bundle_validate(&args),
     }
 }
@@ -174,6 +196,37 @@ fn render(args: &HelmTarget) -> Result<()> {
         command.args(["--version", version]);
     }
     run_streaming(&mut command)
+}
+
+fn deployment_validate(args: &DeploymentValidate) -> Result<()> {
+    require_file(&args.target.values)?;
+    require_file(&args.lock)?;
+    let lock = DeploymentLock::read(&args.lock)?;
+    lock.validate_chart(&args.target.chart, args.target.version.as_deref())?;
+    let rendered = render_capture(&args.target)?;
+    validate_rendered(&lock, &rendered, &args.required_components)?;
+    println!(
+        "deployment validation: chart, {} workload image(s), and required components match the lock",
+        lock.images.len()
+    );
+    Ok(())
+}
+
+fn render_capture(args: &HelmTarget) -> Result<String> {
+    let mut command = Command::new("helm");
+    command.args([
+        "template",
+        &args.target.release,
+        &args.chart,
+        "--namespace",
+        &args.target.namespace,
+        "--values",
+    ]);
+    command.arg(&args.values);
+    if let Some(version) = &args.version {
+        command.args(["--version", version]);
+    }
+    run_capture(&mut command)
 }
 
 fn preflight(args: &ClusterTarget) -> Result<()> {
@@ -230,7 +283,60 @@ fn apply(args: &HelmTarget) -> Result<()> {
     if let Some(context) = &args.target.context {
         command.args(["--kube-context", context]);
     }
-    run_streaming(&mut command)
+    let status = command.status().context("cannot run helm")?;
+    if status.success() {
+        Ok(())
+    } else {
+        collect_rollout_diagnostics(&args.target);
+        bail!("helm exited with {status}; rollout diagnostics were emitted above")
+    }
+}
+
+fn collect_rollout_diagnostics(target: &ReleaseTarget) {
+    eprintln!("rollout diagnostics: workloads");
+    let mut workloads = kubectl(target);
+    workloads.args([
+        "--namespace",
+        &target.namespace,
+        "get",
+        "deployments,statefulsets,jobs,pods",
+        "--selector",
+        &format!("app.kubernetes.io/instance={}", target.release),
+        "--output",
+        "wide",
+    ]);
+    run_diagnostic(&mut workloads);
+
+    eprintln!("rollout diagnostics: recent events");
+    let mut events = kubectl(target);
+    events.args([
+        "--namespace",
+        &target.namespace,
+        "get",
+        "events",
+        "--sort-by=.metadata.creationTimestamp",
+    ]);
+    run_diagnostic(&mut events);
+
+    eprintln!("rollout diagnostics: bounded container logs");
+    let mut logs = kubectl(target);
+    logs.args([
+        "--namespace",
+        &target.namespace,
+        "logs",
+        "--selector",
+        &format!("app.kubernetes.io/instance={}", target.release),
+        "--all-containers",
+        "--prefix",
+        "--tail=100",
+    ]);
+    run_diagnostic(&mut logs);
+}
+
+fn run_diagnostic(command: &mut Command) {
+    if let Err(error) = command.status() {
+        eprintln!("diagnostic command could not run: {error}");
+    }
 }
 
 fn status(args: &ReleaseTarget) -> Result<()> {

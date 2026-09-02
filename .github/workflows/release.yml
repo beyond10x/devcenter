@@ -17,6 +17,18 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+        with:
+          fetch-depth: 0
+          persist-credentials: false
+      - name: Require the provider-reported default branch tip
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          default_branch=$(gh api "repos/${GITHUB_REPOSITORY}" --jq .default_branch)
+          default_sha=$(gh api "repos/${GITHUB_REPOSITORY}/commits/${default_branch}" --jq .sha)
+          tag_sha=$(git rev-parse "${GITHUB_REF_NAME}^{commit}")
+          test -n "$default_branch"
+          test "$tag_sha" = "$default_sha"
       - name: Match every release version
         run: bash ci/check-version-consistency.sh "${GITHUB_REF_NAME}"
 
@@ -89,6 +101,9 @@ jobs:
   image-manifests:
     needs: images
     runs-on: ubuntu-latest
+    outputs:
+      server-digest: ${{ steps.digests.outputs.server }}
+      ctl-digest: ${{ steps.digests.outputs.ctl }}
     steps:
       - uses: docker/setup-buildx-action@8d2750c68a42422c14e847fe6c8ac0403b4cbd6f # v3
       - uses: docker/login-action@c94ce9fb468520275223c153574b00df6fe4bcc9 # v3
@@ -108,6 +123,7 @@ jobs:
             "ghcr.io/beyond10x/devcenterctl:${GITHUB_REF_NAME}-arm64"
       - uses: sigstore/cosign-installer@6f9f17788090df1f26f669e9d70d6ae9567deba6 # v4.1.2
       - name: Sign immutable multi-arch images
+        id: digests
         run: |
           server_digest=$(docker buildx imagetools inspect \
             "ghcr.io/beyond10x/devcenter:${GITHUB_REF_NAME}" \
@@ -119,6 +135,8 @@ jobs:
           case "$ctl_digest" in sha256:*) ;; *) exit 1 ;; esac
           cosign sign --yes "ghcr.io/beyond10x/devcenter@${server_digest}"
           cosign sign --yes "ghcr.io/beyond10x/devcenterctl@${ctl_digest}"
+          echo "server=${server_digest}" >> "$GITHUB_OUTPUT"
+          echo "ctl=${ctl_digest}" >> "$GITHUB_OUTPUT"
       - name: Verify private package visibility
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
@@ -126,9 +144,66 @@ jobs:
           test "$(gh api /orgs/beyond10x/packages/container/devcenter --jq .visibility)" = private
           test "$(gh api /orgs/beyond10x/packages/container/devcenterctl --jq .visibility)" = private
 
-  chart:
-    needs: validate-version
+  release-candidate:
+    needs: [validate-version, image-manifests]
     runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+        with:
+          persist-credentials: false
+      - uses: dtolnay/rust-toolchain@4360b52568e2003a75bf9bc1d59f33a8e3fc893c # stable
+        with:
+          toolchain: 1.97.0
+      - name: Install Helm
+        run: |
+          curl --fail --silent --show-error --location \
+            --output /tmp/helm.tar.gz \
+            https://get.helm.sh/helm-v${HELM_VERSION}-linux-amd64.tar.gz
+          echo 'a7f81ce08007091b86d8bd696eb4d86b8d0f2e1b9f6c714be62f82f96a594496  /tmp/helm.tar.gz' | sha256sum --check
+          tar --extract --gzip --file /tmp/helm.tar.gz --directory /tmp
+          sudo install /tmp/linux-amd64/helm /usr/local/bin/helm
+      - name: Validate the complete release candidate
+        env:
+          SERVER_DIGEST: ${{ needs.image-manifests.outputs.server-digest }}
+        run: |
+          candidate=$(mktemp -d)
+          printf '%s\n' \
+            'global:' \
+            '  tenantId: release-candidate' \
+            '  publicOrigin: https://devcenter.example.invalid' \
+            'devcenter:' \
+            '  image:' \
+            '    repository: ghcr.io/beyond10x/devcenter' \
+            "    digest: ${SERVER_DIGEST}" \
+            '  database:' \
+            '    existingSecret: release-candidate-database' \
+            'networkPolicy:' \
+            '  enabled: false' > "$candidate/values.yaml"
+          printf '%s\n' \
+            'schema = 1' \
+            '[chart]' \
+            'reference = "deploy/charts/devcenter"' \
+            "version = \"${GITHUB_REF_NAME}\"" \
+            'digest = "sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"' \
+            '[images.devcenter]' \
+            'reference = "ghcr.io/beyond10x/devcenter"' \
+            "version = \"${GITHUB_REF_NAME}\"" \
+            "digest = \"${SERVER_DIGEST}\"" > "$candidate/deployment.lock.toml"
+          helm lint deploy/charts/devcenter --values "$candidate/values.yaml"
+          cargo run --locked --bin devcenterctl -- deployment validate \
+            --release devcenter \
+            --namespace release-candidate \
+            --chart deploy/charts/devcenter \
+            --version "$GITHUB_REF_NAME" \
+            --values "$candidate/values.yaml" \
+            --lock "$candidate/deployment.lock.toml" \
+            --require-component devcenter
+
+  chart:
+    needs: release-candidate
+    runs-on: ubuntu-latest
+    outputs:
+      digest: ${{ steps.publish.outputs.digest }}
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
       - name: Install Helm
@@ -140,12 +215,17 @@ jobs:
           tar --extract --gzip --file /tmp/helm.tar.gz --directory /tmp
           sudo install /tmp/linux-amd64/helm /usr/local/bin/helm
       - name: Publish configuration-neutral chart
+        id: publish
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
           echo "$GH_TOKEN" | helm registry login ghcr.io --username "$GITHUB_ACTOR" --password-stdin
           helm package deploy/charts/devcenter --destination /tmp
-          helm push "/tmp/devcenter-${GITHUB_REF_NAME}.tgz" oci://ghcr.io/beyond10x/charts
+          output=$(helm push "/tmp/devcenter-${GITHUB_REF_NAME}.tgz" oci://ghcr.io/beyond10x/charts)
+          printf '%s\n' "$output"
+          chart_digest=$(printf '%s\n' "$output" | awk '$1 == "Digest:" {print $2}')
+          case "$chart_digest" in sha256:*) ;; *) exit 1 ;; esac
+          echo "digest=${chart_digest}" >> "$GITHUB_OUTPUT"
           visibility=$(gh api "/orgs/beyond10x/packages/container/charts%2Fdevcenter" --jq .visibility)
           if [ "$visibility" != public ]; then
             echo 'The one-time chart package bootstrap is incomplete: make charts/devcenter public in Package Settings.' >&2
@@ -156,6 +236,21 @@ jobs:
     needs: [image-manifests, chart]
     runs-on: ubuntu-latest
     steps:
+      - name: Create immutable release manifest
+        env:
+          SERVER_DIGEST: ${{ needs.image-manifests.outputs.server-digest }}
+          CTL_DIGEST: ${{ needs.image-manifests.outputs.ctl-digest }}
+          CHART_DIGEST: ${{ needs.chart.outputs.digest }}
+        run: |
+          jq --null-input \
+            --arg version "$GITHUB_REF_NAME" \
+            --arg commit "$GITHUB_SHA" \
+            --arg server "$SERVER_DIGEST" \
+            --arg ctl "$CTL_DIGEST" \
+            --arg chart "$CHART_DIGEST" \
+            '{schema:1, version:$version, source_commit:$commit, artifacts:{devcenter:$server, devcenterctl:$ctl, chart:$chart}}' \
+            > release-manifest.json
       - uses: softprops/action-gh-release@3bb12739c298aeb8a4eeaf626c5b8d85266b0e65 # v2
         with:
           generate_release_notes: true
+          files: release-manifest.json

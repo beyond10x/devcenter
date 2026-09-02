@@ -133,6 +133,86 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/connections": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get: operations["listConnections"];
+        put?: never;
+        post: operations["startConnection"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/connect-sessions/{connect_session_ref}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get: operations["getConnectSession"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/capabilities": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get: operations["listCapabilities"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/capability-profiles": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get: operations["listCapabilityProfiles"];
+        put?: never;
+        post: operations["createCapabilityProfile"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/capability-profiles/{profile_id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch: operations["updateCapabilityProfile"];
+        trace?: never;
+    };
     "/api/agents": {
         parameters: {
             query?: never;
@@ -643,6 +723,80 @@ export interface components {
             /** Format: password */
             code: string;
         };
+        StartConnection: {
+            integration_ref: string;
+            label: string;
+            auth_profile?: string | null;
+        };
+        ConnectSession: {
+            connect_session_ref: string;
+            integration_ref: string;
+            /** @enum {string} */
+            state: "pending" | "completed" | "expired" | "failed";
+            expires_at_unix_ms: number;
+            completion_endpoint?: string | null;
+            /** Format: uri */
+            browser_completion_url?: string | null;
+            connection_ref?: string | null;
+        };
+        ConnectorConnection: {
+            connection_ref: string;
+            integration_ref: string;
+            label: string;
+            /** @enum {string} */
+            state: "created" | "authorized" | "callable" | "degraded" | "revoked";
+            initiation: ("b10x" | "provider")[];
+            route: Record<string, never>;
+            /** @enum {string|null} */
+            scope?: "tenant" | "principal" | null;
+            /** @enum {string|null} */
+            actor?: "app" | "user" | null;
+            auth_profile?: string | null;
+        };
+        CapabilityConnection: {
+            connection_ref: string;
+            label: string;
+            provider: string;
+            audiences: string[];
+            purpose?: string | null;
+        };
+        Capability: {
+            operation_ref: string;
+            title: string;
+            /** @enum {string} */
+            effect: "read_only" | "mutating" | "destructive";
+            /** @enum {string} */
+            approval: "not_required" | "required";
+            connections: components["schemas"]["CapabilityConnection"][];
+        };
+        CapabilityMapping: {
+            operation_ref: string;
+            tool_name: string;
+            connection_ref?: string | null;
+            context?: string | null;
+            /** @enum {string} */
+            posture: "allow" | "approval_required" | "deny";
+        };
+        CreateCapabilityProfile: {
+            name: string;
+            mappings: components["schemas"]["CapabilityMapping"][];
+        };
+        UpdateCapabilityProfile: {
+            expected_revision: number;
+            name: string;
+            mappings: components["schemas"]["CapabilityMapping"][];
+        };
+        CapabilityProfile: {
+            id: string;
+            tenant_id: string;
+            name: string;
+            revision: number;
+            mappings: components["schemas"]["CapabilityMapping"][];
+            compiled: Record<string, never>;
+            created_by: string;
+            created_at_ms: number;
+            updated_at_ms: number;
+        };
         RepositoryCandidate: {
             forge_instance_ref: string;
             project_ref: string;
@@ -1033,6 +1187,183 @@ export interface operations {
             };
             401: components["responses"]["Problem"];
             403: components["responses"]["Problem"];
+            422: components["responses"]["Problem"];
+            503: components["responses"]["Unavailable"];
+        };
+    };
+    listConnections: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Connections visible through the current Connector grants */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ConnectorConnection"][];
+                };
+            };
+            401: components["responses"]["Problem"];
+            503: components["responses"]["Unavailable"];
+        };
+    };
+    startConnection: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["StartConnection"];
+            };
+        };
+        responses: {
+            /** @description Connector-owned acquisition session */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ConnectSession"];
+                };
+            };
+            401: components["responses"]["Problem"];
+            403: components["responses"]["Problem"];
+            503: components["responses"]["Unavailable"];
+        };
+    };
+    getConnectSession: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                connect_session_ref: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Current Connector acquisition state */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ConnectSession"];
+                };
+            };
+            401: components["responses"]["Problem"];
+            404: components["responses"]["Problem"];
+            503: components["responses"]["Unavailable"];
+        };
+    };
+    listCapabilities: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Callable operations under current Connector grants */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Capability"][];
+                };
+            };
+            401: components["responses"]["Problem"];
+            503: components["responses"]["Unavailable"];
+        };
+    };
+    listCapabilityProfiles: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Revisioned Agent Platform capability profiles */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["CapabilityProfile"][];
+                };
+            };
+            401: components["responses"]["Problem"];
+            503: components["responses"]["Unavailable"];
+        };
+    };
+    createCapabilityProfile: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["CreateCapabilityProfile"];
+            };
+        };
+        responses: {
+            /** @description Profile compiled from current credential-free Connector descriptions */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["CapabilityProfile"];
+                };
+            };
+            401: components["responses"]["Problem"];
+            403: components["responses"]["Problem"];
+            422: components["responses"]["Problem"];
+            503: components["responses"]["Unavailable"];
+        };
+    };
+    updateCapabilityProfile: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                profile_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["UpdateCapabilityProfile"];
+            };
+        };
+        responses: {
+            /** @description New compare-and-swap profile revision */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["CapabilityProfile"];
+                };
+            };
+            401: components["responses"]["Problem"];
+            403: components["responses"]["Problem"];
+            409: components["responses"]["Problem"];
             422: components["responses"]["Problem"];
             503: components["responses"]["Unavailable"];
         };
