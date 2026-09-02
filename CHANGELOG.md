@@ -1,5 +1,14 @@
 # Changelog
 
+## 0.6.3 - 2026-09-02
+
+- Send only the two allowlisted repository identifiers when opening a project, avoiding a 422 from
+  Workspace's strict request contract when the browser holds richer repository display data.
+- Pin Workspace 0.1.3 and pass bounded provider-side repository searches through the BFF, so large
+  GitLab accounts no longer require a serial scan of every repository before the project view loads.
+- Let deployments opt in to the complete Identity-authenticated Connector client API prefix for
+  native CLI discovery while retaining Connectors' audience, scope, actor, tenant, and Grant checks.
+
 ## 0.6.2 - 2026-09-02
 
 - Refresh an active agent's exact Connector capability descriptions before accepting a new task,

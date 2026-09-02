@@ -1013,7 +1013,23 @@ fn valid_connector_ref(value: &str) -> bool {
     !value.is_empty() && value.len() <= 512 && value.bytes().all(|byte| byte.is_ascii_graphic())
 }
 
-async fn list_repositories(State(state): State<AppState>, headers: HeaderMap) -> Response {
+#[derive(Default, Deserialize)]
+#[serde(default, deny_unknown_fields)]
+struct RepositoryQuery {
+    query: String,
+}
+
+async fn list_repositories(
+    State(state): State<AppState>,
+    headers: HeaderMap,
+    query: Result<Query<RepositoryQuery>, axum::extract::rejection::QueryRejection>,
+) -> Response {
+    let Ok(Query(query)) = query else {
+        return problem(StatusCode::UNPROCESSABLE_ENTITY, "repository_query_invalid");
+    };
+    if query.query.len() > 512 {
+        return problem(StatusCode::UNPROCESSABLE_ENTITY, "repository_query_invalid");
+    }
     let authenticated = match authenticate(&state, &headers, false).await {
         Ok(authenticated) => authenticated,
         Err(response) => return response,
@@ -1022,7 +1038,7 @@ async fn list_repositories(State(state): State<AppState>, headers: HeaderMap) ->
         return unavailable("workspace_not_configured");
     };
     match workspace
-        .repositories(authenticated.authorization.as_str())
+        .search_repositories(authenticated.authorization.as_str(), query.query.trim())
         .await
     {
         Ok(repositories) => confidential_json(repositories),
@@ -3014,6 +3030,25 @@ mod tests {
         assert_eq!(response.status(), StatusCode::UNPROCESSABLE_ENTITY);
         let body = response.into_body().collect().await.unwrap().to_bytes();
         assert_eq!(body, r#"{"code":"catalog_query_invalid"}"#);
+    }
+
+    #[tokio::test]
+    async fn repository_query_bounds_have_a_stable_refusal() {
+        let query = "x".repeat(513);
+        let response =
+            test_router(devcenter_auth::Authentication::development_bearer("local-token").unwrap())
+                .oneshot(
+                    Request::builder()
+                        .uri(format!("/api/repositories?query={query}"))
+                        .header(header::AUTHORIZATION, "Bearer local-token")
+                        .body(Body::empty())
+                        .unwrap(),
+                )
+                .await
+                .unwrap();
+        assert_eq!(response.status(), StatusCode::UNPROCESSABLE_ENTITY);
+        let body = response.into_body().collect().await.unwrap().to_bytes();
+        assert_eq!(body, r#"{"code":"repository_query_invalid"}"#);
     }
 
     #[tokio::test]

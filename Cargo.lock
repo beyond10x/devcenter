@@ -711,7 +711,7 @@ dependencies = [
 
 [[package]]
 name = "devcenter-app"
-version = "0.6.2"
+version = "0.6.3"
 dependencies = [
  "anyhow",
  "axum",
@@ -725,7 +725,7 @@ dependencies = [
 
 [[package]]
 name = "devcenter-auth"
-version = "0.6.2"
+version = "0.6.3"
 dependencies = [
  "identity-client 0.3.2",
  "tokio",
@@ -733,7 +733,7 @@ dependencies = [
 
 [[package]]
 name = "devcenter-core"
-version = "0.6.2"
+version = "0.6.3"
 dependencies = [
  "devcenter-auth",
  "serde",
@@ -741,7 +741,7 @@ dependencies = [
 
 [[package]]
 name = "devcenter-http"
-version = "0.6.2"
+version = "0.6.3"
 dependencies = [
  "agent-platform-client",
  "agent-platform-core",
@@ -771,7 +771,7 @@ dependencies = [
 
 [[package]]
 name = "devcenter-mcp"
-version = "0.6.2"
+version = "0.6.3"
 dependencies = [
  "serde",
  "serde_json",
@@ -780,7 +780,7 @@ dependencies = [
 
 [[package]]
 name = "devcenter-store"
-version = "0.6.2"
+version = "0.6.3"
 dependencies = [
  "devcenter-mcp",
  "serde",
@@ -793,7 +793,7 @@ dependencies = [
 
 [[package]]
 name = "devcenter-web-assets"
-version = "0.6.2"
+version = "0.6.3"
 dependencies = [
  "mime_guess",
  "rust-embed",
@@ -801,7 +801,7 @@ dependencies = [
 
 [[package]]
 name = "devcenterctl"
-version = "0.6.2"
+version = "0.6.3"
 dependencies = [
  "anyhow",
  "clap",
@@ -3830,8 +3830,8 @@ checksum = "1ebf944e87a7c253233ad6766e082e3cd714b5d03812acc24c318f549614536e"
 
 [[package]]
 name = "workspace-client"
-version = "0.1.0"
-source = "git+ssh://git@github.com/beyond10x/workspace.git?rev=8cbab51f170d7bf0398ae2ccce2497a8f536d3fb#8cbab51f170d7bf0398ae2ccce2497a8f536d3fb"
+version = "0.1.3"
+source = "git+ssh://git@github.com/beyond10x/workspace.git?rev=f9694ba65ddb2f91ea84b2dc77e1e36dad70c65f#f9694ba65ddb2f91ea84b2dc77e1e36dad70c65f"
 dependencies = [
  "reqwest 0.13.4",
  "serde",
@@ -3842,8 +3842,8 @@ dependencies = [
 
 [[package]]
 name = "workspace-core"
-version = "0.1.0"
-source = "git+ssh://git@github.com/beyond10x/workspace.git?rev=8cbab51f170d7bf0398ae2ccce2497a8f536d3fb#8cbab51f170d7bf0398ae2ccce2497a8f536d3fb"
+version = "0.1.3"
+source = "git+ssh://git@github.com/beyond10x/workspace.git?rev=f9694ba65ddb2f91ea84b2dc77e1e36dad70c65f#f9694ba65ddb2f91ea84b2dc77e1e36dad70c65f"
 dependencies = [
  "serde",
 ]

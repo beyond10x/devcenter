@@ -455,6 +455,12 @@ test("opens a visible repository as a commit-pinned project", async ({ page }, t
   await page.goto("/projects");
 
   await expect(page.getByRole("heading", { name: "Open a project" })).toBeVisible();
+  const searched = page.waitForRequest((request) => {
+    const url = new URL(request.url());
+    return url.pathname === "/api/repositories" && url.searchParams.get("query") === "devcenter";
+  });
+  await page.getByRole("searchbox", { name: "Search repositories" }).fill("devcenter");
+  await searched;
   await page.getByRole("button", { name: /foundation\/devcenter/ }).click();
   await expect(page.getByRole("heading", { name: "foundation/devcenter" })).toBeVisible();
   await expect(page.getByText("0123456789", { exact: true })).toBeVisible();

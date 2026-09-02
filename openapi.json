@@ -2,7 +2,7 @@
   "openapi": "3.1.0",
   "info": {
     "title": "Devcenter API",
-    "version": "0.6.2",
+    "version": "0.6.3",
     "description": "Authenticated browser/BFF surface for identity, connector custody, agents, and tasks."
   },
   "paths": {
@@ -900,6 +900,14 @@
     "/api/repositories": {
       "get": {
         "operationId": "listRepositories",
+        "parameters": [
+          {
+            "name": "query",
+            "in": "query",
+            "description": "Optional provider-side repository name or path search",
+            "schema": { "type": "string", "maxLength": 512 }
+          }
+        ],
         "security": [{ "browserSession": [] }, { "identityBearer": [] }],
         "responses": {
           "200": {
@@ -916,6 +924,7 @@
             }
           },
           "401": { "$ref": "#/components/responses/Problem" },
+          "422": { "$ref": "#/components/responses/Problem" },
           "503": { "$ref": "#/components/responses/Unavailable" }
         }
       }

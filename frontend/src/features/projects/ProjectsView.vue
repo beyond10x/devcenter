@@ -53,6 +53,7 @@ const runs = ref<WorkflowRun[]>([]);
 const activeTab = ref<Tab>("overview");
 const tabs: Tab[] = ["overview", "files", "chat", "workflows", "aep"];
 const opening = ref<string>();
+const searching = ref(false);
 const refreshing = ref(false);
 const sending = ref(false);
 const draft = ref("");
@@ -61,13 +62,6 @@ const runningWorkflow = ref<string>();
 const projectId = computed(() =>
   typeof route.params.projectId === "string" ? route.params.projectId : undefined,
 );
-const filteredRepositories = computed(() => {
-  const query = search.value.trim().toLowerCase();
-  if (!query) return repositories.value;
-  return repositories.value.filter((repository) =>
-    repository.path_with_namespace.toLowerCase().includes(query),
-  );
-});
 const selectedThread = computed(() =>
   threads.value.find((thread) => thread.id === selectedThreadId.value),
 );
@@ -75,14 +69,35 @@ const selectedThread = computed(() =>
 onMounted(load);
 watch(projectId, load);
 watch(selectedThreadId, () => void loadMessages());
+let repositoryRequest = 0;
+let searchTimer: number | undefined;
+watch(search, () => {
+  if (projectId.value) return;
+  if (searchTimer !== undefined) window.clearTimeout(searchTimer);
+  searchTimer = window.setTimeout(() => void searchRepositories(), 300);
+});
+
+async function searchRepositories() {
+  const request = ++repositoryRequest;
+  searching.value = true;
+  error.value = "";
+  try {
+    const matches = await api.repositories(search.value);
+    if (request === repositoryRequest) repositories.value = matches;
+  } catch (caught) {
+    if (request === repositoryRequest) error.value = errorMessage(caught);
+  } finally {
+    if (request === repositoryRequest) searching.value = false;
+  }
+}
 
 async function load() {
   loading.value = true;
   error.value = "";
   try {
     if (!projectId.value) {
-      repositories.value = await api.repositories();
       project.value = undefined;
+      await searchRepositories();
     } else {
       const loadedProject = await api.project(projectId.value);
       const [loadedBranches, loadedTree, loadedThreads, loadedWorkflows] = await Promise.all([
@@ -257,11 +272,11 @@ function shortCommit(commit?: string | null) {
       <label class="project-search">
         <Search :size="18" /><span class="sr-only">Search repositories</span>
         <input v-model="search" type="search" placeholder="Search namespace or repository" />
-        <span>{{ filteredRepositories.length }} visible</span>
+        <span>{{ searching ? "Searching…" : `${repositories.length} matches` }}</span>
       </label>
       <section class="repository-list" aria-label="Visible repositories">
         <button
-          v-for="repository in filteredRepositories"
+          v-for="repository in repositories"
           :key="`${repository.forge_instance_ref}:${repository.project_ref}`"
           type="button"
           class="repository-row"
@@ -280,7 +295,7 @@ function shortCommit(commit?: string | null) {
           <LoaderCircle v-if="opening === repository.project_ref" class="spinning" :size="18" />
           <ChevronRight v-else :size="18" />
         </button>
-        <div v-if="!filteredRepositories.length" class="empty-projects">
+        <div v-if="!repositories.length && !searching" class="empty-projects">
           <FolderGit2 :size="28" /><strong>No matching repository</strong>
           <p>Try another name or verify the current GitLab connection.</p>
         </div>

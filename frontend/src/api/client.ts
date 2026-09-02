@@ -188,7 +188,11 @@ export const api = {
   session: () => request<Session>("/api/session"),
   identityProviders: () => request<IdentityProvider[]>("/api/auth/providers"),
   logout: () => request<undefined>("/auth/logout", { method: "POST" }),
-  repositories: () => request<RepositoryCandidate[]>("/api/repositories"),
+  repositories: (query = "") => {
+    const normalized = query.trim();
+    const suffix = normalized ? `?query=${encodeURIComponent(normalized)}` : "";
+    return request<RepositoryCandidate[]>(`/api/repositories${suffix}`);
+  },
   openProject: (repository: Pick<RepositoryCandidate, "forge_instance_ref" | "project_ref">) =>
     request<Project>("/api/projects", {
       method: "POST",

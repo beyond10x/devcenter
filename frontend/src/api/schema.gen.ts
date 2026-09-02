@@ -2090,7 +2090,10 @@ export interface operations {
     };
     listRepositories: {
         parameters: {
-            query?: never;
+            query?: {
+                /** @description Optional provider-side repository name or path search */
+                query?: string;
+            };
             header?: never;
             path?: never;
             cookie?: never;
@@ -2107,6 +2110,7 @@ export interface operations {
                 };
             };
             401: components["responses"]["Problem"];
+            422: components["responses"]["Problem"];
             503: components["responses"]["Unavailable"];
         };
     };
