@@ -15,8 +15,8 @@ import {
   X,
 } from "@lucide/vue";
 import type { Component } from "vue";
-import { nextTick, onBeforeUnmount, onMounted, ref } from "vue";
-import { useRouter } from "vue-router";
+import { computed, nextTick, onBeforeUnmount, onMounted, ref } from "vue";
+import { useRoute, useRouter } from "vue-router";
 import GlobalSearch from "@/app/GlobalSearch.vue";
 import KeyboardHelp from "@/app/KeyboardHelp.vue";
 import { navigationItems } from "@/app/navigation";
@@ -24,6 +24,7 @@ import ThemePicker from "@/app/ThemePicker.vue";
 import { useWorkspaceStore } from "@/stores/workspace";
 
 const workspace = useWorkspaceStore();
+const route = useRoute();
 const router = useRouter();
 const navigationOpen = ref(false);
 const searchOpen = ref(false);
@@ -32,6 +33,7 @@ const chordOpen = ref(false);
 const searchTrigger = ref<HTMLButtonElement>();
 const helpTrigger = ref<HTMLButtonElement>();
 const reviewMode = import.meta.env.MODE === "review";
+const codingSessionActive = computed(() => route.name === "coding-session");
 const commandKey = /Mac|iPhone|iPad/.test(globalThis.navigator.userAgent) ? "⌘ K" : "Ctrl K";
 let chordTimer: number | undefined;
 
@@ -205,7 +207,7 @@ async function logout() {
       <a class="sidebar-api-link" href="/openapi.json">OpenAPI 3.1 <span>↗</span></a>
     </aside>
 
-    <section class="app-main">
+    <section class="app-main" :class="{ 'coding-session-main': codingSessionActive }">
       <header class="shell-toolbar">
         <button
           ref="searchTrigger"

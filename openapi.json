@@ -2,7 +2,7 @@
   "openapi": "3.1.0",
   "info": {
     "title": "Devcenter API",
-    "version": "0.8.6",
+    "version": "0.8.7",
     "description": "Authenticated browser/BFF surface for identity, connector custody, agents, and tasks."
   },
   "paths": {
@@ -1089,7 +1089,7 @@
             "description": "Exact project revision materialized by Workspace into Substrate",
             "content": {
               "application/json": {
-                "schema": { "$ref": "#/components/schemas/CodingSession" }
+                "schema": { "$ref": "#/components/schemas/HostedCodingSession" }
               }
             }
           },
@@ -1128,12 +1128,193 @@
             "description": "Session closed and its Substrate materializations cleaned up",
             "content": {
               "application/json": {
-                "schema": { "$ref": "#/components/schemas/CodingSession" }
+                "schema": { "$ref": "#/components/schemas/HostedCodingSession" }
               }
             }
           },
           "403": { "$ref": "#/components/responses/Problem" },
           "404": { "$ref": "#/components/responses/Problem" },
+          "503": { "$ref": "#/components/responses/Unavailable" }
+        }
+      }
+    },
+    "/api/project-sessions/{session_id}/resume": {
+      "post": {
+        "operationId": "resumeCodingSession",
+        "parameters": [{ "$ref": "#/components/parameters/CodingSessionId" }],
+        "security": [{ "browserSession": [] }, { "identityBearer": [] }],
+        "responses": {
+          "200": {
+            "description": "Workspace session with automatically ensured AgentIDE coordination",
+            "content": {
+              "application/json": {
+                "schema": { "$ref": "#/components/schemas/HostedCodingSession" }
+              }
+            }
+          },
+          "403": { "$ref": "#/components/responses/Problem" },
+          "404": { "$ref": "#/components/responses/Problem" },
+          "409": { "$ref": "#/components/responses/Problem" },
+          "503": { "$ref": "#/components/responses/Unavailable" }
+        }
+      }
+    },
+    "/api/project-sessions/{session_id}/coordination": {
+      "get": {
+        "operationId": "getCodingCoordination",
+        "parameters": [{ "$ref": "#/components/parameters/CodingSessionId" }],
+        "security": [{ "browserSession": [] }, { "identityBearer": [] }],
+        "responses": {
+          "200": {
+            "description": "Actor-authorized AgentIDE projections and aggregate revision",
+            "content": {
+              "application/json": {
+                "schema": { "$ref": "#/components/schemas/CodingCoordinationView" }
+              }
+            }
+          },
+          "403": { "$ref": "#/components/responses/Problem" },
+          "404": { "$ref": "#/components/responses/Problem" },
+          "409": { "$ref": "#/components/responses/Problem" },
+          "503": { "$ref": "#/components/responses/Unavailable" }
+        }
+      }
+    },
+    "/api/project-sessions/{session_id}/coordination/pins": {
+      "post": {
+        "operationId": "pinCodingContext",
+        "parameters": [{ "$ref": "#/components/parameters/CodingSessionId" }],
+        "security": [{ "browserSession": [] }, { "identityBearer": [] }],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": { "$ref": "#/components/schemas/PinCodingContext" }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Context reference pinned through AgentIDE",
+            "content": {
+              "application/json": {
+                "schema": { "$ref": "#/components/schemas/CodingCoordinationView" }
+              }
+            }
+          },
+          "403": { "$ref": "#/components/responses/Problem" },
+          "409": { "$ref": "#/components/responses/Problem" },
+          "422": { "$ref": "#/components/responses/Problem" },
+          "503": { "$ref": "#/components/responses/Unavailable" }
+        }
+      }
+    },
+    "/api/project-sessions/{session_id}/coordination/pins/{pin_id}": {
+      "delete": {
+        "operationId": "removeCodingContextPin",
+        "parameters": [
+          { "$ref": "#/components/parameters/CodingSessionId" },
+          { "$ref": "#/components/parameters/ContextPinId" }
+        ],
+        "security": [{ "browserSession": [] }, { "identityBearer": [] }],
+        "responses": {
+          "200": {
+            "description": "Context reference removed through AgentIDE",
+            "content": {
+              "application/json": {
+                "schema": { "$ref": "#/components/schemas/CodingCoordinationView" }
+              }
+            }
+          },
+          "403": { "$ref": "#/components/responses/Problem" },
+          "404": { "$ref": "#/components/responses/Problem" },
+          "409": { "$ref": "#/components/responses/Problem" },
+          "503": { "$ref": "#/components/responses/Unavailable" }
+        }
+      }
+    },
+    "/api/project-sessions/{session_id}/coordination/grants": {
+      "post": {
+        "operationId": "createCodingGrant",
+        "parameters": [{ "$ref": "#/components/parameters/CodingSessionId" }],
+        "security": [{ "browserSession": [] }, { "identityBearer": [] }],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": { "$ref": "#/components/schemas/CreateCodingGrant" }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Bounded coding grant created through AgentIDE",
+            "content": {
+              "application/json": {
+                "schema": { "$ref": "#/components/schemas/CodingCoordinationView" }
+              }
+            }
+          },
+          "403": { "$ref": "#/components/responses/Problem" },
+          "409": { "$ref": "#/components/responses/Problem" },
+          "422": { "$ref": "#/components/responses/Problem" },
+          "503": { "$ref": "#/components/responses/Unavailable" }
+        }
+      }
+    },
+    "/api/project-sessions/{session_id}/coordination/grants/{grant_id}": {
+      "delete": {
+        "operationId": "revokeCodingGrant",
+        "parameters": [
+          { "$ref": "#/components/parameters/CodingSessionId" },
+          { "$ref": "#/components/parameters/GrantId" }
+        ],
+        "security": [{ "browserSession": [] }, { "identityBearer": [] }],
+        "responses": {
+          "200": {
+            "description": "Grant revoked through AgentIDE",
+            "content": {
+              "application/json": {
+                "schema": { "$ref": "#/components/schemas/CodingCoordinationView" }
+              }
+            }
+          },
+          "403": { "$ref": "#/components/responses/Problem" },
+          "404": { "$ref": "#/components/responses/Problem" },
+          "409": { "$ref": "#/components/responses/Problem" },
+          "503": { "$ref": "#/components/responses/Unavailable" }
+        }
+      }
+    },
+    "/api/project-sessions/{session_id}/coordination/checkpoints/{checkpoint_id}": {
+      "post": {
+        "operationId": "decideCodingCheckpoint",
+        "parameters": [
+          { "$ref": "#/components/parameters/CodingSessionId" },
+          { "$ref": "#/components/parameters/CheckpointId" }
+        ],
+        "security": [{ "browserSession": [] }, { "identityBearer": [] }],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": { "$ref": "#/components/schemas/DecideCodingCheckpoint" }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Exact-plan checkpoint decided through AgentIDE",
+            "content": {
+              "application/json": {
+                "schema": { "$ref": "#/components/schemas/CodingCoordinationView" }
+              }
+            }
+          },
+          "403": { "$ref": "#/components/responses/Problem" },
+          "404": { "$ref": "#/components/responses/Problem" },
+          "409": { "$ref": "#/components/responses/Problem" },
+          "422": { "$ref": "#/components/responses/Problem" },
           "503": { "$ref": "#/components/responses/Unavailable" }
         }
       }
@@ -1795,6 +1976,24 @@
       },
       "CodingSessionId": {
         "name": "session_id",
+        "in": "path",
+        "required": true,
+        "schema": { "type": "string", "maxLength": 128 }
+      },
+      "ContextPinId": {
+        "name": "pin_id",
+        "in": "path",
+        "required": true,
+        "schema": { "type": "string", "maxLength": 128 }
+      },
+      "GrantId": {
+        "name": "grant_id",
+        "in": "path",
+        "required": true,
+        "schema": { "type": "string", "maxLength": 128 }
+      },
+      "CheckpointId": {
+        "name": "checkpoint_id",
         "in": "path",
         "required": true,
         "schema": { "type": "string", "maxLength": 128 }
@@ -2531,7 +2730,80 @@
             "additionalProperties": false
           },
           "created_at_ms": { "type": "integer", "minimum": 0 },
-          "updated_at_ms": { "type": "integer", "minimum": 0 }
+          "updated_at_ms": { "type": "integer", "minimum": 0 },
+          "coordination": { "$ref": "#/components/schemas/CoordinationSummary" }
+        },
+        "additionalProperties": false
+      },
+      "HostedCodingSession": {
+        "allOf": [
+          { "$ref": "#/components/schemas/CodingSession" },
+          { "type": "object", "required": ["coordination"] }
+        ]
+      },
+      "CoordinationSummary": {
+        "type": "object",
+        "required": ["state", "through_version", "failure_code", "retryable"],
+        "properties": {
+          "state": { "type": "string", "enum": ["ready", "degraded", "closed"] },
+          "through_version": { "type": ["integer", "null"], "minimum": 0 },
+          "failure_code": { "type": ["string", "null"] },
+          "retryable": { "type": "boolean" }
+        },
+        "additionalProperties": false
+      },
+      "CodingCoordinationView": {
+        "type": "object",
+        "required": ["summary", "session", "grants", "pins", "checkpoints"],
+        "properties": {
+          "summary": { "$ref": "#/components/schemas/CoordinationSummary" },
+          "session": { "type": "object", "additionalProperties": true },
+          "grants": {
+            "type": "array",
+            "items": { "type": "object", "additionalProperties": true }
+          },
+          "pins": {
+            "type": "array",
+            "items": { "type": "object", "additionalProperties": true }
+          },
+          "checkpoints": {
+            "type": "array",
+            "items": { "type": "object", "additionalProperties": true }
+          }
+        },
+        "additionalProperties": false
+      },
+      "PinCodingContext": {
+        "type": "object",
+        "required": ["kind", "reference", "sha256", "idempotency_key"],
+        "properties": {
+          "kind": {
+            "type": "string",
+            "enum": ["Editor", "DiffHunk", "Terminal", "Process", "Evidence"]
+          },
+          "reference": { "type": "string", "maxLength": 4096 },
+          "start_line": { "type": ["integer", "null"], "minimum": 0 },
+          "end_line": { "type": ["integer", "null"], "minimum": 0 },
+          "sha256": { "type": "string", "minLength": 64, "maxLength": 64 },
+          "idempotency_key": { "type": "string", "maxLength": 128 }
+        },
+        "additionalProperties": false
+      },
+      "CreateCodingGrant": {
+        "type": "object",
+        "required": ["grantee", "idempotency_key"],
+        "properties": {
+          "grantee": { "type": "string", "maxLength": 128 },
+          "idempotency_key": { "type": "string", "maxLength": 128 }
+        },
+        "additionalProperties": false
+      },
+      "DecideCodingCheckpoint": {
+        "type": "object",
+        "required": ["decision", "idempotency_key"],
+        "properties": {
+          "decision": { "type": "string", "enum": ["approve", "deny"] },
+          "idempotency_key": { "type": "string", "maxLength": 128 }
         },
         "additionalProperties": false
       },
@@ -2773,17 +3045,8 @@
       },
       "CreateTerminal": {
         "type": "object",
-        "required": [
-          "agentide_session_id",
-          "authority_grant_id",
-          "profile_id",
-          "columns",
-          "rows",
-          "idempotency_key"
-        ],
+        "required": ["profile_id", "columns", "rows", "idempotency_key"],
         "properties": {
-          "agentide_session_id": { "type": "string" },
-          "authority_grant_id": { "type": "string" },
           "profile_id": { "type": "string" },
           "columns": { "type": "integer", "minimum": 2, "maximum": 1000 },
           "rows": { "type": "integer", "minimum": 2, "maximum": 1000 },
@@ -3162,7 +3425,6 @@
         "required": [
           "prompt",
           "messages",
-          "agentide_session_id",
           "focused_selections",
           "open_files",
           "idempotency_key"
@@ -3173,7 +3435,6 @@
             "type": "array",
             "items": { "$ref": "#/components/schemas/ConversationMessage" }
           },
-          "agentide_session_id": { "type": "string" },
           "focused_selections": {
             "type": "array",
             "maxItems": 8,

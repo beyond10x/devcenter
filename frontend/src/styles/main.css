@@ -783,6 +783,22 @@ a {
   min-height: 100vh;
   grid-column: 2;
 }
+.app-main.coding-session-main {
+  display: flex;
+  height: 100dvh;
+  min-height: 0;
+  flex-direction: column;
+  overflow: hidden;
+}
+.coding-session-main > .shell-toolbar,
+.coding-session-main > .review-banner {
+  flex: 0 0 auto;
+}
+.coding-session-main > .hosted-workbench {
+  min-height: 0;
+  flex: 1;
+  overflow: hidden;
+}
 
 /* MCP publications */
 .publication-error,
@@ -4261,7 +4277,7 @@ pre,
   min-height: 0;
   flex: 1;
   grid-template:
-    "explorer center inspector" minmax(20rem, 1fr)
+    "explorer center inspector" minmax(10rem, 1fr)
     "terminal terminal terminal" minmax(9rem, var(--terminal-height, 20rem)) /
     minmax(13rem, 17vw) minmax(25rem, 1fr) minmax(14rem, 19vw);
   overflow: hidden;
@@ -5298,6 +5314,9 @@ pre,
 .diff-side .diff-line {
   grid-template-columns: 2.7rem minmax(0, 1fr);
 }
+.diff-line.empty {
+  background: color-mix(in srgb, var(--surface-subtle) 60%, transparent);
+}
 .diff-line > span {
   min-height: 1.35rem;
   padding: 0.18rem 0.35rem;
@@ -5391,8 +5410,8 @@ pre,
 @media (max-width: 1100px) {
   .workbench-grid {
     grid-template:
-      "explorer center" minmax(20rem, 1fr)
-      "terminal terminal" minmax(9rem, 25vh) /
+      "explorer center" minmax(10rem, 1fr)
+      "terminal terminal" minmax(9rem, var(--terminal-height, 20rem)) /
       minmax(12rem, 22vw) minmax(24rem, 1fr);
   }
   .workbench-inspector {
@@ -5419,13 +5438,21 @@ pre,
     width: 100%;
     margin-left: 0;
   }
-  .workbench-grid,
   .workbench-grid.terminal-collapsed {
     grid-template:
-      "explorer" minmax(10rem, 28vh)
-      "center" minmax(24rem, 1fr)
-      "terminal" minmax(2.45rem, auto) / minmax(0, 1fr);
-    overflow: auto;
+      "explorer" minmax(7rem, 22vh)
+      "center" minmax(10rem, 1fr)
+      "terminal" 2.45rem / minmax(0, 1fr);
+    overflow: hidden;
+  }
+  .workbench-grid:not(.terminal-collapsed) {
+    grid-template:
+      "center" minmax(0, 1fr)
+      "terminal" minmax(16rem, 60%) / minmax(0, 1fr);
+    overflow: hidden;
+  }
+  .workbench-grid:not(.terminal-collapsed) .workbench-explorer {
+    display: none;
   }
   .workbench-explorer {
     border-right: 0;

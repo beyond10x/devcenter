@@ -2,6 +2,17 @@
 
 ## Unreleased
 
+## 0.8.7 - 2026-09-03
+
+- Align the hosted workbench with AgentIDE 0.1.3, Workspace 0.2.7, Agent Platform 0.6.4,
+  Service SDK 0.3.3, and Todo 0.2.5 as one released protocol and service composition graph.
+- Make hosted coding-session coordination automatic and canonical: the BFF now derives one session
+  identity from Workspace, owns AgentIDE revision-safe grants and context mutations, and preserves
+  file/diff access plus existing terminal reattachment when coordination is degraded.
+- Start the terminal panel collapsed, expose confined profile details without a misleading bind
+  step, keep its dock visible within the review viewport, show prompt attachments directly, and
+  keep side-by-side diff changes line-aligned.
+
 ## 0.8.6 - 2026-09-03
 
 - Make the ESS semantic system and typed multi-output build DAG the canonical source for Devcenter's
