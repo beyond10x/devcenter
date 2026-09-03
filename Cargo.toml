@@ -13,7 +13,7 @@ members = [
 exclude = ["crates/devcenter-connectors"]
 
 [workspace.package]
-version = "0.8.0"
+version = "0.8.1"
 edition = "2024"
 rust-version = "1.97"
 license = "PolyForm-Free-Trial-1.0.0"
@@ -28,8 +28,8 @@ devcenter-http = { path = "crates/devcenter-http" }
 devcenter-mcp = { path = "crates/devcenter-mcp" }
 devcenter-store = { path = "crates/devcenter-store" }
 identity-client = { git = "ssh://git@github.com/beyond10x/identity.git", tag = "0.5.2" }
-agent-platform-client = { git = "ssh://git@github.com/beyond10x/agent-platform.git", tag = "0.6.1" }
-agent-platform-core = { git = "ssh://git@github.com/beyond10x/agent-platform.git", tag = "0.6.1" }
+agent-platform-client = { git = "ssh://git@github.com/beyond10x/agent-platform.git", tag = "0.6.3" }
+agent-platform-core = { git = "ssh://git@github.com/beyond10x/agent-platform.git", tag = "0.6.3" }
 connectors-client = { git = "ssh://git@github.com/beyond10x/connectors.git", tag = "v0.5.2" }
 connectors-protocol = { package = "protocol", git = "ssh://git@github.com/beyond10x/connectors.git", tag = "v0.5.2" }
 workspace-client = { git = "ssh://git@github.com/beyond10x/workspace.git", rev = "5f77ed38ac3b73f29c43e1eb8483c954ec9d1d46" }
