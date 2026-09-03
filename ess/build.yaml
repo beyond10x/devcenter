@@ -1,0 +1,245 @@
+format: ess-build/1
+build: devcenter
+platforms:
+  - os: linux
+    architecture: amd64
+  - os: linux
+    architecture: arm64
+secrets: [github-token]
+nodes:
+  - id: source
+    kind: source
+    path: .
+    destination: /source
+
+  - id: node-base
+    kind: oci_base
+    reference: node
+    digest: sha256:6c74791e557ce11fc957704f6d4fe134a7bc8d6f5ca4403205b2966bd488f6b3
+  - id: node-source
+    kind: copy
+    base: node-base
+    from: source
+    source: /source
+    destination: /source
+  - id: frontend
+    kind: run
+    base: node-source
+    argv:
+      - sh
+      - -euc
+      - >-
+        apt-get update && apt-get install -y --no-install-recommends ca-certificates git &&
+        rm -rf /var/lib/apt/lists/* && npm install --global pnpm@11.25.0 &&
+        cd /source/frontend && token="$(cat /run/secrets/github-token)" &&
+        git config --global url."https://x-access-token:${token}@github.com/".insteadOf
+        "https://github.com/" && pnpm install --frozen-lockfile && pnpm build &&
+        git config --global --unset-all
+        url."https://x-access-token:${token}@github.com/".insteadOf
+    mounts:
+      - kind: secret
+        secret: github-token
+        target: /run/secrets/github-token
+      - kind: cache
+        id: devcenter-pnpm
+        target: /root/.local/share/pnpm/store
+    network: sandbox
+
+  - id: rust-base
+    kind: oci_base
+    reference: rust
+    digest: sha256:82150a52ec202c1b14d7817e14516c392bb7f5cfebd88f1ed531cb37ebd39922
+  - id: rust-source
+    kind: copy
+    base: rust-base
+    from: source
+    source: /source
+    destination: /source
+  - id: rust-with-frontend
+    kind: copy
+    base: rust-source
+    from: frontend
+    source: /source/frontend/dist
+    destination: /source/frontend/dist
+  - id: server-binaries
+    kind: run
+    base: rust-with-frontend
+    workdir: /source
+    argv:
+      - sh
+      - -euc
+      - >-
+        token="$(cat /run/secrets/github-token)" && git config --global
+        url."https://x-access-token:${token}@github.com/".insteadOf "ssh://git@github.com/" &&
+        cargo build --locked --release -p devcenter-app -p devcenterctl &&
+        install -D /source/target/release/devcenter /out/devcenter &&
+        install -D /source/target/release/devcenterctl /out/devcenterctl &&
+        git config --global --unset-all
+        url."https://x-access-token:${token}@github.com/".insteadOf
+    mounts:
+      - kind: secret
+        secret: github-token
+        target: /run/secrets/github-token
+      - kind: cache
+        id: b10x-cargo-registry
+        target: /usr/local/cargo/registry
+      - kind: cache
+        id: b10x-cargo-git
+        target: /usr/local/cargo/git
+      - kind: cache
+        id: devcenter-target
+        target: /source/target
+    network: sandbox
+  - id: connectors-binary
+    kind: run
+    base: rust-source
+    workdir: /source
+    argv:
+      - sh
+      - -euc
+      - >-
+        token="$(cat /run/secrets/github-token)" && git config --global
+        url."https://x-access-token:${token}@github.com/".insteadOf "https://github.com/" &&
+        cp /source/crates/devcenter-connectors/Cargo.toml /build/Cargo.toml &&
+        cp /source/crates/devcenter-connectors/Cargo.lock /build/Cargo.lock &&
+        cp -R /source/crates/devcenter-connectors/src /build/src && cd /build &&
+        cargo build --locked --release &&
+        install -D /build/target/release/devcenter-connectors /out/devcenter-connectors &&
+        git config --global --unset-all
+        url."https://x-access-token:${token}@github.com/".insteadOf
+    mounts:
+      - kind: secret
+        secret: github-token
+        target: /run/secrets/github-token
+      - kind: cache
+        id: b10x-cargo-registry
+        target: /usr/local/cargo/registry
+      - kind: cache
+        id: b10x-cargo-git
+        target: /usr/local/cargo/git
+      - kind: cache
+        id: devcenter-connectors-target
+        target: /build/target
+    network: sandbox
+
+  - id: debian-base
+    kind: oci_base
+    reference: debian
+    digest: sha256:88200866dfff7ea7f5cbcb6ec7c8a701889efe6fe859fe64d6990e4b07ea4171
+  - id: server-root
+    kind: run
+    base: debian-base
+    argv: [sh, -euc, "apt-get update && apt-get install -y --no-install-recommends ca-certificates && rm -rf /var/lib/apt/lists/* && useradd --system --uid 10001 --home /nonexistent devcenter && install -d --owner=10001 --group=10001 /var/lib/devcenter"]
+    network: sandbox
+  - id: server-installed
+    kind: copy
+    base: server-root
+    from: server-binaries
+    source: /out/devcenter
+    destination: /usr/local/bin/devcenter
+  - id: server-image
+    kind: image
+    rootfs: server-installed
+    config:
+      entrypoint: [/usr/local/bin/devcenter]
+      user: "10001:10001"
+      workdir: /var/lib/devcenter
+
+  - id: connectors-base
+    kind: oci_base
+    reference: gcr.io/distroless/cc-debian12
+    digest: sha256:adcd20c7b4c988b73cbfbddb26d2eee574571e6d7c9ffea29b3821e0690efb77
+  - id: connectors-installed
+    kind: copy
+    base: connectors-base
+    from: connectors-binary
+    source: /out/devcenter-connectors
+    destination: /usr/local/bin/devcenter-connectors
+  - id: connectors-image
+    kind: image
+    rootfs: connectors-installed
+    config:
+      entrypoint: [/usr/local/bin/devcenter-connectors]
+
+  - id: helm-base
+    kind: oci_base
+    reference: alpine/helm
+    digest: sha256:aef9b56f64e866207d9591d0abd8f6d767b36aadd12edf68f8a719716d9d29c9
+  - id: oras-base
+    kind: oci_base
+    reference: ghcr.io/oras-project/oras
+    digest: sha256:6ce045ce069a89934d6666b8b49f9c4c0145201bd6de6dbe2aee267814c55468
+  - id: kubectl-base
+    kind: oci_base
+    reference: registry.k8s.io/kubectl
+    digest: sha256:59bafa07ff3a6d4b417e7633ddb9d79a9606ca98bf64bac080b3e65748669250
+  - id: ctl-root
+    kind: run
+    base: debian-base
+    argv: [sh, -euc, "apt-get update && apt-get install -y --no-install-recommends ca-certificates curl && rm -rf /var/lib/apt/lists/*"]
+    network: sandbox
+  - id: ctl-with-binary
+    kind: copy
+    base: ctl-root
+    from: server-binaries
+    source: /out/devcenterctl
+    destination: /usr/local/bin/devcenterctl
+  - id: ctl-with-helm
+    kind: copy
+    base: ctl-with-binary
+    from: helm-base
+    source: /usr/bin/helm
+    destination: /usr/local/bin/helm
+  - id: ctl-with-oras
+    kind: copy
+    base: ctl-with-helm
+    from: oras-base
+    source: /bin/oras
+    destination: /usr/local/bin/oras
+  - id: ctl-installed
+    kind: copy
+    base: ctl-with-oras
+    from: kubectl-base
+    source: /bin/kubectl
+    destination: /usr/local/bin/kubectl
+  - id: ctl-image
+    kind: image
+    rootfs: ctl-installed
+    config:
+      entrypoint: [/usr/local/bin/devcenterctl]
+
+  - id: chart-package
+    kind: run
+    base: chart-source
+    argv: [sh, -euc, "mkdir -p /out && helm package /source/deploy/charts/devcenter --version 0.0.0 --destination /out && mv /out/devcenter-0.0.0.tgz /out/devcenter.tgz"]
+  - id: chart-source
+    kind: copy
+    base: helm-base
+    from: source
+    source: /source/deploy/charts/devcenter
+    destination: /source/deploy/charts/devcenter
+  - id: chart-artifact
+    kind: artifact
+    from: chart-package
+    path: /out/devcenter.tgz
+
+outputs:
+  - name: server
+    release_unit: devcenter-server
+    node: server-image
+    kind: oci_image
+    repository: devcenter
+  - name: connectors
+    release_unit: devcenter-connectors
+    node: connectors-image
+    kind: oci_image
+    repository: devcenter-connectors
+  - name: deployment-cli
+    release_unit: devcenterctl
+    node: ctl-image
+    kind: oci_image
+    repository: devcenterctl
+  - name: chart
+    release_unit: devcenter-chart
+    node: chart-artifact
+    kind: helm_chart

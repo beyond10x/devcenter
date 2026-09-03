@@ -78,6 +78,20 @@ jobs:
           echo 'a7f81ce08007091b86d8bd696eb4d86b8d0f2e1b9f6c714be62f82f96a594496  /tmp/helm.tar.gz' | sha256sum --check
           tar --extract --gzip --file /tmp/helm.tar.gz --directory /tmp
           sudo install /tmp/linux-amd64/helm /usr/local/bin/helm
+      - name: Install pinned ESS compiler
+        env:
+          ESS_REPOSITORY: ${{ github.repository_owner }}/ess
+          ESS_VERSION: 0.9.1
+        run: |
+          archive="ess-${ESS_VERSION}-x86_64-unknown-linux-gnu.tar.gz"
+          curl --fail --silent --show-error --location \
+            --output "/tmp/${archive}" \
+            "https://github.com/${ESS_REPOSITORY}/releases/download/${ESS_VERSION}/${archive}"
+          echo '5a9e03f6476449c96210f74ad9538392f4ae5032558501d8771d35447d12c1f7  /tmp/ess-0.9.1-x86_64-unknown-linux-gnu.tar.gz' | sha256sum --check
+          tar --extract --gzip --file "/tmp/${archive}" --directory /tmp
+          sudo install "/tmp/ess-${ESS_VERSION}-x86_64-unknown-linux-gnu/ess" /usr/local/bin/ess
+      - name: Validate ESS sources and generated build inputs
+        run: bash ci/check-ess-model.sh
       - run: cargo fmt --all --check
       - run: cargo clippy --workspace --all-targets --locked -- -D warnings
       - run: cargo test --workspace --locked
@@ -103,9 +117,14 @@ jobs:
         env:
           TOKEN: ${{ steps.app-token.outputs.token }}
         run: |
-          docker build --secret id=github_token,env=TOKEN --target server --tag devcenter:gate .
-          docker build --secret id=github_token,env=TOKEN --target connectors --tag devcenter-connectors:gate .
-          docker build --secret id=github_token,env=TOKEN --target ctl --tag devcenterctl:gate .
+          docker buildx bake --file docker-bake.hcl \
+            server connectors deployment-cli \
+            --load \
+            --set '*.platform=linux/amd64' \
+            --set '*.secrets=id=github-token,env=TOKEN' \
+            --set 'server.tags=devcenter:gate' \
+            --set 'connectors.tags=devcenter-connectors:gate' \
+            --set 'deployment-cli.tags=devcenterctl:gate'
           docker run --rm devcenter-connectors:gate --version
           docker run --rm devcenterctl:gate --version
       - name: Smoke-test documented server container

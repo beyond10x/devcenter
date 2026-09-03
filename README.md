@@ -39,17 +39,26 @@ private artifact.
 This path is available only to evaluators with approved access to the private sibling dependencies.
 The public review mode above does not require that access.
 
-Build the same Linux container used by deployments. The token lets Cargo fetch the GitHub-hosted
-Rust dependencies through HTTPS and is not retained in an image layer:
+Build the same Linux containers used by deployments. `ess/build.yaml` is the canonical build graph;
+the committed `Dockerfile.ess` and `docker-bake.hcl` are deterministic projections checked by CI.
+The token lets package managers fetch approved GitHub-hosted dependencies through HTTPS and is not
+retained in an image layer:
 
 ```bash
 DEV_CENTER_BUILD_TOKEN="$(gh auth token)"
-docker build \
-  --secret id=github_token,env=DEV_CENTER_BUILD_TOKEN \
-  --target server \
-  --tag devcenter:local \
-  .
+docker buildx bake --file docker-bake.hcl \
+  server connectors deployment-cli \
+  --load \
+  --set '*.platform=linux/amd64' \
+  --set '*.secrets=id=github-token,env=DEV_CENTER_BUILD_TOKEN' \
+  --set 'server.tags=devcenter:local' \
+  --set 'connectors.tags=devcenter-connectors:local' \
+  --set 'deployment-cli.tags=devcenterctl:local'
 ```
+
+One Bake invocation shares the frontend and Rust build nodes across outputs. Run
+`bash ci/check-ess-model.sh` with ESS 0.9.1 installed to prove that the committed projections still
+match the typed semantic and build sources.
 
 ```bash
 docker run --rm --publish 8080:8080 \

@@ -1,0 +1,82 @@
+# syntax=docker/dockerfile:1.12
+FROM gcr.io/distroless/cc-debian12@sha256:adcd20c7b4c988b73cbfbddb26d2eee574571e6d7c9ffea29b3821e0690efb77 AS connectors_base
+
+FROM debian@sha256:88200866dfff7ea7f5cbcb6ec7c8a701889efe6fe859fe64d6990e4b07ea4171 AS debian_base
+
+FROM debian_base AS ctl_root
+RUN --network=default ["sh","-euc","apt-get update && apt-get install -y --no-install-recommends ca-certificates curl && rm -rf /var/lib/apt/lists/*"]
+
+FROM alpine/helm@sha256:aef9b56f64e866207d9591d0abd8f6d767b36aadd12edf68f8a719716d9d29c9 AS helm_base
+
+FROM registry.k8s.io/kubectl@sha256:59bafa07ff3a6d4b417e7633ddb9d79a9606ca98bf64bac080b3e65748669250 AS kubectl_base
+
+FROM node@sha256:6c74791e557ce11fc957704f6d4fe134a7bc8d6f5ca4403205b2966bd488f6b3 AS node_base
+
+FROM ghcr.io/oras-project/oras@sha256:6ce045ce069a89934d6666b8b49f9c4c0145201bd6de6dbe2aee267814c55468 AS oras_base
+
+FROM rust@sha256:82150a52ec202c1b14d7817e14516c392bb7f5cfebd88f1ed531cb37ebd39922 AS rust_base
+
+FROM debian_base AS server_root
+RUN --network=default ["sh","-euc","apt-get update && apt-get install -y --no-install-recommends ca-certificates && rm -rf /var/lib/apt/lists/* && useradd --system --uid 10001 --home /nonexistent devcenter && install -d --owner=10001 --group=10001 /var/lib/devcenter"]
+
+FROM scratch AS source
+COPY [".","/source"]
+
+FROM helm_base AS chart_source
+COPY --from=source ["/source/deploy/charts/devcenter","/source/deploy/charts/devcenter"]
+
+FROM chart_source AS chart_package
+RUN --network=none ["sh","-euc","mkdir -p /out && helm package /source/deploy/charts/devcenter --version 0.0.0 --destination /out && mv /out/devcenter-0.0.0.tgz /out/devcenter.tgz"]
+
+FROM scratch AS chart_artifact
+COPY --from=chart_package ["/out/devcenter.tgz","/out/"]
+
+FROM node_base AS node_source
+COPY --from=source ["/source","/source"]
+
+FROM node_source AS frontend
+RUN --network=default --mount=type=secret,id=github-token,target=/run/secrets/github-token --mount=type=cache,id=devcenter-pnpm,target=/root/.local/share/pnpm/store ["sh","-euc","apt-get update && apt-get install -y --no-install-recommends ca-certificates git && rm -rf /var/lib/apt/lists/* && npm install --global pnpm@11.25.0 && cd /source/frontend && token=\"$(cat /run/secrets/github-token)\" && git config --global url.\"https://x-access-token:${token}@github.com/\".insteadOf \"https://github.com/\" && pnpm install --frozen-lockfile && pnpm build && git config --global --unset-all url.\"https://x-access-token:${token}@github.com/\".insteadOf"]
+
+FROM rust_base AS rust_source
+COPY --from=source ["/source","/source"]
+
+FROM rust_source AS connectors_binary
+WORKDIR /source
+RUN --network=default --mount=type=secret,id=github-token,target=/run/secrets/github-token --mount=type=cache,id=b10x-cargo-registry,target=/usr/local/cargo/registry --mount=type=cache,id=b10x-cargo-git,target=/usr/local/cargo/git --mount=type=cache,id=devcenter-connectors-target,target=/build/target ["sh","-euc","token=\"$(cat /run/secrets/github-token)\" && git config --global url.\"https://x-access-token:${token}@github.com/\".insteadOf \"https://github.com/\" && cp /source/crates/devcenter-connectors/Cargo.toml /build/Cargo.toml && cp /source/crates/devcenter-connectors/Cargo.lock /build/Cargo.lock && cp -R /source/crates/devcenter-connectors/src /build/src && cd /build && cargo build --locked --release && install -D /build/target/release/devcenter-connectors /out/devcenter-connectors && git config --global --unset-all url.\"https://x-access-token:${token}@github.com/\".insteadOf"]
+
+FROM connectors_base AS connectors_installed
+COPY --from=connectors_binary ["/out/devcenter-connectors","/usr/local/bin/devcenter-connectors"]
+
+FROM connectors_installed AS connectors_image
+ENTRYPOINT ["/usr/local/bin/devcenter-connectors"]
+
+FROM rust_source AS rust_with_frontend
+COPY --from=frontend ["/source/frontend/dist","/source/frontend/dist"]
+
+FROM rust_with_frontend AS server_binaries
+WORKDIR /source
+RUN --network=default --mount=type=secret,id=github-token,target=/run/secrets/github-token --mount=type=cache,id=b10x-cargo-registry,target=/usr/local/cargo/registry --mount=type=cache,id=b10x-cargo-git,target=/usr/local/cargo/git --mount=type=cache,id=devcenter-target,target=/source/target ["sh","-euc","token=\"$(cat /run/secrets/github-token)\" && git config --global url.\"https://x-access-token:${token}@github.com/\".insteadOf \"ssh://git@github.com/\" && cargo build --locked --release -p devcenter-app -p devcenterctl && install -D /source/target/release/devcenter /out/devcenter && install -D /source/target/release/devcenterctl /out/devcenterctl && git config --global --unset-all url.\"https://x-access-token:${token}@github.com/\".insteadOf"]
+
+FROM ctl_root AS ctl_with_binary
+COPY --from=server_binaries ["/out/devcenterctl","/usr/local/bin/devcenterctl"]
+
+FROM ctl_with_binary AS ctl_with_helm
+COPY --from=helm_base ["/usr/bin/helm","/usr/local/bin/helm"]
+
+FROM ctl_with_helm AS ctl_with_oras
+COPY --from=oras_base ["/bin/oras","/usr/local/bin/oras"]
+
+FROM ctl_with_oras AS ctl_installed
+COPY --from=kubectl_base ["/bin/kubectl","/usr/local/bin/kubectl"]
+
+FROM ctl_installed AS ctl_image
+ENTRYPOINT ["/usr/local/bin/devcenterctl"]
+
+FROM server_root AS server_installed
+COPY --from=server_binaries ["/out/devcenter","/usr/local/bin/devcenter"]
+
+FROM server_installed AS server_image
+ENTRYPOINT ["/usr/local/bin/devcenter"]
+USER 10001:10001
+WORKDIR /var/lib/devcenter
+
