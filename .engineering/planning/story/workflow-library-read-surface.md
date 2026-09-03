@@ -32,7 +32,7 @@ scope:
   path: frontend/src
 - confidence: cited
   path: openapi.json
-revision: 7
+revision: 8
 ---
 ## Outcome
 
@@ -44,13 +44,13 @@ Workflow and Workspace are separate product boundaries. DevCenter adds the stand
 
 ## Acceptance
 
-- DevCenter 0.8.12 pins Workflow 0.2.0, Service SDK 0.4.2, AgentIDE 0.3.1's generated service and Vue renderer, Todo 0.2.7, Workspace 0.2.13, and the exact Connectors 0.5.6 revision shared by the generated services and hosted runtime.
+- DevCenter 0.8.13 pins Workflow 0.2.0, Service SDK 0.4.2, AgentIDE 0.3.1's generated service and Vue renderer, Todo 0.2.7, Workspace 0.2.13, and the exact Connectors 0.5.6 revision shared by the generated services and hosted runtime.
 - The Agent Platform 0.6.7 coding-turn boundary remains on the exact AgentIDE contract it declares; no conversion shim or compatibility adapter is added.
 - The BFF exposes only `GET /api/workflows` and `GET /api/workflows/{id}` through the official Workflow client and exchanges exactly `workflows.read` for audience `urn:b10x:workflow`.
 - The Vue app provides a compact URL-backed Workflow library with a bold selector, revision and node summary, and no restored fat sidebar.
 - Workflow unavailable and refusal states are explicit; tenant and actor remain session-derived.
 - The chart can enable Workflow and wires its origin, audience, probes, and Identity configuration without embedding deployment-specific values.
-- Contract, browser, chart-disabled, chart-enabled, dependency-graph, and devserver visual checks pass.
+- Contract, browser, chart-disabled, chart-enabled, dependency-graph, and devserver visual checks pass; the chart refusal cases independently isolate the Workflow and AgentIDE dependency boundaries.
 
 ## Out of Scope
 

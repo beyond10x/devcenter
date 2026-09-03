@@ -152,6 +152,7 @@ grep -q "the AgentIDE workspace requires components.agent-platform.enabled" "$in
 if helm template devcenter "$chart" \
   --namespace devcenter \
   --values "$values" \
+  --set devcenter.features.agentideWorkspace.enabled=false \
   --set components.identity.enabled=false \
   --set components.secrets.enabled=false \
   >/dev/null 2>"$invalid_workflow_error"

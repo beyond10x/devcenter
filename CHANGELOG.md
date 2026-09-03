@@ -2,6 +2,11 @@
 
 ## Unreleased
 
+## 0.8.13 - 2026-09-03
+
+- Isolate the Workflow/Identity chart refusal assertion from the independently enabled AgentIDE
+  workspace so the release gate checks the intended dependency boundary deterministically.
+
 ## 0.8.12 - 2026-09-03
 
 - Add a standalone, read-only Workflow library backed by Workflow 0.2.0's official generated HTTP
