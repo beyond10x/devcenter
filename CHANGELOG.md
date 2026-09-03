@@ -2,6 +2,8 @@
 
 ## Unreleased
 
+## 0.8.1 - 2026-09-03
+
 - Add the disabled-by-default native hosted coding workbench with Monaco editing, bounded Workspace
   tree and file reads, digest-guarded saves and conflict review, canonical Workspace diff rendering,
   URL-restored panes, and explicit terminal refusal when no admitted Substrate profile exists.
@@ -13,6 +15,8 @@
   production, redistribution, private images, and post-trial use outside the public grant.
 - Separate the public frontend review path from the approval-required full-service source build and
   make clear that the public chart is not sufficient for an operational deployment.
+- Consume Agent Platform 0.6.3 so denied Connector mappings remain terminal and malformed model
+  tool schemas are refused while capability profiles are compiled.
 
 ## 0.8.0 - 2026-09-03
 

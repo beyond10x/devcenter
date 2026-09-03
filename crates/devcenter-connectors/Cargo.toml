@@ -4,7 +4,7 @@ members = ["."]
 
 [package]
 name = "devcenter-connectors"
-version = "0.8.0"
+version = "0.8.1"
 edition = "2024"
 rust-version = "1.97"
 license = "PolyForm-Free-Trial-1.0.0"
