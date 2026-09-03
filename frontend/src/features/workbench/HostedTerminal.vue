@@ -67,6 +67,11 @@ const detail = ref("");
 const search = ref("");
 let renderer: GhosttyTerminal | undefined;
 let fit: GhosttyFitAddon | undefined;
+let ghosttyModule: GhosttyModule | undefined;
+let dataSubscription: Disposable | undefined;
+let resizeSubscription: Disposable | undefined;
+let themeObserver: MutationObserver | undefined;
+let renderedTheme = "";
 let socket: WebSocket | undefined;
 let reconnectTimer: number | undefined;
 let reconnectAttempt = 0;
@@ -82,31 +87,64 @@ async function open() {
   try {
     // The renderer is vendored and served by Devcenter; it is loaded only when a live terminal
     // pane exists, and its WASM is never fetched from a CDN.
-    const ghostty = await loadGhostty();
-    await ghostty.init();
+    ghosttyModule = await loadGhostty();
+    await ghosttyModule.init();
     await document.fonts.load(`13px ${WORKBENCH_MONO_FONT}`);
     if (!alive || !host.value) return;
-    renderer = new ghostty.Terminal({
-      fontFamily: WORKBENCH_MONO_FONT,
-      fontSize: 13,
-      scrollback: 10_000,
-      theme: currentWorkbenchTheme().terminal,
+    mountRenderer(ghosttyModule);
+    themeObserver = new MutationObserver(refreshRendererTheme);
+    themeObserver.observe(document.documentElement, {
+      attributes: true,
+      attributeFilter: ["data-theme"],
     });
-    fit = new ghostty.FitAddon();
-    renderer.loadAddon(fit);
-    renderer.open(host.value);
-    fit.fit();
-    fit.observeResize();
-    const encoder = new TextEncoder();
-    renderer.onData((data) => {
-      if (socket?.readyState === WebSocket.OPEN) socket.send(encoder.encode(data));
-    });
-    renderer.onResize(({ cols, rows }) => sendResize(cols, rows));
     void connect();
   } catch (error) {
     connectionState.value = "refused";
     detail.value = error instanceof Error ? error.message : "terminal_renderer_unavailable";
   }
+}
+
+function mountRenderer(ghostty: GhosttyModule) {
+  if (!host.value) return;
+  const workbenchTheme = currentWorkbenchTheme();
+  renderedTheme = workbenchTheme.id;
+  renderer = new ghostty.Terminal({
+    fontFamily: WORKBENCH_MONO_FONT,
+    fontSize: 13,
+    scrollback: 10_000,
+    theme: workbenchTheme.terminal,
+  });
+  fit = new ghostty.FitAddon();
+  renderer.loadAddon(fit);
+  renderer.open(host.value);
+  fit.fit();
+  fit.observeResize();
+  const encoder = new TextEncoder();
+  dataSubscription = renderer.onData((data) => {
+    if (socket?.readyState === WebSocket.OPEN) socket.send(encoder.encode(data));
+  });
+  resizeSubscription = renderer.onResize(({ cols, rows }) => sendResize(cols, rows));
+}
+
+function refreshRendererTheme() {
+  const ghostty = ghosttyModule;
+  if (!alive || !ghostty || !host.value || currentWorkbenchTheme().id === renderedTheme) return;
+  connectionEpoch += 1;
+  if (reconnectTimer !== undefined) {
+    window.clearTimeout(reconnectTimer);
+    reconnectTimer = undefined;
+  }
+  const previous = socket;
+  socket = undefined;
+  previous?.close();
+  disposeRenderer();
+  hasSequence = false;
+  lastSequence = 0n;
+  reconnectAttempt = 0;
+  mountRenderer(ghostty);
+  connectionState.value = "connecting";
+  detail.value = "Reloading retained output with the selected theme.";
+  void connect();
 }
 
 function loadGhostty(): Promise<GhosttyModule> {
@@ -335,9 +373,20 @@ function findNext() {
 function dispose() {
   alive = false;
   connectionEpoch += 1;
+  themeObserver?.disconnect();
+  themeObserver = undefined;
   if (reconnectTimer !== undefined) window.clearTimeout(reconnectTimer);
   socket?.close();
   socket = undefined;
+  disposeRenderer();
+  ghosttyModule = undefined;
+}
+
+function disposeRenderer() {
+  dataSubscription?.dispose();
+  dataSubscription = undefined;
+  resizeSubscription?.dispose();
+  resizeSubscription = undefined;
   fit?.dispose();
   fit = undefined;
   renderer?.dispose();
