@@ -45,6 +45,51 @@ const project = {
   pinned_commit: "0123456789abcdef0123456789abcdef01234567",
   web_url: "https://gitlab.example.test/foundation/devcenter",
 };
+const workflowLibrary = [
+  {
+    id: "workflow-release",
+    name: "Release train",
+    state: "active",
+    active_revision_id: "revision-release-2",
+  },
+  {
+    id: "workflow-review",
+    name: "Change review",
+    state: "active",
+    active_revision_id: "revision-review-1",
+  },
+];
+const workflowLibraryDetail = {
+  workflow: workflowLibrary[0],
+  drafts: [
+    {
+      id: "draft-release-3",
+      name: "Release train v3",
+      state: "open",
+      based_on_revision_id: "revision-release-2",
+    },
+  ],
+  revisions: [
+    {
+      id: "revision-release-2",
+      draft_id: "draft-release-2",
+      state: "published",
+      digest: "b".repeat(64),
+      node_count: 3,
+      edge_count: 2,
+      nodes: [
+        { node_id: "verify", definition: { kind: "read", value: { operation: "verify" } } },
+        { node_id: "approve", definition: { kind: "judge", value: { rubric: "release" } } },
+        { node_id: "publish", definition: { kind: "invoke", value: { operation: "publish" } } },
+      ],
+      edges: [
+        { from_node_id: "verify", to_node_id: "approve" },
+        { from_node_id: "approve", to_node_id: "publish" },
+      ],
+    },
+  ],
+  partial: false,
+};
 const codingSession = {
   id: "session-test",
   project_id: project.id,
@@ -506,6 +551,14 @@ async function mockAuthenticatedWorkspace(
       await route.fulfill({ json: [] });
       return;
     }
+    if (path === "/api/workflows") {
+      await route.fulfill({ json: { workflows: workflowLibrary, partial: false } });
+      return;
+    }
+    if (path === "/api/workflows/workflow-release") {
+      await route.fulfill({ json: workflowLibraryDetail });
+      return;
+    }
     if (path === "/api/agents" && request.method() === "GET") {
       await route.fulfill({ json: agents });
       return;
@@ -956,6 +1009,31 @@ test("opens a deep-linked agent and creates a governed worker", async ({ page },
   await expect(page.getByRole("status").filter({ hasText: "created and activated" })).toBeVisible();
   const accessibility = await new AxeBuilder({ page }).withTags(["wcag2a", "wcag2aa"]).analyze();
   expect(accessibility.violations).toEqual([]);
+});
+
+test("inspects standalone Workflow definitions separately from project runs", async ({
+  page,
+}, testInfo) => {
+  test.skip(testInfo.project.name !== "chromium", "Desktop Workflow library behavior");
+  await mockAuthenticatedWorkspace(page);
+  await page.goto("/workflows");
+
+  await expect(page.getByRole("heading", { name: "Workflow library" })).toBeVisible();
+  await expect(page.getByRole("button", { name: /Release train/ })).toBeVisible();
+  await page.getByRole("button", { name: /Release train/ }).click();
+  await expect(page).toHaveURL(/\/workflows\/workflow-release$/);
+  await expect(page.getByLabel("Current workflow")).toHaveValue("workflow-release");
+  await expect(page.getByRole("heading", { name: "Published graph" })).toBeVisible();
+  await expect(page.getByText("read", { exact: true })).toBeVisible();
+  await expect(page.getByText("Release train v3", { exact: true })).toBeVisible();
+  await expect(page.getByRole("button", { name: "All workflows" })).toBeVisible();
+  const accessibility = await new AxeBuilder({ page }).withTags(["wcag2a", "wcag2aa"]).analyze();
+  expect(accessibility.violations).toEqual([]);
+  await expect(page).toHaveScreenshot("workflow-library.png", {
+    animations: "disabled",
+    fullPage: true,
+    maxDiffPixelRatio: 0.01,
+  });
 });
 
 test("runs the SDK-generated Todo console through the live BFF binding", async ({

@@ -12,7 +12,8 @@ invalid_connector_client_error=$(mktemp)
 invalid_kubernetes_access_error=$(mktemp)
 invalid_identity_provider_error=$(mktemp)
 invalid_agentide_workspace_error=$(mktemp)
-trap 'rm -f "$rendered" "$missing_database_error" "$invalid_docs_error" "$invalid_identity_cli_error" "$invalid_connector_client_error" "$invalid_kubernetes_access_error" "$invalid_identity_provider_error" "$invalid_agentide_workspace_error"' EXIT
+invalid_workflow_error=$(mktemp)
+trap 'rm -f "$rendered" "$missing_database_error" "$invalid_docs_error" "$invalid_identity_cli_error" "$invalid_connector_client_error" "$invalid_kubernetes_access_error" "$invalid_identity_provider_error" "$invalid_agentide_workspace_error" "$invalid_workflow_error"' EXIT
 
 grants_checksum() {
   helm template devcenter "$chart" \
@@ -114,6 +115,8 @@ awk '
 
 grep -q 'name: SUBSTRATE_TLS_LISTEN' "$rendered"
 grep -q 'name: WORKSPACE_SUBSTRATE_ORIGIN' "$rendered"
+grep -q 'name: WORKFLOW_IDENTITY_ORIGIN' "$rendered"
+grep -A1 'name: WORKFLOW_IDENTITY_AUDIENCE' "$rendered" | grep -q 'value: "urn:b10x:workflow"'
 grep -q 'name: AGENT_PLATFORM_IDENTITY_ORIGIN' "$rendered"
 grep -q 'name: AGENT_PLATFORM_CONNECTORS_API_BASE' "$rendered"
 grep -q 'name: AGENT_PLATFORM_WORKSPACE_ORIGIN' "$rendered"
@@ -133,6 +136,7 @@ grep -q 'chown 65532:65532 /var/lib/substrate /var/run/substrate /var/run/substr
 grep -q 'name: tls-source' "$rendered"
 grep -q 'DEV_CENTER_CONNECTORS_DOCS_AVAILABLE: "false"' "$rendered"
 grep -q 'DEV_CENTER_AGENTIDE_WORKSPACE_ENABLED: "true"' "$rendered"
+grep -q 'DEV_CENTER_WORKFLOW_ORIGIN:' "$rendered"
 
 if helm template devcenter "$chart" \
   --namespace devcenter \
@@ -144,6 +148,18 @@ then
   exit 1
 fi
 grep -q "the AgentIDE workspace requires components.agent-platform.enabled" "$invalid_agentide_workspace_error"
+
+if helm template devcenter "$chart" \
+  --namespace devcenter \
+  --values "$values" \
+  --set components.identity.enabled=false \
+  --set components.secrets.enabled=false \
+  >/dev/null 2>"$invalid_workflow_error"
+then
+  echo "chart unexpectedly enabled Workflow without Identity" >&2
+  exit 1
+fi
+grep -q "the Workflow library requires components.identity.enabled" "$invalid_workflow_error"
 
 if helm template devcenter "$chart" \
   --namespace devcenter \

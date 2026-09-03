@@ -2,6 +2,15 @@
 
 ## Unreleased
 
+## 0.8.12 - 2026-09-03
+
+- Add a standalone, read-only Workflow library backed by Workflow 0.2.0's official generated HTTP
+  client, exact `urn:b10x:workflow` audience, and `workflows.read` scope while leaving
+  Workspace-backed project workflows unchanged.
+- Align the composed service graph with Service SDK 0.4.2, Workspace 0.2.13, AgentIDE 0.3.1, Todo
+  0.2.7, and the exact Connectors 0.5.6 and Identity 0.5.6 revisions shared by generated services
+  and hosted runtimes.
+
 ## 0.8.11 - 2026-09-03
 
 - Replace the Codex add-time OAuth command with an explicit least-privilege server configuration

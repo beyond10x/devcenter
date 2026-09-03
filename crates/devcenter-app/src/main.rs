@@ -71,6 +71,9 @@ struct Args {
     /// Internal Workspace service origin.
     #[arg(long, env = "DEV_CENTER_WORKSPACE_ORIGIN")]
     workspace_origin: Option<String>,
+    /// Internal standalone Workflow service origin.
+    #[arg(long, env = "DEV_CENTER_WORKFLOW_ORIGIN")]
+    workflow_origin: Option<String>,
     /// Enable the native hosted coding workbench routes and browser surface.
     #[arg(
         long,
@@ -162,6 +165,7 @@ async fn main() -> Result<()> {
             connectors_api_base: args.connectors_api_base,
             connectors_docs_available: args.connectors_docs_available,
             workspace_origin: args.workspace_origin,
+            workflow_origin: args.workflow_origin,
             agentide_workspace_enabled: args.agentide_workspace_enabled,
         })?,
     )

@@ -64,7 +64,7 @@ spec:
           args: {{ toYaml . | nindent 12 }}
           {{- end }}
           ports: [{name: http, containerPort: {{ $component.port }}, protocol: TCP}]
-          {{- if or $component.env $component.envValueFrom (eq $name "secrets") (eq $name "workspace") (eq $name "agent-platform") (eq $name "aep-service") }}
+          {{- if or $component.env $component.envValueFrom (eq $name "secrets") (eq $name "workspace") (eq $name "workflow") (eq $name "agent-platform") (eq $name "aep-service") }}
           env:
             {{- range $key, $value := $component.env }}
             - name: {{ $key }}
@@ -111,6 +111,12 @@ spec:
             - name: WORKSPACE_AEP_SERVICE_ORIGIN
               value: {{ printf "http://%s-aep-service.%s.svc.cluster.local:%v" (include "devcenter.fullname" $) $.Release.Namespace (index $.Values.components "aep-service").port | quote }}
             {{- end }}
+            {{- end }}
+            {{- if eq $name "workflow" }}
+            - name: WORKFLOW_IDENTITY_ORIGIN
+              value: {{ printf "http://%s-identity.%s.svc.cluster.local:%v" (include "devcenter.fullname" $) $.Release.Namespace (index $.Values.components "identity").port | quote }}
+            - name: WORKFLOW_IDENTITY_AUDIENCE
+              value: "urn:b10x:workflow"
             {{- end }}
             {{- if eq $name "agent-platform" }}
             {{- if and (index $.Values.components "identity").enabled (not (hasKey ($component.env | default dict) "AGENT_PLATFORM_IDENTITY_ORIGIN")) }}

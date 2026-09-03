@@ -52,9 +52,14 @@ use devcenter_store::{
 use futures_util::{SinkExt as _, StreamExt as _};
 use serde::{Deserialize, Serialize};
 use serde_json::{Value, json};
+use service_http::{ClientError as WorkflowClientError, Page as WorkflowPage};
 use sha2::{Digest, Sha256};
 use tokio_tungstenite::tungstenite::client::IntoClientRequest as _;
 use url::Url;
+use workflow_generated_service::{
+    GetWorkflowInput, GetWorkflowRow, ListDraftsInput, ListDraftsRow, ListRevisionsInput,
+    ListRevisionsRow, ListWorkflowsInput, ListWorkflowsRow, WorkflowClient,
+};
 use workspace_client::{ClientError as WorkspaceError, WorkspaceClient};
 use workspace_core::{
     CodingSession, CodingSessionState, CreateCodingSession, CreateMessage, CreateTerminal,
@@ -72,6 +77,7 @@ const CONNECTORS_CATALOG_SCOPE: &str = "connectors.catalog.read";
 const CONNECTORS_INVOKE_SCOPE: &str = "connectors.invoke";
 const CONNECTORS_APPROVAL_SCOPE: &str = "connectors.approvals.issue";
 const CONNECTOR_APPROVAL_TTL_SECONDS: u64 = 120;
+const WORKFLOW_READ_SCOPE: &str = "workflows.read";
 const MCP_APPROVAL_TTL_MILLISECONDS: i64 = 10 * 60 * 1_000;
 const MCP_CLIENT_ID: &str = "identity-public-client";
 const MCP_CLIENT_DISPLAY_NAME: &str = "External MCP client";
@@ -89,6 +95,7 @@ struct AppState {
     agent_platform: Option<AgentPlatformClient>,
     connectors: Option<HostedClient>,
     workspace: Option<WorkspaceClient>,
+    workflow: Option<WorkflowClient>,
     pending_logins: Arc<Mutex<BTreeMap<String, PendingLogin>>>,
     publications: Store,
 }
@@ -138,11 +145,18 @@ pub fn router_with_store(
         .map(WorkspaceClient::new)
         .transpose()
         .map_err(|_| ConfigurationError)?;
+    let workflow = config
+        .workflow_origin
+        .as_deref()
+        .map(WorkflowClient::new)
+        .transpose()
+        .map_err(|_| ConfigurationError)?;
     let state = AppState {
         config: Arc::new(config),
         agent_platform,
         connectors,
         workspace,
+        workflow,
         pending_logins: Arc::new(Mutex::new(BTreeMap::new())),
         publications,
     };
@@ -150,6 +164,7 @@ pub fn router_with_store(
         .merge(publication_routes())
         .merge(connection_routes())
         .merge(service_routes())
+        .merge(workflow_routes())
         .merge(agent_routes())
         .merge(project_routes())
         .route("/mcp/{publication_id}", post(mcp))
@@ -164,6 +179,8 @@ fn frontend_routes() -> Router<AppState> {
         .route("/connectors", get(app))
         .route("/connectors/{provider_ref}", get(app))
         .route("/services", get(app))
+        .route("/workflows", get(app))
+        .route("/workflows/{workflow_id}", get(app))
         .route("/connections", get(legacy_connections))
         .route("/projects", get(app))
         .route("/projects/{project_id}", get(app))
@@ -267,6 +284,256 @@ fn service_routes() -> Router<AppState> {
         .route("/api/services", get(list_generated_services))
         .route("/api/services/catalog", post(get_generated_service_catalog))
         .route("/api/services/invoke", post(invoke_generated_service))
+}
+
+fn workflow_routes() -> Router<AppState> {
+    Router::new()
+        .route("/api/workflows", get(list_workflow_library))
+        .route(
+            "/api/workflows/{workflow_id}",
+            get(get_workflow_library_item),
+        )
+}
+
+#[derive(Serialize)]
+struct WorkflowLibraryPage {
+    workflows: Vec<WorkflowLibrarySummary>,
+    partial: bool,
+}
+
+#[derive(Serialize)]
+struct WorkflowLibrarySummary {
+    id: String,
+    name: String,
+    state: String,
+    active_revision_id: Option<String>,
+}
+
+#[derive(Serialize)]
+struct WorkflowDraftSummary {
+    id: String,
+    name: String,
+    state: String,
+    based_on_revision_id: Option<String>,
+}
+
+#[derive(Serialize)]
+struct WorkflowRevisionSummary {
+    id: String,
+    draft_id: String,
+    state: String,
+    digest: String,
+    node_count: i64,
+    edge_count: i64,
+    nodes: Vec<Value>,
+    edges: Vec<Value>,
+}
+
+#[derive(Serialize)]
+struct WorkflowLibraryDetail {
+    workflow: WorkflowLibrarySummary,
+    drafts: Vec<WorkflowDraftSummary>,
+    revisions: Vec<WorkflowRevisionSummary>,
+    partial: bool,
+}
+
+async fn list_workflow_library(State(state): State<AppState>, headers: HeaderMap) -> Response {
+    let authenticated = match authenticate(&state, &headers, false).await {
+        Ok(authenticated) => authenticated,
+        Err(response) => return response,
+    };
+    let Some(workflow) = state.workflow.as_ref() else {
+        return unavailable("workflow_not_configured");
+    };
+    let identity = match state.config.authentication.identity_client() {
+        Ok(identity) => identity,
+        Err(error) => return authentication_problem(error),
+    };
+    let Ok(access) = identity
+        .issue_access_token(
+            authenticated.authorization.as_str(),
+            workflow_generated_service::HTTP_AUDIENCE,
+            WORKFLOW_READ_SCOPE,
+        )
+        .await
+    else {
+        return unavailable("identity_access_unavailable");
+    };
+    let page = match workflow
+        .list_workflows(&access.credential, &ListWorkflowsInput {}, workflow_page())
+        .await
+    {
+        Ok(page) => page,
+        Err(error) => return workflow_error(&error),
+    };
+    let Ok(workflows) = page
+        .items
+        .into_iter()
+        .map(workflow_summary_from_list)
+        .collect::<Result<Vec<_>, _>>()
+    else {
+        return unavailable("workflow_invalid_response");
+    };
+    confidential_json(WorkflowLibraryPage {
+        workflows,
+        partial: page.partial || page.next_cursor.is_some(),
+    })
+}
+
+async fn get_workflow_library_item(
+    State(state): State<AppState>,
+    headers: HeaderMap,
+    Path(workflow_id): Path<String>,
+) -> Response {
+    let authenticated = match authenticate(&state, &headers, false).await {
+        Ok(authenticated) => authenticated,
+        Err(response) => return response,
+    };
+    let Some(workflow) = state.workflow.as_ref() else {
+        return unavailable("workflow_not_configured");
+    };
+    let identity = match state.config.authentication.identity_client() {
+        Ok(identity) => identity,
+        Err(error) => return authentication_problem(error),
+    };
+    let Ok(access) = identity
+        .issue_access_token(
+            authenticated.authorization.as_str(),
+            workflow_generated_service::HTTP_AUDIENCE,
+            WORKFLOW_READ_SCOPE,
+        )
+        .await
+    else {
+        return unavailable("identity_access_unavailable");
+    };
+    let workflow_id_value = Value::String(workflow_id);
+    let entity_page = match workflow
+        .get_workflow(
+            &access.credential,
+            &GetWorkflowInput {
+                workflow_id: workflow_id_value.clone(),
+            },
+            workflow_page(),
+        )
+        .await
+    {
+        Ok(page) => page,
+        Err(error) => return workflow_error(&error),
+    };
+    let Some(workflow_row) = entity_page.items.into_iter().next() else {
+        return problem(StatusCode::NOT_FOUND, "workflow_not_found");
+    };
+    let drafts_page = match workflow
+        .list_drafts(
+            &access.credential,
+            &ListDraftsInput {
+                workflow_id: workflow_id_value.clone(),
+            },
+            workflow_page(),
+        )
+        .await
+    {
+        Ok(page) => page,
+        Err(error) => return workflow_error(&error),
+    };
+    let revisions_page = match workflow
+        .list_revisions(
+            &access.credential,
+            &ListRevisionsInput {
+                workflow_id: workflow_id_value,
+            },
+            workflow_page(),
+        )
+        .await
+    {
+        Ok(page) => page,
+        Err(error) => return workflow_error(&error),
+    };
+    let Ok(summary) = workflow_summary_from_get(workflow_row) else {
+        return unavailable("workflow_invalid_response");
+    };
+    let Ok(drafts) = drafts_page
+        .items
+        .into_iter()
+        .map(workflow_draft_summary)
+        .collect::<Result<Vec<_>, _>>()
+    else {
+        return unavailable("workflow_invalid_response");
+    };
+    let Ok(revisions) = revisions_page
+        .items
+        .into_iter()
+        .map(workflow_revision_summary)
+        .collect::<Result<Vec<_>, _>>()
+    else {
+        return unavailable("workflow_invalid_response");
+    };
+    confidential_json(WorkflowLibraryDetail {
+        workflow: summary,
+        drafts,
+        revisions,
+        partial: entity_page.partial
+            || entity_page.next_cursor.is_some()
+            || drafts_page.partial
+            || drafts_page.next_cursor.is_some()
+            || revisions_page.partial
+            || revisions_page.next_cursor.is_some(),
+    })
+}
+
+fn workflow_page() -> WorkflowPage {
+    WorkflowPage {
+        cursor: None,
+        limit: 1_000,
+    }
+}
+
+fn workflow_summary_from_list(row: ListWorkflowsRow) -> Result<WorkflowLibrarySummary, ()> {
+    Ok(WorkflowLibrarySummary {
+        id: workflow_scalar(&row.workflow_id)?,
+        name: row.name,
+        state: workflow_scalar(&row.state)?,
+        active_revision_id: workflow_optional_scalar(row.active_revision_id.as_ref())?,
+    })
+}
+
+fn workflow_summary_from_get(row: GetWorkflowRow) -> Result<WorkflowLibrarySummary, ()> {
+    Ok(WorkflowLibrarySummary {
+        id: workflow_scalar(&row.workflow_id)?,
+        name: row.name,
+        state: workflow_scalar(&row.state)?,
+        active_revision_id: workflow_optional_scalar(row.active_revision_id.as_ref())?,
+    })
+}
+
+fn workflow_draft_summary(row: ListDraftsRow) -> Result<WorkflowDraftSummary, ()> {
+    Ok(WorkflowDraftSummary {
+        id: workflow_scalar(&row.draft_id)?,
+        name: row.name,
+        state: workflow_scalar(&row.state)?,
+        based_on_revision_id: workflow_optional_scalar(row.based_on_revision_id.as_ref())?,
+    })
+}
+
+fn workflow_revision_summary(row: ListRevisionsRow) -> Result<WorkflowRevisionSummary, ()> {
+    Ok(WorkflowRevisionSummary {
+        id: workflow_scalar(&row.revision_id)?,
+        draft_id: workflow_scalar(&row.draft_id)?,
+        state: workflow_scalar(&row.state)?,
+        digest: row.digest,
+        node_count: row.node_count,
+        edge_count: row.edge_count,
+        nodes: row.nodes,
+        edges: row.edges,
+    })
+}
+
+fn workflow_optional_scalar(value: Option<&Value>) -> Result<Option<String>, ()> {
+    value.map(workflow_scalar).transpose()
+}
+
+fn workflow_scalar(value: &Value) -> Result<String, ()> {
+    value.as_str().map(str::to_owned).ok_or(())
 }
 
 async fn legacy_connections() -> Redirect {
@@ -479,6 +746,10 @@ async fn ready(State(state): State<AppState>) -> Response {
         && optional_client_ready(
             state.config.workspace_origin.is_some(),
             state.workspace.is_some(),
+        )
+        && optional_client_ready(
+            state.config.workflow_origin.is_some(),
+            state.workflow.is_some(),
         )
         && state.publications.ready().await.is_ok();
     let status = if ready {
@@ -5011,6 +5282,30 @@ fn workspace_error(error: &WorkspaceError) -> Response {
     }
 }
 
+fn workflow_error(error: &WorkflowClientError) -> Response {
+    match error {
+        WorkflowClientError::Refused(refusal) if refusal.status == 401 => {
+            problem(StatusCode::BAD_GATEWAY, "workflow_authentication_refused")
+        }
+        WorkflowClientError::Refused(refusal) if refusal.status == 403 => {
+            problem(StatusCode::FORBIDDEN, "workflow_access_refused")
+        }
+        WorkflowClientError::Refused(refusal) if refusal.status == 404 => {
+            problem(StatusCode::NOT_FOUND, "workflow_not_found")
+        }
+        WorkflowClientError::Refused(_) => {
+            problem(StatusCode::BAD_GATEWAY, "workflow_request_refused")
+        }
+        WorkflowClientError::Configuration(_) | WorkflowClientError::Encode(_) => problem(
+            StatusCode::INTERNAL_SERVER_ERROR,
+            "workflow_client_contract",
+        ),
+        WorkflowClientError::Transport(_) | WorkflowClientError::InvalidResponse(_) => {
+            unavailable("workflow_unavailable")
+        }
+    }
+}
+
 fn confidential_json<T: Serialize>(value: T) -> Response {
     let mut response = Json(value).into_response();
     response
@@ -5097,6 +5392,7 @@ mod tests {
             connectors_api_base: None,
             connectors_docs_available: false,
             workspace_origin: None,
+            workflow_origin: None,
             agentide_workspace_enabled: false,
         })
         .unwrap()
@@ -5306,6 +5602,7 @@ mod tests {
             connectors_api_base: None,
             connectors_docs_available: false,
             workspace_origin: Some("http://127.0.0.1:3002".into()),
+            workflow_origin: None,
             agentide_workspace_enabled: true,
         })
         .unwrap();
@@ -5337,6 +5634,8 @@ mod tests {
             "/connectors",
             "/connectors/gitlab",
             "/services",
+            "/workflows",
+            "/workflows/workflow-1",
             "/projects/project-1/sessions/session-1",
             "/docs",
             "/docs/",
@@ -5355,6 +5654,7 @@ mod tests {
         assert!(script.contains("/api/connectors/claude-code/oauth/start"));
         assert!(script.contains("/api/connectors/claude-code/oauth/complete"));
         assert!(script.contains("/api/services/invoke"));
+        assert!(script.contains("/api/workflows"));
         assert!(script.contains("/api/project-sessions/"));
         assert!(!script.contains("id=\"credential\""));
         assert!(script.contains("claude-opus-5"));
@@ -5411,6 +5711,8 @@ mod tests {
         assert!(contract["paths"]["/api/services"].is_object());
         assert!(contract["paths"]["/api/services/catalog"].is_object());
         assert!(contract["paths"]["/api/services/invoke"].is_object());
+        assert!(contract["paths"]["/api/workflows"].is_object());
+        assert!(contract["paths"]["/api/workflows/{workflow_id}"].is_object());
         assert!(contract["paths"]["/api/project-sessions/{session_id}/resume"].is_object());
         assert!(contract["paths"]["/api/project-sessions/{session_id}/coordination"].is_object());
         assert!(
@@ -5515,6 +5817,8 @@ mod tests {
             "/api/connectors/catalog",
             "/api/connectors/catalog/gitlab",
             "/api/services",
+            "/api/workflows",
+            "/api/workflows/workflow-one",
             "/api/connections",
             "/api/capabilities",
             "/api/capability-profiles",
@@ -5545,6 +5849,24 @@ mod tests {
             .await
             .unwrap();
         assert_eq!(complete.status(), StatusCode::UNAUTHORIZED);
+    }
+
+    #[tokio::test]
+    async fn workflow_library_refuses_an_authenticated_request_when_not_configured() {
+        let response =
+            test_router(devcenter_auth::Authentication::development_bearer("local-token").unwrap())
+                .oneshot(
+                    Request::builder()
+                        .uri("/api/workflows")
+                        .header(header::AUTHORIZATION, "Bearer local-token")
+                        .body(Body::empty())
+                        .unwrap(),
+                )
+                .await
+                .unwrap();
+        assert_eq!(response.status(), StatusCode::SERVICE_UNAVAILABLE);
+        let body = response.into_body().collect().await.unwrap().to_bytes();
+        assert_eq!(body, r#"{"code":"workflow_not_configured"}"#);
     }
 
     #[tokio::test]
@@ -5650,6 +5972,7 @@ mod tests {
             connectors_api_base: None,
             connectors_docs_available: false,
             workspace_origin: None,
+            workflow_origin: None,
             agentide_workspace_enabled: false,
         };
         router_with_store(config, store).unwrap()

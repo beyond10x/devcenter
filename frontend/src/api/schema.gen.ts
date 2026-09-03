@@ -486,6 +486,38 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/workflows": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get: operations["listWorkflowLibrary"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/workflows/{workflow_id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get: operations["getWorkflowLibraryItem"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/repositories": {
         parameters: {
             query?: never;
@@ -1600,6 +1632,38 @@ export interface components {
         };
         CreateProjectMessage: {
             content: string;
+        };
+        WorkflowLibrarySummary: {
+            id: string;
+            name: string;
+            state: string;
+            active_revision_id: string | null;
+        };
+        WorkflowDraftSummary: {
+            id: string;
+            name: string;
+            state: string;
+            based_on_revision_id: string | null;
+        };
+        WorkflowRevisionSummary: {
+            id: string;
+            draft_id: string;
+            state: string;
+            digest: string;
+            node_count: number;
+            edge_count: number;
+            nodes: unknown[];
+            edges: unknown[];
+        };
+        WorkflowLibraryPage: {
+            workflows: components["schemas"]["WorkflowLibrarySummary"][];
+            partial: boolean;
+        };
+        WorkflowLibraryDetail: {
+            workflow: components["schemas"]["WorkflowLibrarySummary"];
+            drafts: components["schemas"]["WorkflowDraftSummary"][];
+            revisions: components["schemas"]["WorkflowRevisionSummary"][];
+            partial: boolean;
         };
         WorkflowDefinition: {
             id: string;
@@ -2731,6 +2795,53 @@ export interface operations {
                 };
                 content?: never;
             };
+            404: components["responses"]["Problem"];
+            503: components["responses"]["Unavailable"];
+        };
+    };
+    listWorkflowLibrary: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Standalone Workflow definitions visible to the current actor */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["WorkflowLibraryPage"];
+                };
+            };
+            401: components["responses"]["Problem"];
+            503: components["responses"]["Unavailable"];
+        };
+    };
+    getWorkflowLibraryItem: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                workflow_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Standalone Workflow definition with drafts and immutable revisions */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["WorkflowLibraryDetail"];
+                };
+            };
+            401: components["responses"]["Problem"];
             404: components["responses"]["Problem"];
             503: components["responses"]["Unavailable"];
         };

@@ -7,6 +7,9 @@
 {{- if not (index .Values.components "workspace").enabled }}{{ fail "the AgentIDE workspace requires components.workspace.enabled" }}{{ end -}}
 {{- if not .Values.substrate.enabled }}{{ fail "the AgentIDE workspace requires substrate.enabled" }}{{ end -}}
 {{- end -}}
+{{- if and (index .Values.components "workflow").enabled (not (index .Values.components "identity").enabled) -}}
+{{- fail "the Workflow library requires components.identity.enabled" -}}
+{{- end -}}
 apiVersion: v1
 kind: ConfigMap
 metadata:
@@ -38,4 +41,7 @@ data:
   {{- end }}
   {{- if (index .Values.components "workspace").enabled }}
   DEV_CENTER_WORKSPACE_ORIGIN: {{ printf "http://%s-workspace.%s.svc.cluster.local:%v" (include "devcenter.fullname" .) .Release.Namespace (index .Values.components "workspace").port | quote }}
+  {{- end }}
+  {{- if (index .Values.components "workflow").enabled }}
+  DEV_CENTER_WORKFLOW_ORIGIN: {{ printf "http://%s-workflow.%s.svc.cluster.local:%v" (include "devcenter.fullname" .) .Release.Namespace (index .Values.components "workflow").port | quote }}
   {{- end }}

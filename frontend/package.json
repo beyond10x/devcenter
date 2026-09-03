@@ -1,6 +1,6 @@
 {
   "name": "devcenter-frontend",
-  "version": "0.8.11",
+  "version": "0.8.12",
   "private": true,
   "type": "module",
   "packageManager": "pnpm@11.25.0",
@@ -22,8 +22,8 @@
     "check": "pnpm format:check && pnpm lint && pnpm check:generated && pnpm typecheck && pnpm test && pnpm build"
   },
   "dependencies": {
-    "@b10x/agentide-ui": "git+https://github.com/beyond10x/agentide.git#74162248238f91846d713cb2571e8cc6625b4922",
-    "@b10x/service-console-vue": "git+https://github.com/beyond10x/service-sdk.git#a57d5a0f4b4cf7a98bf9bd38bd8cacbe94ae7e5b",
+    "@b10x/agentide-ui": "git+https://github.com/beyond10x/agentide.git#efe595b07a430e0757e991be6eef60c02439b4f4",
+    "@b10x/service-console-vue": "git+https://github.com/beyond10x/service-sdk.git#084defb7bf2960b9888db42feb9f009c1a78d4e4",
     "@fontsource-variable/jetbrains-mono": "5.3.0",
     "@fontsource-variable/manrope": "5.3.0",
     "@lucide/vue": "1.38.0",

@@ -8,11 +8,11 @@ importers:
   .:
     dependencies:
       "@b10x/agentide-ui":
-        specifier: git+https://github.com/beyond10x/agentide.git#74162248238f91846d713cb2571e8cc6625b4922
-        version: https://codeload.github.com/beyond10x/agentide/tar.gz/74162248238f91846d713cb2571e8cc6625b4922(vue@3.5.42(typescript@5.9.3))
+        specifier: git+https://github.com/beyond10x/agentide.git#efe595b07a430e0757e991be6eef60c02439b4f4
+        version: https://codeload.github.com/beyond10x/agentide/tar.gz/efe595b07a430e0757e991be6eef60c02439b4f4(vue@3.5.42(typescript@5.9.3))
       "@b10x/service-console-vue":
-        specifier: git+https://github.com/beyond10x/service-sdk.git#a57d5a0f4b4cf7a98bf9bd38bd8cacbe94ae7e5b
-        version: https://codeload.github.com/beyond10x/service-sdk/tar.gz/a57d5a0f4b4cf7a98bf9bd38bd8cacbe94ae7e5b(typescript@5.9.3)
+        specifier: git+https://github.com/beyond10x/service-sdk.git#084defb7bf2960b9888db42feb9f009c1a78d4e4
+        version: https://codeload.github.com/beyond10x/service-sdk/tar.gz/084defb7bf2960b9888db42feb9f009c1a78d4e4(typescript@5.9.3)
       "@fontsource-variable/jetbrains-mono":
         specifier: 5.3.0
         version: 5.3.0
@@ -135,24 +135,25 @@ packages:
     peerDependencies:
       playwright-core: ">= 1.0.0"
 
-  "@b10x/agentide-ui@https://codeload.github.com/beyond10x/agentide/tar.gz/74162248238f91846d713cb2571e8cc6625b4922":
+  "@b10x/agentide-ui@https://codeload.github.com/beyond10x/agentide/tar.gz/efe595b07a430e0757e991be6eef60c02439b4f4":
     resolution:
       {
         gitHosted: true,
-        integrity: sha512-BOzm1o81PazdkzNZovYa3iRaMOdadsult4cDTtb7KWDb7pYMaBuhh4OGCSLdP9HDLPckV747MOGJmh8cTsLRAQ==,
-        tarball: https://codeload.github.com/beyond10x/agentide/tar.gz/74162248238f91846d713cb2571e8cc6625b4922,
+        integrity: sha512-/YRnIy4a+l7OgcTdf6lBdeFZ+WEU4tmbbGU3teOlPtzNQ9ieQHsicClvMHvQfqTZqfVXC+NE4rnXRl0FZfbDPw==,
+        tarball: https://codeload.github.com/beyond10x/agentide/tar.gz/efe595b07a430e0757e991be6eef60c02439b4f4,
       }
     version: 0.3.0
     peerDependencies:
       vue: ^3.5.0
 
-  "@b10x/service-console-vue@https://codeload.github.com/beyond10x/service-sdk/tar.gz/a57d5a0f4b4cf7a98bf9bd38bd8cacbe94ae7e5b":
+  "@b10x/service-console-vue@https://codeload.github.com/beyond10x/service-sdk/tar.gz/084defb7bf2960b9888db42feb9f009c1a78d4e4":
     resolution:
       {
         gitHosted: true,
-        tarball: https://codeload.github.com/beyond10x/service-sdk/tar.gz/a57d5a0f4b4cf7a98bf9bd38bd8cacbe94ae7e5b,
+        integrity: sha512-48kykUoD/uwYVay/hQd+jYt8GWUV+3y3aB9iOheo5OqO04TyptmFyrMWmBHo9S1HG/GKSmG1dXYrX6wYuGsPfA==,
+        tarball: https://codeload.github.com/beyond10x/service-sdk/tar.gz/084defb7bf2960b9888db42feb9f009c1a78d4e4,
       }
-    version: 0.3.4
+    version: 0.4.2
 
   "@babel/code-frame@7.29.7":
     resolution:
@@ -3251,11 +3252,11 @@ snapshots:
       axe-core: 4.13.0
       playwright-core: 1.62.1
 
-  "@b10x/agentide-ui@https://codeload.github.com/beyond10x/agentide/tar.gz/74162248238f91846d713cb2571e8cc6625b4922(vue@3.5.42(typescript@5.9.3))":
+  "@b10x/agentide-ui@https://codeload.github.com/beyond10x/agentide/tar.gz/efe595b07a430e0757e991be6eef60c02439b4f4(vue@3.5.42(typescript@5.9.3))":
     dependencies:
       vue: 3.5.42(typescript@5.9.3)
 
-  "@b10x/service-console-vue@https://codeload.github.com/beyond10x/service-sdk/tar.gz/a57d5a0f4b4cf7a98bf9bd38bd8cacbe94ae7e5b(typescript@5.9.3)":
+  "@b10x/service-console-vue@https://codeload.github.com/beyond10x/service-sdk/tar.gz/084defb7bf2960b9888db42feb9f009c1a78d4e4(typescript@5.9.3)":
     dependencies:
       vue: 3.5.42(typescript@5.9.3)
     transitivePeerDependencies:

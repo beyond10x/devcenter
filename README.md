@@ -95,12 +95,17 @@ DEV_CENTER_DATABASE_URL=postgresql://... \
 DEV_CENTER_AGENT_PLATFORM_ORIGIN=https://agents.example.test \
 DEV_CENTER_CONNECTORS_API_BASE=https://connectors.example.test/api/connectors/v1 \
 DEV_CENTER_WORKSPACE_ORIGIN=https://workspace.example.test \
+DEV_CENTER_WORKFLOW_ORIGIN=https://workflow.example.test \
 DEV_CENTER_AGENTIDE_WORKSPACE_ENABLED=false
 ```
 
 The matching `DEV_CENTER_IDENTITY_EXCHANGE_SECRET` is injected from deployment-owned Secret
 material, never a ConfigMap or public values file. Identity admits that caller only under an exact
 source-audience, source-scope, target-audience, and target-scope exchange policy.
+
+`DEV_CENTER_WORKFLOW_ORIGIN` enables the standalone Workflow library. Devcenter exchanges the
+browser session for only `workflows.read` at `urn:b10x:workflow`; project-bound workflow runs remain
+served by Workspace.
 
 The browser receives only an opaque, Secure, HttpOnly session cookie. `Connect Claude` starts a
 Connector-owned OAuth2 PKCE flow: Devcenter retains only an opaque flow id in browser memory while

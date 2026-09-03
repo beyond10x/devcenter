@@ -29,6 +29,13 @@ export const navigationItems: NavigationItem[] = [
   },
   { id: "agents", label: "Agents", to: "/agents", chord: "a", searchTerms: "tasks assistants" },
   {
+    id: "workflows",
+    label: "Workflows",
+    to: "/workflows",
+    chord: "w",
+    searchTerms: "automation definitions drafts revisions nodes",
+  },
+  {
     id: "connectors",
     label: "Connectors",
     to: "/connectors",

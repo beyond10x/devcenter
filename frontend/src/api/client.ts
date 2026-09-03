@@ -21,6 +21,11 @@ export type ConnectorProviderSummary = components["schemas"]["ConnectorProviderS
 export type ConnectorSetupProfile = components["schemas"]["ConnectorSetupProfile"];
 export type GeneratedServiceSummary = components["schemas"]["GeneratedServiceSummary"];
 export type GeneratedServicePage = components["schemas"]["GeneratedServicePage"];
+export type WorkflowLibrarySummary = components["schemas"]["WorkflowLibrarySummary"];
+export type WorkflowDraftSummary = components["schemas"]["WorkflowDraftSummary"];
+export type WorkflowRevisionSummary = components["schemas"]["WorkflowRevisionSummary"];
+export type WorkflowLibraryPage = components["schemas"]["WorkflowLibraryPage"];
+export type WorkflowLibraryDetail = components["schemas"]["WorkflowLibraryDetail"];
 export type { ServiceCatalog };
 export interface GeneratedServiceInvocation {
   output: unknown;
@@ -400,6 +405,9 @@ async function request<T>(path: string, init: RequestInit = {}): Promise<T> {
 }
 
 export const api = {
+  workflowLibrary: () => request<WorkflowLibraryPage>("/api/workflows"),
+  workflowLibraryItem: (workflowId: string) =>
+    request<WorkflowLibraryDetail>(`/api/workflows/${encodeURIComponent(workflowId)}`),
   session: () => request<Session>("/api/session"),
   identityProviders: () => request<IdentityProvider[]>("/api/auth/providers"),
   logout: () => request<undefined>("/auth/logout", { method: "POST" }),
@@ -717,6 +725,11 @@ export const api = {
 
 const FRIENDLY_ERRORS: Record<string, string> = {
   agent_platform_not_configured: "Agent Platform is not configured for this environment.",
+  workflow_not_configured:
+    "The standalone Workflow library is not configured for this environment.",
+  workflow_unavailable: "The standalone Workflow service is temporarily unavailable.",
+  workflow_access_refused: "Your current authority does not admit this workflow.",
+  workflow_not_found: "That workflow is no longer visible.",
   agent_platform_unavailable: "Agent Platform is temporarily unavailable.",
   connectors_unavailable: "The connection service is temporarily unavailable.",
   connectors_invalid_response: "The connection service returned an invalid response.",

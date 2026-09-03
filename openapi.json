@@ -2,8 +2,8 @@
   "openapi": "3.1.0",
   "info": {
     "title": "Devcenter API",
-    "version": "0.8.11",
-    "description": "Authenticated browser/BFF surface for identity, connector custody, agents, and tasks."
+    "version": "0.8.12",
+    "description": "Authenticated browser/BFF surface for identity, connector custody, agents, workflows, and tasks."
   },
   "paths": {
     "/auth/sso/start": {
@@ -946,7 +946,56 @@
           }
         },
         "responses": {
-          "204": { "description": "Exact pending tool call approved or denied" },
+          "204": {
+            "description": "Exact pending tool call approved or denied"
+          },
+          "404": { "$ref": "#/components/responses/Problem" },
+          "503": { "$ref": "#/components/responses/Unavailable" }
+        }
+      }
+    },
+    "/api/workflows": {
+      "get": {
+        "operationId": "listWorkflowLibrary",
+        "security": [{ "browserSession": [] }, { "identityBearer": [] }],
+        "responses": {
+          "200": {
+            "description": "Standalone Workflow definitions visible to the current actor",
+            "content": {
+              "application/json": {
+                "schema": { "$ref": "#/components/schemas/WorkflowLibraryPage" }
+              }
+            }
+          },
+          "401": { "$ref": "#/components/responses/Problem" },
+          "503": { "$ref": "#/components/responses/Unavailable" }
+        }
+      }
+    },
+    "/api/workflows/{workflow_id}": {
+      "get": {
+        "operationId": "getWorkflowLibraryItem",
+        "security": [{ "browserSession": [] }, { "identityBearer": [] }],
+        "parameters": [
+          {
+            "name": "workflow_id",
+            "in": "path",
+            "required": true,
+            "schema": { "type": "string" }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Standalone Workflow definition with drafts and immutable revisions",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/WorkflowLibraryDetail"
+                }
+              }
+            }
+          },
+          "401": { "$ref": "#/components/responses/Problem" },
           "404": { "$ref": "#/components/responses/Problem" },
           "503": { "$ref": "#/components/responses/Unavailable" }
         }
@@ -1169,7 +1218,9 @@
             "description": "Actor-authorized AgentIDE projections and aggregate revision",
             "content": {
               "application/json": {
-                "schema": { "$ref": "#/components/schemas/CodingCoordinationView" }
+                "schema": {
+                  "$ref": "#/components/schemas/CodingCoordinationView"
+                }
               }
             }
           },
@@ -1198,7 +1249,9 @@
             "description": "Context reference pinned through AgentIDE",
             "content": {
               "application/json": {
-                "schema": { "$ref": "#/components/schemas/CodingCoordinationView" }
+                "schema": {
+                  "$ref": "#/components/schemas/CodingCoordinationView"
+                }
               }
             }
           },
@@ -1222,7 +1275,9 @@
             "description": "Context reference removed through AgentIDE",
             "content": {
               "application/json": {
-                "schema": { "$ref": "#/components/schemas/CodingCoordinationView" }
+                "schema": {
+                  "$ref": "#/components/schemas/CodingCoordinationView"
+                }
               }
             }
           },
@@ -1251,7 +1306,9 @@
             "description": "Bounded coding grant created through AgentIDE",
             "content": {
               "application/json": {
-                "schema": { "$ref": "#/components/schemas/CodingCoordinationView" }
+                "schema": {
+                  "$ref": "#/components/schemas/CodingCoordinationView"
+                }
               }
             }
           },
@@ -1275,7 +1332,9 @@
             "description": "Grant revoked through AgentIDE",
             "content": {
               "application/json": {
-                "schema": { "$ref": "#/components/schemas/CodingCoordinationView" }
+                "schema": {
+                  "$ref": "#/components/schemas/CodingCoordinationView"
+                }
               }
             }
           },
@@ -1298,7 +1357,9 @@
           "required": true,
           "content": {
             "application/json": {
-              "schema": { "$ref": "#/components/schemas/DecideCodingCheckpoint" }
+              "schema": {
+                "$ref": "#/components/schemas/DecideCodingCheckpoint"
+              }
             }
           }
         },
@@ -1307,7 +1368,9 @@
             "description": "Exact-plan checkpoint decided through AgentIDE",
             "content": {
               "application/json": {
-                "schema": { "$ref": "#/components/schemas/CodingCoordinationView" }
+                "schema": {
+                  "$ref": "#/components/schemas/CodingCoordinationView"
+                }
               }
             }
           },
@@ -2745,7 +2808,10 @@
         "type": "object",
         "required": ["state", "through_version", "failure_code", "retryable"],
         "properties": {
-          "state": { "type": "string", "enum": ["ready", "degraded", "closed"] },
+          "state": {
+            "type": "string",
+            "enum": ["ready", "degraded", "closed"]
+          },
           "through_version": { "type": ["integer", "null"], "minimum": 0 },
           "failure_code": { "type": ["string", "null"] },
           "retryable": { "type": "boolean" }
@@ -3219,6 +3285,81 @@
         "type": "object",
         "required": ["content"],
         "properties": { "content": { "type": "string" } },
+        "additionalProperties": false
+      },
+      "WorkflowLibrarySummary": {
+        "type": "object",
+        "required": ["id", "name", "state", "active_revision_id"],
+        "properties": {
+          "id": { "type": "string" },
+          "name": { "type": "string" },
+          "state": { "type": "string" },
+          "active_revision_id": { "type": ["string", "null"] }
+        },
+        "additionalProperties": false
+      },
+      "WorkflowDraftSummary": {
+        "type": "object",
+        "required": ["id", "name", "state", "based_on_revision_id"],
+        "properties": {
+          "id": { "type": "string" },
+          "name": { "type": "string" },
+          "state": { "type": "string" },
+          "based_on_revision_id": { "type": ["string", "null"] }
+        },
+        "additionalProperties": false
+      },
+      "WorkflowRevisionSummary": {
+        "type": "object",
+        "required": [
+          "id",
+          "draft_id",
+          "state",
+          "digest",
+          "node_count",
+          "edge_count",
+          "nodes",
+          "edges"
+        ],
+        "properties": {
+          "id": { "type": "string" },
+          "draft_id": { "type": "string" },
+          "state": { "type": "string" },
+          "digest": { "type": "string" },
+          "node_count": { "type": "integer" },
+          "edge_count": { "type": "integer" },
+          "nodes": { "type": "array", "items": {} },
+          "edges": { "type": "array", "items": {} }
+        },
+        "additionalProperties": false
+      },
+      "WorkflowLibraryPage": {
+        "type": "object",
+        "required": ["workflows", "partial"],
+        "properties": {
+          "workflows": {
+            "type": "array",
+            "items": { "$ref": "#/components/schemas/WorkflowLibrarySummary" }
+          },
+          "partial": { "type": "boolean" }
+        },
+        "additionalProperties": false
+      },
+      "WorkflowLibraryDetail": {
+        "type": "object",
+        "required": ["workflow", "drafts", "revisions", "partial"],
+        "properties": {
+          "workflow": { "$ref": "#/components/schemas/WorkflowLibrarySummary" },
+          "drafts": {
+            "type": "array",
+            "items": { "$ref": "#/components/schemas/WorkflowDraftSummary" }
+          },
+          "revisions": {
+            "type": "array",
+            "items": { "$ref": "#/components/schemas/WorkflowRevisionSummary" }
+          },
+          "partial": { "type": "boolean" }
+        },
         "additionalProperties": false
       },
       "WorkflowDefinition": {

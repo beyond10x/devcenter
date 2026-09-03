@@ -13,6 +13,7 @@ import {
   Keyboard,
   Search,
   X,
+  Workflow,
 } from "@lucide/vue";
 import type { Component } from "vue";
 import { computed, nextTick, onBeforeUnmount, onMounted, ref } from "vue";
@@ -40,6 +41,7 @@ let chordTimer: number | undefined;
 const navigationIcons: Record<string, Component> = {
   projects: FolderGit2,
   agents: Bot,
+  workflows: Workflow,
   connectors: Cable,
   services: Shapes,
   profiles: ShieldCheck,
