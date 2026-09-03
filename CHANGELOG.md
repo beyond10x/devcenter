@@ -2,6 +2,13 @@
 
 ## Unreleased
 
+## 0.8.2 - 2026-09-03
+
+- Consume Connectors 0.5.3 in both the BFF contracts and composed hosted runtime so GitLab
+  repository file reads admit safe nested paths and Workspace materialization can populate a
+  repository beyond root-level files.
+- Align the composed AgentIDE and Todo generated services with Service SDK 0.3.2 so every hosted
+  factory implements the same exact Connectors 0.5.3 service contract.
 - Add an opt-in, loopback-only review bridge for exercising the vendored Ghostty renderer against
   Workspace's real Substrate terminal lab, and let partial replay be explicitly reloaded from the
   oldest output Workspace still retains.

@@ -13,7 +13,7 @@ members = [
 exclude = ["crates/devcenter-connectors"]
 
 [workspace.package]
-version = "0.8.1"
+version = "0.8.2"
 edition = "2024"
 rust-version = "1.98"
 license = "PolyForm-Free-Trial-1.0.0"
@@ -31,10 +31,10 @@ identity-client = { git = "ssh://git@github.com/beyond10x/identity.git", tag = "
 agent-platform-client = { git = "ssh://git@github.com/beyond10x/agent-platform.git", rev = "bdacb8f177cb049d33abd6886c720f47fd567a12" }
 agent-platform-core = { git = "ssh://git@github.com/beyond10x/agent-platform.git", rev = "bdacb8f177cb049d33abd6886c720f47fd567a12" }
 agentide-contracts = { git = "https://github.com/beyond10x/agentide.git", rev = "ed6250bb1f1a3ff56f3c5a6acffe11cbd4f07e20" }
-connectors-client = { git = "ssh://git@github.com/beyond10x/connectors.git", tag = "v0.5.2" }
-connectors-protocol = { package = "protocol", git = "ssh://git@github.com/beyond10x/connectors.git", tag = "v0.5.2" }
-workspace-client = { git = "ssh://git@github.com/beyond10x/workspace.git", rev = "ce66f9fb7f582aca436a7af6d1582f891f0dfaea" }
-workspace-core = { git = "ssh://git@github.com/beyond10x/workspace.git", rev = "ce66f9fb7f582aca436a7af6d1582f891f0dfaea" }
+connectors-client = { git = "ssh://git@github.com/beyond10x/connectors.git", tag = "v0.5.3" }
+connectors-protocol = { package = "protocol", git = "ssh://git@github.com/beyond10x/connectors.git", tag = "v0.5.3" }
+workspace-client = { git = "ssh://git@github.com/beyond10x/workspace.git", rev = "4fd141bb40358e4989e9fcb10530d3da2acb97e8" }
+workspace-core = { git = "ssh://git@github.com/beyond10x/workspace.git", rev = "4fd141bb40358e4989e9fcb10530d3da2acb97e8" }
 
 anyhow = "1"
 axum = { version = "0.8", features = ["ws"] }
