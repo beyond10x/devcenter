@@ -3578,6 +3578,19 @@ struct SubmitCodingTurn {
     idempotency_key: String,
 }
 
+#[derive(Clone, Deserialize)]
+#[serde(deny_unknown_fields)]
+struct CodingTurnSelection {
+    id: String,
+    kind: SelectionKind,
+    reference: String,
+    start_line: Option<u64>,
+    end_line: Option<u64>,
+    content: String,
+    sha256: String,
+    truncated: bool,
+}
+
 fn coding_turn_is_bounded(input: &SubmitCodingTurn) -> bool {
     if input.prompt.trim().is_empty()
         || input.focused_selections.len() > MAX_CODING_SELECTIONS
@@ -3664,6 +3677,11 @@ async fn submit_coding_turn(
     };
     let Ok(agent_id) = AgentId::new(agent_id) else {
         return problem(StatusCode::UNPROCESSABLE_ENTITY, "agent_id_invalid");
+    };
+    let Ok(focused_selections) =
+        seal_coding_selections(request.focused_selections, &authenticated.principal.subject)
+    else {
+        return problem(StatusCode::UNPROCESSABLE_ENTITY, "coding_turn_invalid");
     };
     let input = ConversationInput::CodingSessionTurn {
         prompt: request.prompt,
