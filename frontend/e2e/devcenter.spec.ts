@@ -83,7 +83,7 @@ const terminalProfile = {
 const terminalSession = {
   id: "terminal-test",
   coding_session_id: codingSession.id,
-  agentide_session_id: "agentide-session-test",
+  agentide_session_id: codingSession.id,
   authority_grant_id: "grant-terminal-test",
   profile: terminalProfile,
   actor: "actor-1",
@@ -224,6 +224,26 @@ async function mockAuthenticatedWorkspace(
   let agentIdeVersion = 1;
   const agentIdeGrants: Array<Record<string, unknown>> = [];
   const agentIdePins: Array<Record<string, unknown>> = [];
+  const coordinationView = () => ({
+    summary: {
+      state: "ready",
+      through_version: agentIdeVersion,
+      failure_code: null,
+      retryable: false,
+    },
+    session: {
+      session_id: codingSession.id,
+      workspace_session_id: codingSession.id,
+      project_id: project.id,
+      source_revision: codingSession.source_revision,
+      manifest_digest: codingSession.manifest_sha256,
+      objective: "Work on foundation/devcenter",
+      state: "Active",
+    },
+    grants: agentIdeGrants,
+    pins: agentIdePins,
+    checkpoints: [],
+  });
   let currentTerminal: Record<string, unknown> = { ...terminalSession };
   const codingTasks: Array<Record<string, unknown>> = [];
   let workflowRun: Record<string, unknown> | undefined;
@@ -498,12 +518,11 @@ async function mockAuthenticatedWorkspace(
     if (codingTurnMatch && request.method() === "POST") {
       const submitted = request.postDataJSON() as {
         prompt: string;
-        agentide_session_id: string;
         focused_selections: Array<Record<string, unknown>>;
         open_files: Array<Record<string, unknown>>;
       };
       expect(codingTurnMatch[1]).toBe(codingSession.id);
-      expect(submitted.agentide_session_id).toBe("agentide-session-test");
+      expect(submitted).not.toHaveProperty("agentide_session_id");
       expect(submitted.focused_selections[0]).toMatchObject({
         kind: "diff_hunk",
         truncated: false,
@@ -526,7 +545,7 @@ async function mockAuthenticatedWorkspace(
         accepted_at_ms: Date.now(),
         completed_at_ms: null,
         workspace_session_id: codingSession.id,
-        agentide_session_id: "agentide-session-test",
+        agentide_session_id: codingSession.id,
       };
       codingTasks.push(task);
       await route.fulfill({ status: 202, json: task });
@@ -699,6 +718,57 @@ async function mockAuthenticatedWorkspace(
     }
     if (path === `/api/projects/${project.id}/sessions`) {
       await route.fulfill({ json: [codingSession] });
+      return;
+    }
+    if (
+      path === `/api/project-sessions/${codingSession.id}/resume` &&
+      request.method() === "POST"
+    ) {
+      agentIdeBound = true;
+      await route.fulfill({
+        json: { ...codingSession, coordination: coordinationView().summary },
+      });
+      return;
+    }
+    if (path === `/api/project-sessions/${codingSession.id}/coordination`) {
+      await route.fulfill({ json: coordinationView() });
+      return;
+    }
+    if (
+      path === `/api/project-sessions/${codingSession.id}/coordination/pins` &&
+      request.method() === "POST"
+    ) {
+      const submitted = request.postDataJSON() as Record<string, unknown>;
+      agentIdeVersion += 1;
+      agentIdePins.push({
+        pin_id: "pin-test",
+        kind: submitted.kind,
+        reference: submitted.reference,
+        start_line: submitted.start_line,
+        end_line: submitted.end_line,
+        sha256: submitted.sha256,
+        state: "Active",
+      });
+      await route.fulfill({ json: coordinationView() });
+      return;
+    }
+    if (
+      path === `/api/project-sessions/${codingSession.id}/coordination/grants` &&
+      request.method() === "POST"
+    ) {
+      const submitted = request.postDataJSON() as { grantee: string };
+      agentIdeVersion += 1;
+      agentIdeGrants.push({
+        grant_id: "grant-test",
+        grantee: submitted.grantee,
+        allowed_intents: ["code_edit", "code_create", "code_delete", "code_rename"],
+        path_prefixes: [""],
+        maximum_risk: "Medium",
+        expires_at: null,
+        revision: 1,
+        state: "Active",
+      });
+      await route.fulfill({ json: coordinationView() });
       return;
     }
     if (path === `/api/project-sessions/${codingSession.id}`) {
@@ -1009,19 +1079,17 @@ test("restores the native coding workbench from URL-backed state", async ({ page
   );
 
   await expect(page.getByRole("link", { name: project.path_with_namespace })).toBeVisible();
-  await expect(page.getByRole("treeitem", { name: /src\/main.rs/ })).toBeVisible();
+  await expect(page.getByRole("treeitem", { name: /main.rs/ })).toBeVisible();
   await expect(page.getByText("3 entries omitted.")).toBeVisible();
   await expect(page.getByRole("button", { name: "Split" })).toHaveClass(/active/);
   await expect(page.getByText("new", { exact: true })).toBeVisible();
-  await expect(page.getByText("Interactive terminal refused")).toBeVisible();
-  await expect(page.getByText("Workspace ready; durable coordination is not bound")).toBeVisible();
-
-  await page.getByRole("button", { name: "Bind AgentIDE session" }).click();
   await expect(page.getByText("AgentIDE ready", { exact: true })).toBeVisible();
-  await expect(page).toHaveURL(/agentide=agentide-session-test/);
+  await expect(page).not.toHaveURL(/agentide=/);
+  await page.getByRole("button", { name: "Terminal", exact: true }).click();
+  await expect(page.getByText("Interactive terminal refused")).toBeVisible();
 
   await page.getByRole("button", { name: "Attach hunk" }).click();
-  await page.getByRole("button", { name: "Share reference" }).click();
+  await page.getByRole("button", { name: "Pin for session" }).click();
   await expect(page.getByText("DiffHunk", { exact: true })).toBeVisible();
 
   await page.getByRole("button", { name: "agents", exact: true }).click();

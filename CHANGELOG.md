@@ -2,6 +2,12 @@
 
 ## Unreleased
 
+- Make hosted coding-session coordination automatic and canonical: the BFF now derives one session
+  identity from Workspace, owns AgentIDE revision-safe grants and context mutations, and preserves
+  file/diff access plus existing terminal reattachment when coordination is degraded.
+- Start the terminal panel collapsed, expose confined profile details without a misleading bind
+  step, show prompt attachments directly, and keep side-by-side diff changes line-aligned.
+
 ## 0.8.6 - 2026-09-03
 
 - Make the ESS semantic system and typed multi-output build DAG the canonical source for Devcenter's

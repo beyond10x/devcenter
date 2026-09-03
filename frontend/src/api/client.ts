@@ -120,6 +120,54 @@ export interface CodingSession {
   limits: { max_files: number; max_total_bytes: number; max_file_bytes: number };
   created_at_ms: number;
   updated_at_ms: number;
+  coordination?: CoordinationSummary;
+}
+export interface CoordinationSummary {
+  state: "ready" | "degraded" | "closed";
+  through_version?: number | null;
+  failure_code?: string | null;
+  retryable: boolean;
+}
+export interface AgentIdeSessionSnapshot {
+  session_id: string;
+  workspace_session_id?: string | null;
+  project_id?: string | null;
+  source_revision?: string | null;
+  manifest_digest?: string | null;
+  objective: string;
+  state: "Active" | "Closed";
+}
+export interface AgentIdeGrantSnapshot {
+  grant_id: string;
+  grantee: string;
+  allowed_intents: string[];
+  path_prefixes: string[];
+  maximum_risk: "Low" | "Medium";
+  expires_at?: string | null;
+  revision: number;
+  state: "Active" | "Revoked";
+}
+export interface AgentIdeContextPinSnapshot {
+  pin_id: string;
+  kind: string;
+  reference: string;
+  start_line?: number | null;
+  end_line?: number | null;
+  sha256: string;
+  state: "Active" | "Removed";
+}
+export interface AgentIdeCheckpointSnapshot {
+  checkpoint_id: string;
+  attempt_ref: string;
+  plan_digest: string;
+  state: "Pending" | "Approved" | "Denied";
+}
+export interface CodingCoordinationView {
+  summary: CoordinationSummary;
+  session: AgentIdeSessionSnapshot;
+  grants: AgentIdeGrantSnapshot[];
+  pins: AgentIdeContextPinSnapshot[];
+  checkpoints: AgentIdeCheckpointSnapshot[];
 }
 export interface CodingTreeEntry {
   path: string;
@@ -182,7 +230,6 @@ export interface CodingOpenFileReference {
 export interface SubmitCodingTurn {
   prompt: string;
   messages: ConversationMessage[];
-  agentide_session_id: string;
   focused_selections: CodingTurnSelection[];
   open_files: CodingOpenFileReference[];
   active_diff?: ChangeSelector | null;
@@ -423,10 +470,59 @@ export const api = {
     }),
   codingSession: (sessionId: string) =>
     request<CodingSession>(`/api/project-sessions/${encodeURIComponent(sessionId)}`),
+  resumeCodingSession: (sessionId: string) =>
+    request<CodingSession>(`/api/project-sessions/${encodeURIComponent(sessionId)}/resume`, {
+      method: "POST",
+    }),
   closeCodingSession: (sessionId: string) =>
     request<CodingSession>(`/api/project-sessions/${encodeURIComponent(sessionId)}`, {
       method: "DELETE",
     }),
+  codingCoordination: (sessionId: string) =>
+    request<CodingCoordinationView>(
+      `/api/project-sessions/${encodeURIComponent(sessionId)}/coordination`,
+    ),
+  pinCodingContext: (
+    sessionId: string,
+    input: {
+      kind: string;
+      reference: string;
+      start_line?: number | null;
+      end_line?: number | null;
+      sha256: string;
+      idempotency_key: string;
+    },
+  ) =>
+    request<CodingCoordinationView>(
+      `/api/project-sessions/${encodeURIComponent(sessionId)}/coordination/pins`,
+      { method: "POST", body: JSON.stringify(input) },
+    ),
+  removeCodingContextPin: (sessionId: string, pinId: string) =>
+    request<CodingCoordinationView>(
+      `/api/project-sessions/${encodeURIComponent(sessionId)}/coordination/pins/${encodeURIComponent(pinId)}`,
+      { method: "DELETE" },
+    ),
+  createCodingGrant: (sessionId: string, grantee: string) =>
+    request<CodingCoordinationView>(
+      `/api/project-sessions/${encodeURIComponent(sessionId)}/coordination/grants`,
+      {
+        method: "POST",
+        body: JSON.stringify({ grantee, idempotency_key: crypto.randomUUID() }),
+      },
+    ),
+  revokeCodingGrant: (sessionId: string, grantId: string) =>
+    request<CodingCoordinationView>(
+      `/api/project-sessions/${encodeURIComponent(sessionId)}/coordination/grants/${encodeURIComponent(grantId)}`,
+      { method: "DELETE" },
+    ),
+  decideCodingCheckpoint: (sessionId: string, checkpointId: string, decision: "approve" | "deny") =>
+    request<CodingCoordinationView>(
+      `/api/project-sessions/${encodeURIComponent(sessionId)}/coordination/checkpoints/${encodeURIComponent(checkpointId)}`,
+      {
+        method: "POST",
+        body: JSON.stringify({ decision, idempotency_key: crypto.randomUUID() }),
+      },
+    ),
   codingTree: (sessionId: string, query = "", limit = 500) => {
     const parameters = new URLSearchParams({ query, limit: String(limit) });
     return request<CodingTreeProjection>(
@@ -464,8 +560,6 @@ export const api = {
   createTerminal: (
     sessionId: string,
     input: {
-      agentide_session_id: string;
-      authority_grant_id: string;
       profile_id: string;
       columns: number;
       rows: number;
