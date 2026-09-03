@@ -12,6 +12,8 @@ Choose the path that matches what you are trying to do:
 
 - [Review the frontend locally](docs/frontend-review.md) — public, credential-free evaluation.
 - [Build the full service from source](docs/source-build.md) — preview access for approved evaluators.
+- [Understand the ESS deployment model](docs/ess-deployment-model.md) — how independently released
+  systems compile into one exact, reviewable deployment.
 - [Check production deployment availability](docs/production-deployment.md) — currently paused and
   dependent on private artifacts and deployment inputs.
 

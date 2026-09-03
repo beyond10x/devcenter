@@ -64,6 +64,7 @@ surfaces:
       - README.md
       - docs/frontend-review.md
       - docs/source-build.md
+      - docs/ess-deployment-model.md
       - docs/production-deployment.md
     navigation:
       group: Products
