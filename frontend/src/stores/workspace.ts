@@ -12,6 +12,7 @@ import {
   type Task,
   type TaskApproval,
   type TaskEventEnvelope,
+  type SubmitCodingTurn,
   taskFailureMessage,
 } from "@/api/client";
 
@@ -34,6 +35,9 @@ export interface AgentRun {
   approvals?: TaskApproval[];
   approvalError?: string;
   resolvingApprovalId?: string;
+  contextRevision?: string;
+  inventoryRevision?: string;
+  publishedTools?: string[];
 }
 
 const streams = new Map<string, EventSource>();
@@ -257,6 +261,33 @@ export const useWorkspaceStore = defineStore("workspace", () => {
     }
   }
 
+  async function submitCodingTurn(
+    sessionId: string,
+    agentId: string,
+    input: SubmitCodingTurn,
+  ): Promise<Task | undefined> {
+    runs.value[agentId] = { status: "submitting", output: "", error: "" };
+    try {
+      const task = await api.submitCodingTurn(sessionId, agentId, input);
+      runs.value[agentId] = {
+        status: "accepted",
+        output: "",
+        error: "",
+        taskId: task.id,
+      };
+      taskHistory.value[agentId] = [...historyFor(agentId), task];
+      streamTask(agentId, task.id);
+      return task;
+    } catch (error) {
+      runs.value[agentId] = {
+        status: "failed",
+        output: "",
+        error: errorMessage(error),
+      };
+      return undefined;
+    }
+  }
+
   function streamTask(agentId: string, taskId: string) {
     streams.get(agentId)?.close();
     const events = new EventSource(`/api/tasks/${encodeURIComponent(taskId)}/events`);
@@ -273,6 +304,13 @@ export const useWorkspaceStore = defineStore("workspace", () => {
         if (update.kind === "text_delta") {
           current.status = "running";
           current.output += update.text;
+        }
+        if (update.kind === "context_changed") {
+          current.contextRevision = update.revision;
+        }
+        if (update.kind === "inventory_changed") {
+          current.inventoryRevision = update.revision;
+          current.publishedTools = update.published_tools;
         }
         if (update.kind === "approval_requested") {
           current.status = "awaiting_approval";
@@ -409,6 +447,7 @@ export const useWorkspaceStore = defineStore("workspace", () => {
     setDraft,
     runFor,
     submitTask,
+    submitCodingTurn,
     resolveTaskApproval,
     clearNotice,
   };

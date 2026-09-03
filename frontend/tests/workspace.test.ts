@@ -167,6 +167,86 @@ describe("workspace store", () => {
     vi.unstubAllGlobals();
   });
 
+  it("submits a workspace-bound coding turn and records refreshed context and tools", async () => {
+    class CodingEventSource {
+      static readonly CLOSED = 2;
+      readonly CLOSED = 2;
+      readyState = 1;
+      listeners = new Map<string, (event: MessageEvent<string>) => void>();
+      onerror: (() => void) | null = null;
+      constructor(readonly url: string) {
+        queueMicrotask(() => {
+          for (const event of [
+            { kind: "context_changed", revision: "context-2" },
+            {
+              kind: "inventory_changed",
+              revision: "inventory-2",
+              published_tools: ["code_read", "code_edit"],
+            },
+            { kind: "succeeded", output: "Saved change reviewed." },
+          ]) {
+            this.listeners.get("task")?.(
+              new MessageEvent("task", { data: JSON.stringify({ event }) }),
+            );
+          }
+        });
+      }
+      addEventListener(type: string, listener: EventListener) {
+        this.listeners.set(type, listener);
+      }
+      close() {
+        this.readyState = CodingEventSource.CLOSED;
+      }
+    }
+    vi.stubGlobal("EventSource", CodingEventSource);
+    server.use(
+      http.post("/api/project-sessions/session-1/agents/agent-1/turns", async ({ request }) => {
+        const body = (await request.json()) as Record<string, unknown>;
+        expect(body).toMatchObject({
+          prompt: "Review the saved change.",
+          agentide_session_id: "agentide-1",
+          active_diff: { kind: "workspace" },
+        });
+        expect(body.open_files).toEqual([
+          { path: "src/main.rs", sha256: "a".repeat(64), cursor: null, dirty: true },
+        ]);
+        return HttpResponse.json(
+          {
+            id: "task-coding-1",
+            agent_id: "agent-1",
+            status: "accepted",
+            attempt_id: "attempt-coding-1",
+            prompt: "Review the saved change.",
+            accepted_at_ms: 1,
+            workspace_session_id: "session-1",
+            agentide_session_id: "agentide-1",
+          },
+          { status: 202 },
+        );
+      }),
+    );
+    const workspace = useWorkspaceStore();
+    const task = await workspace.submitCodingTurn("session-1", "agent-1", {
+      prompt: "Review the saved change.",
+      messages: [],
+      agentide_session_id: "agentide-1",
+      focused_selections: [],
+      open_files: [{ path: "src/main.rs", sha256: "a".repeat(64), cursor: null, dirty: true }],
+      active_diff: { kind: "workspace" },
+      idempotency_key: "coding-turn-1",
+    });
+    await new Promise((resolve) => setTimeout(resolve, 0));
+    expect(task?.workspace_session_id).toBe("session-1");
+    expect(workspace.runFor("agent-1")).toMatchObject({
+      status: "succeeded",
+      output: "Saved change reviewed.",
+      contextRevision: "context-2",
+      inventoryRevision: "inventory-2",
+      publishedTools: ["code_read", "code_edit"],
+    });
+    vi.unstubAllGlobals();
+  });
+
   it("shows the exact pending call and sends only the human decision", async () => {
     class ApprovalEventSource {
       static readonly CLOSED = 2;

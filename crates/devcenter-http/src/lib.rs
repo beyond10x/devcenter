@@ -1,5 +1,10 @@
 //! Embedded HTTP application and explicit Devcenter BFF allowlist.
 
+#![allow(
+    clippy::result_large_err,
+    reason = "Axum handler helpers deliberately carry a complete HTTP refusal response"
+)]
+
 use std::collections::BTreeMap;
 use std::fmt;
 use std::sync::{Arc, Mutex};
@@ -14,8 +19,9 @@ use agent_platform_client::{
 use agent_platform_core::{
     ApprovalId, CapabilityMapping, CapabilityPosture, CapabilityProfileAudience,
     CapabilityProfileId, ConnectorApprovalPosture, ConnectorConnectionSummary,
-    ConnectorEffectClass, ConnectorOperationDescription,
+    ConnectorEffectClass, ConnectorOperationDescription, ConversationInput, ConversationMessage,
 };
+use agentide_contracts::{ChangeSelector, ContextSelection, OpenFileReference};
 use axum::body::Body;
 use axum::extract::ws::{Message as BrowserMessage, WebSocket, WebSocketUpgrade};
 use axum::extract::{Path, Query, State};
@@ -45,8 +51,8 @@ use tokio_tungstenite::tungstenite::client::IntoClientRequest as _;
 use url::Url;
 use workspace_client::{ClientError as WorkspaceError, WorkspaceClient};
 use workspace_core::{
-    CreateCodingSession, CreateMessage, CreateTerminal, CreateThread, OpenProject, ResolveDiff,
-    SelectBranch, StartWorkflow, WriteFile,
+    CodingSessionState, CreateCodingSession, CreateMessage, CreateTerminal, CreateThread,
+    OpenProject, ResolveDiff, SelectBranch, StartWorkflow, WriteFile,
 };
 use zeroize::Zeroizing;
 
@@ -63,6 +69,10 @@ const CONNECTOR_APPROVAL_TTL_SECONDS: u64 = 120;
 const SERVICE_CATALOG_LIST_OPERATION: &str = "service_catalog.list_services";
 const SERVICE_CATALOG_GET_OPERATION: &str = "service_catalog.get_service";
 const MAX_TERMINAL_WEBSOCKET_FRAME_BYTES: usize = 64 * 1024;
+const MAX_CODING_SELECTIONS: usize = 8;
+const MAX_CODING_SELECTION_BYTES: usize = 32 * 1024;
+const MAX_CODING_SELECTION_TOTAL_BYTES: usize = 64 * 1024;
+const MAX_CODING_OPEN_FILES: usize = 128;
 
 #[derive(Clone)]
 struct AppState {
@@ -319,6 +329,10 @@ fn project_routes() -> Router<AppState> {
         .route(
             "/api/project-sessions/{session_id}/diff",
             post(resolve_coding_diff),
+        )
+        .route(
+            "/api/project-sessions/{session_id}/agents/{agent_id}/turns",
+            post(submit_coding_turn),
         )
         .route(
             "/api/project-sessions/{session_id}/terminal-profiles",
@@ -2647,15 +2661,36 @@ struct AgentTaskSummary {
     failure_message: Option<String>,
     accepted_at_ms: u64,
     completed_at_ms: Option<u64>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    workspace_session_id: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    agentide_session_id: Option<String>,
 }
 
 fn agent_task_summary(task: Task) -> AgentTaskSummary {
-    let prompt = task
-        .input
-        .get("prompt")
-        .and_then(Value::as_str)
-        .unwrap_or_default()
-        .to_owned();
+    let (prompt, workspace_session_id, agentide_session_id) =
+        match serde_json::from_value::<ConversationInput>(task.input.clone()) {
+            Ok(ConversationInput::ProjectConversation { prompt, .. }) => (prompt, None, None),
+            Ok(ConversationInput::CodingSessionTurn {
+                prompt,
+                workspace_session_id,
+                agentide_session_id,
+                ..
+            }) => (
+                prompt,
+                Some(workspace_session_id),
+                Some(agentide_session_id),
+            ),
+            Err(_) => (
+                task.input
+                    .get("prompt")
+                    .and_then(Value::as_str)
+                    .unwrap_or_default()
+                    .to_owned(),
+                None,
+                None,
+            ),
+        };
     AgentTaskSummary {
         id: task.id.to_string(),
         agent_id: task.agent_id.to_string(),
@@ -2670,6 +2705,114 @@ fn agent_task_summary(task: Task) -> AgentTaskSummary {
         failure_message: task.failure.map(|failure| failure.message),
         accepted_at_ms: task.accepted_at_ms,
         completed_at_ms: task.completed_at_ms,
+        workspace_session_id,
+        agentide_session_id,
+    }
+}
+
+#[derive(Deserialize)]
+#[serde(deny_unknown_fields)]
+struct SubmitCodingTurn {
+    prompt: String,
+    #[serde(default)]
+    messages: Vec<ConversationMessage>,
+    agentide_session_id: String,
+    #[serde(default)]
+    focused_selections: Vec<ContextSelection>,
+    #[serde(default)]
+    open_files: Vec<OpenFileReference>,
+    active_diff: Option<ChangeSelector>,
+    idempotency_key: String,
+}
+
+fn coding_turn_is_bounded(input: &SubmitCodingTurn) -> bool {
+    if input.prompt.trim().is_empty()
+        || !valid_opaque_id(&input.agentide_session_id)
+        || input.focused_selections.len() > MAX_CODING_SELECTIONS
+        || input.open_files.len() > MAX_CODING_OPEN_FILES
+    {
+        return false;
+    }
+    let mut total = 0usize;
+    for selection in &input.focused_selections {
+        total = total.saturating_add(selection.content.len());
+        if selection.truncated
+            || selection.content.len() > MAX_CODING_SELECTION_BYTES
+            || total > MAX_CODING_SELECTION_TOTAL_BYTES
+            || selection.sha256 != hex::encode(Sha256::digest(selection.content.as_bytes()))
+        {
+            return false;
+        }
+    }
+    input.open_files.iter().all(|file| {
+        !file.path.is_empty()
+            && file.path.len() <= 4_096
+            && !file.path.starts_with('/')
+            && !file
+                .path
+                .split('/')
+                .any(|part| part.is_empty() || part == "." || part == "..")
+            && file.sha256.len() == 64
+            && file.sha256.bytes().all(|byte| byte.is_ascii_hexdigit())
+    })
+}
+
+async fn submit_coding_turn(
+    State(state): State<AppState>,
+    headers: HeaderMap,
+    Path((session_id, agent_id)): Path<(String, String)>,
+    Json(request): Json<SubmitCodingTurn>,
+) -> Response {
+    if !coding_turn_is_bounded(&request) {
+        return problem(StatusCode::UNPROCESSABLE_ENTITY, "coding_turn_invalid");
+    }
+    let workspace = match require_coding_workbench(&state) {
+        Ok(workspace) => workspace,
+        Err(refusal) => return refusal.response(),
+    };
+    let authenticated = match authenticate(&state, &headers, true).await {
+        Ok(authenticated) => authenticated,
+        Err(response) => return response,
+    };
+    let session = match workspace
+        .coding_session(authenticated.authorization.as_str(), &session_id)
+        .await
+    {
+        Ok(session) if session.state == CodingSessionState::Ready => session,
+        Ok(_) => return problem(StatusCode::CONFLICT, "coding_session_not_ready"),
+        Err(error) => return workspace_error(&error),
+    };
+    let Some(client) = state.agent_platform.as_ref() else {
+        return unavailable("agent_platform_not_configured");
+    };
+    let Ok(agent_id) = AgentId::new(agent_id) else {
+        return problem(StatusCode::UNPROCESSABLE_ENTITY, "agent_id_invalid");
+    };
+    let input = ConversationInput::CodingSessionTurn {
+        prompt: request.prompt,
+        messages: request.messages,
+        workspace_session_id: session.id,
+        agentide_session_id: request.agentide_session_id,
+        focused_selections: request.focused_selections,
+        open_files: request.open_files,
+        active_diff: request.active_diff,
+    };
+    let Ok(input) = serde_json::to_value(input) else {
+        return unavailable("coding_turn_serialization_unavailable");
+    };
+    match client
+        .submit_coding_session_turn(
+            authenticated.authorization.as_str(),
+            &SubmitTask {
+                agent_id,
+                idempotency_key: request.idempotency_key,
+                input,
+            },
+        )
+        .await
+    {
+        Ok(task) => (StatusCode::ACCEPTED, Json(agent_task_summary(task))).into_response(),
+        Err(error) => agent_platform_error(&error),
     }
 }
 
@@ -3704,6 +3847,72 @@ mod tests {
             let body = response.into_body().collect().await.unwrap().to_bytes();
             assert_eq!(body, r#"{"code":"agentide_workspace_disabled"}"#);
         }
+
+        let response = test_router(devcenter_auth::Authentication::Unconfigured)
+            .oneshot(
+                Request::builder()
+                    .method("POST")
+                    .uri("/api/project-sessions/session-1/agents/agent-1/turns")
+                    .header(header::CONTENT_TYPE, "application/json")
+                    .body(Body::from(
+                        serde_json::json!({
+                            "prompt": "Review the saved change",
+                            "messages": [],
+                            "agentide_session_id": "agentide-1",
+                            "focused_selections": [],
+                            "open_files": [],
+                            "active_diff": null,
+                            "idempotency_key": "turn-1"
+                        })
+                        .to_string(),
+                    ))
+                    .unwrap(),
+            )
+            .await
+            .unwrap();
+        assert_eq!(response.status(), StatusCode::NOT_FOUND);
+        let body = response.into_body().collect().await.unwrap().to_bytes();
+        assert_eq!(body, r#"{"code":"agentide_workspace_disabled"}"#);
+    }
+
+    #[test]
+    fn coding_turn_boundary_rejects_tampered_or_incomplete_attachments() {
+        let digest = hex::encode(Sha256::digest(b"saved selection"));
+        let valid = serde_json::json!({
+            "prompt": "Review the saved change",
+            "messages": [],
+            "agentide_session_id": "agentide-1",
+            "focused_selections": [{
+                "id": "selection-1",
+                "kind": "editor",
+                "reference": "src/main.rs",
+                "start_line": 1,
+                "end_line": 1,
+                "content": "saved selection",
+                "sha256": digest,
+                "truncated": false
+            }],
+            "open_files": [{
+                "path": "src/main.rs",
+                "sha256": "a".repeat(64),
+                "cursor": null,
+                "dirty": true
+            }],
+            "active_diff": { "kind": "workspace" },
+            "idempotency_key": "turn-1"
+        });
+        let request: SubmitCodingTurn = serde_json::from_value(valid.clone()).unwrap();
+        assert!(coding_turn_is_bounded(&request));
+
+        let mut tampered = valid.clone();
+        tampered["focused_selections"][0]["sha256"] = Value::String("b".repeat(64));
+        let request: SubmitCodingTurn = serde_json::from_value(tampered).unwrap();
+        assert!(!coding_turn_is_bounded(&request));
+
+        let mut truncated = valid;
+        truncated["focused_selections"][0]["truncated"] = Value::Bool(true);
+        let request: SubmitCodingTurn = serde_json::from_value(truncated).unwrap();
+        assert!(!coding_turn_is_bounded(&request));
     }
 
     #[tokio::test]

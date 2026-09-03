@@ -15,7 +15,7 @@ exclude = ["crates/devcenter-connectors"]
 [workspace.package]
 version = "0.8.1"
 edition = "2024"
-rust-version = "1.97"
+rust-version = "1.98"
 license = "PolyForm-Free-Trial-1.0.0"
 repository = "https://github.com/beyond10x/devcenter"
 publish = false
@@ -28,18 +28,20 @@ devcenter-http = { path = "crates/devcenter-http" }
 devcenter-mcp = { path = "crates/devcenter-mcp" }
 devcenter-store = { path = "crates/devcenter-store" }
 identity-client = { git = "ssh://git@github.com/beyond10x/identity.git", tag = "0.5.2" }
-agent-platform-client = { git = "ssh://git@github.com/beyond10x/agent-platform.git", tag = "0.6.3" }
-agent-platform-core = { git = "ssh://git@github.com/beyond10x/agent-platform.git", tag = "0.6.3" }
+agent-platform-client = { git = "ssh://git@github.com/beyond10x/agent-platform.git", rev = "bdacb8f177cb049d33abd6886c720f47fd567a12" }
+agent-platform-core = { git = "ssh://git@github.com/beyond10x/agent-platform.git", rev = "bdacb8f177cb049d33abd6886c720f47fd567a12" }
+agentide-contracts = { git = "https://github.com/beyond10x/agentide.git", rev = "ed6250bb1f1a3ff56f3c5a6acffe11cbd4f07e20" }
 connectors-client = { git = "ssh://git@github.com/beyond10x/connectors.git", tag = "v0.5.2" }
 connectors-protocol = { package = "protocol", git = "ssh://git@github.com/beyond10x/connectors.git", tag = "v0.5.2" }
-workspace-client = { git = "ssh://git@github.com/beyond10x/workspace.git", rev = "df8a3ec80a39ad86302e0b20c10b378d206c57c5" }
-workspace-core = { git = "ssh://git@github.com/beyond10x/workspace.git", rev = "df8a3ec80a39ad86302e0b20c10b378d206c57c5" }
+workspace-client = { git = "ssh://git@github.com/beyond10x/workspace.git", rev = "ce66f9fb7f582aca436a7af6d1582f891f0dfaea" }
+workspace-core = { git = "ssh://git@github.com/beyond10x/workspace.git", rev = "ce66f9fb7f582aca436a7af6d1582f891f0dfaea" }
 
 anyhow = "1"
 axum = { version = "0.8", features = ["ws"] }
 base64 = "0.22"
 clap = { version = "4.6", features = ["derive", "env"] }
 getrandom = "0.3"
+hex = "0.4"
 http-body-util = "0.1"
 reqwest = { version = "0.13", default-features = false, features = ["stream"] }
 rust-embed = "8"

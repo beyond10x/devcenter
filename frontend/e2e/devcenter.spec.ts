@@ -225,6 +225,7 @@ async function mockAuthenticatedWorkspace(
   const agentIdeGrants: Array<Record<string, unknown>> = [];
   const agentIdePins: Array<Record<string, unknown>> = [];
   let currentTerminal: Record<string, unknown> = { ...terminalSession };
+  const codingTasks: Array<Record<string, unknown>> = [];
   await page.route(/^https?:\/\/[^/]+\/api\//, async (route) => {
     const request = route.request();
     const path = new URL(request.url()).pathname;
@@ -480,6 +481,80 @@ async function mockAuthenticatedWorkspace(
     }
     if (path === "/api/agents" && request.method() === "GET") {
       await route.fulfill({ json: agents });
+      return;
+    }
+    const agentTasksMatch = path.match(/^\/api\/agents\/([^/]+)\/tasks$/);
+    if (agentTasksMatch && request.method() === "GET") {
+      await route.fulfill({
+        json: codingTasks.filter((task) => task.agent_id === agentTasksMatch[1]),
+      });
+      return;
+    }
+    const codingTurnMatch = path.match(
+      /^\/api\/project-sessions\/([^/]+)\/agents\/([^/]+)\/turns$/,
+    );
+    if (codingTurnMatch && request.method() === "POST") {
+      const submitted = request.postDataJSON() as {
+        prompt: string;
+        agentide_session_id: string;
+        focused_selections: Array<Record<string, unknown>>;
+        open_files: Array<Record<string, unknown>>;
+      };
+      expect(codingTurnMatch[1]).toBe(codingSession.id);
+      expect(submitted.agentide_session_id).toBe("agentide-session-test");
+      expect(submitted.focused_selections[0]).toMatchObject({
+        kind: "diff_hunk",
+        truncated: false,
+      });
+      expect(submitted.open_files[0]).toMatchObject({
+        path: "src/main.rs",
+        sha256: "b".repeat(64),
+        dirty: false,
+      });
+      expect(submitted.open_files[0]).not.toHaveProperty("content");
+      const task = {
+        id: "task-coding-test",
+        agent_id: codingTurnMatch[2],
+        status: "accepted",
+        attempt_id: "attempt-coding-test",
+        prompt: submitted.prompt,
+        output: null,
+        failure_code: null,
+        failure_message: null,
+        accepted_at_ms: Date.now(),
+        completed_at_ms: null,
+        workspace_session_id: codingSession.id,
+        agentide_session_id: "agentide-session-test",
+      };
+      codingTasks.push(task);
+      await route.fulfill({ status: 202, json: task });
+      return;
+    }
+    if (/^\/api\/tasks\/[^/]+\/events$/.test(path) && request.method() === "GET") {
+      const events = [
+        { event: { kind: "accepted" } },
+        { event: { kind: "running" } },
+        { event: { kind: "context_changed", revision: "context-test-2" } },
+        {
+          event: {
+            kind: "inventory_changed",
+            revision: "inventory-test-2",
+            published_tools: ["code_read", "code_changes", "code_edit"],
+          },
+        },
+        { event: { kind: "text_delta", text: "Inspecting the saved workspace…" } },
+        {
+          event: {
+            kind: "succeeded",
+            output: "The saved Workspace content was inspected with the current AgentIDE tools.",
+          },
+        },
+      ];
+      await route.fulfill({
+        status: 200,
+        contentType: "text/event-stream",
+        body: events.map((event) => `event: task\ndata: ${JSON.stringify(event)}\n\n`).join(""),
+      });
       return;
     }
     if (path === "/api/repositories") {
@@ -884,6 +959,18 @@ test("restores the native coding workbench from URL-backed state", async ({ page
   await page.getByRole("button", { name: "Grant coding edits" }).first().click();
   await page.getByRole("button", { name: "grants", exact: true }).click();
   await expect(page.getByText("code_edit, code_create, code_delete, code_rename")).toBeVisible();
+
+  await page.getByRole("button", { name: /Diff/ }).click();
+  await page.getByRole("button", { name: "Attach hunk" }).click();
+  await page.getByRole("button", { name: /Agent/ }).click();
+  await page.getByLabel("Coding agent prompt").fill("Review and improve the saved change.");
+  await page.getByRole("button", { name: "Send turn" }).click();
+  await expect(page.getByText("Review and improve the saved change.")).toBeVisible();
+  await expect(
+    page.getByText("The saved Workspace content was inspected with the current AgentIDE tools."),
+  ).toBeVisible();
+  await expect(page.getByText("context context-tes")).toBeVisible();
+  await expect(page.getByText("code_read, code_changes, code_edit")).toBeVisible();
 
   await page.getByRole("button", { name: /Editor/ }).click();
   await expect(page).toHaveURL(/pane=editor/);
