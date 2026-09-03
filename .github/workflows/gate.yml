@@ -1,17 +1,18 @@
 name: Gate
 
 on:
-  push:
   pull_request:
   workflow_call:
+  workflow_dispatch:
 
 permissions:
   contents: read
 
 jobs:
   gate:
-    if: github.event_name != 'push' || github.ref == format('refs/heads/{0}', github.event.repository.default_branch)
     runs-on: ubuntu-latest
+    outputs:
+      oci_targets: ${{ steps.release-unit-impact.outputs.oci_targets }}
     services:
       postgres:
         image: postgres:17-alpine
@@ -31,7 +32,25 @@ jobs:
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
         with:
+          fetch-depth: 0
           persist-credentials: false
+      - name: Select affected OCI release units
+        id: release-unit-impact
+        env:
+          EVENT_NAME: ${{ github.event_name }}
+          BEFORE_SHA: ${{ github.event.before }}
+          BASE_SHA: ${{ github.event.pull_request.base.sha }}
+          HEAD_SHA: ${{ github.event.pull_request.head.sha || github.sha }}
+        run: |
+          if [ "$EVENT_NAME" = pull_request ]; then
+            git diff --name-only -z "$BASE_SHA...$HEAD_SHA" | bash ci/release-unit-impact.sh >> "$GITHUB_OUTPUT"
+          elif [ "$EVENT_NAME" = push ] && [ -n "$BEFORE_SHA" ] && ! printf '%s' "$BEFORE_SHA" | grep --quiet '^0\{40\}$'; then
+            git diff --name-only -z "$BEFORE_SHA..$HEAD_SHA" | bash ci/release-unit-impact.sh >> "$GITHUB_OUTPUT"
+          else
+            bash ci/release-unit-impact.sh --all >> "$GITHUB_OUTPUT"
+          fi
+      - name: Check release-unit impact classifier
+        run: bash ci/check-release-unit-impact.sh
       - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4
         with:
           node-version: 22.23.1
@@ -113,21 +132,53 @@ jobs:
           trap 'rm -f "$marker_file"' EXIT
           printf '%s\n' "$CONFIDENTIAL_MARKERS" > "$marker_file"
           cargo run --locked --bin devcenterctl -- leak-check --root . --deny-file "$marker_file"
-      - name: Build all OCI targets
+  affected-oci:
+    name: Build affected OCI release units
+    needs: gate
+    if: needs.gate.result == 'success' && needs.gate.outputs.oci_targets != ''
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+        with:
+          persist-credentials: false
+      - name: Token for private sibling dependencies
+        id: app-token
+        uses: actions/create-github-app-token@fee1f7d63c2ff003460e3d139729b119787bc349 # v2
+        with:
+          app-id: ${{ secrets.B10X_BOT_APP_ID }}
+          private-key: ${{ secrets.B10X_BOT_PRIVATE_KEY }}
+          owner: beyond10x
+          repositories: |
+            identity
+            agent-platform
+            connectors
+            eventlog
+            service-sdk
+            todo
+      - name: Build affected OCI targets
         env:
           TOKEN: ${{ steps.app-token.outputs.token }}
+          OCI_TARGETS: ${{ needs.gate.outputs.oci_targets }}
         run: |
+          read -r -a targets <<< "$OCI_TARGETS"
           docker buildx bake --file docker-bake.hcl \
-            server connectors deployment-cli \
+            "${targets[@]}" \
             --load \
             --set '*.platform=linux/amd64' \
             --set '*.secrets=id=github-token,env=TOKEN' \
             --set 'server.tags=devcenter:gate' \
             --set 'connectors.tags=devcenter-connectors:gate' \
             --set 'deployment-cli.tags=devcenterctl:gate'
-          docker run --rm devcenter-connectors:gate --version
-          docker run --rm devcenterctl:gate --version
+          if [[ " $OCI_TARGETS " == *' connectors '* ]]; then
+            docker run --rm devcenter-connectors:gate --version
+          fi
+          if [[ " $OCI_TARGETS " == *' deployment-cli '* ]]; then
+            docker run --rm devcenterctl:gate --version
+          fi
       - name: Smoke-test documented server container
+        if: contains(format(' {0} ', needs.gate.outputs.oci_targets), ' server ')
+        env:
+          OCI_TARGETS: ${{ needs.gate.outputs.oci_targets }}
         run: |
           container=$(docker run --detach --rm \
             --publish 127.0.0.1::8080 \

@@ -19,15 +19,16 @@ flowchart LR
     n16["connectors-binary<br/><small>run</small>"]
     n17["connectors-installed<br/><small>copy</small>"]
     n18["connectors-image<br/><small>OCI image</small>"]
-    n19["rust-with-frontend<br/><small>copy</small>"]
-    n20["server-binaries<br/><small>run</small>"]
-    n21["ctl-with-binary<br/><small>copy</small>"]
-    n22["ctl-with-helm<br/><small>copy</small>"]
-    n23["ctl-with-oras<br/><small>copy</small>"]
-    n24["ctl-installed<br/><small>copy</small>"]
-    n25["ctl-image<br/><small>OCI image</small>"]
-    n26["server-installed<br/><small>copy</small>"]
-    n27["server-image<br/><small>OCI image</small>"]
+    n19["ctl-binary<br/><small>run</small>"]
+    n20["ctl-with-binary<br/><small>copy</small>"]
+    n21["ctl-with-helm<br/><small>copy</small>"]
+    n22["ctl-with-oras<br/><small>copy</small>"]
+    n23["ctl-installed<br/><small>copy</small>"]
+    n24["ctl-image<br/><small>OCI image</small>"]
+    n25["rust-with-frontend<br/><small>copy</small>"]
+    n26["server-binary<br/><small>run</small>"]
+    n27["server-installed<br/><small>copy</small>"]
+    n28["server-image<br/><small>OCI image</small>"]
     n1 --> n2
     n1 --> n8
     n3 --> n10
@@ -43,21 +44,22 @@ flowchart LR
     n0 --> n17
     n16 --> n17
     n17 --> n18
-    n14 --> n19
     n15 --> n19
     n19 --> n20
-    n2 --> n21
+    n2 --> n20
     n20 --> n21
+    n3 --> n21
     n21 --> n22
-    n3 --> n22
+    n6 --> n22
     n22 --> n23
-    n6 --> n23
+    n4 --> n23
     n23 --> n24
-    n4 --> n24
-    n24 --> n25
-    n20 --> n26
-    n8 --> n26
+    n14 --> n25
+    n15 --> n25
+    n25 --> n26
     n26 --> n27
+    n8 --> n27
+    n27 --> n28
   end
   subgraph release_outputs["Independent release outputs"]
     o0(["chart<br/><small>Helm chart · devcenter-chart</small>"])
@@ -67,5 +69,5 @@ flowchart LR
   end
   n12 --> o0
   n18 --> o1
-  n25 --> o2
-  n27 --> o3
+  n24 --> o2
+  n28 --> o3
