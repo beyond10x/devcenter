@@ -2,7 +2,7 @@
 format: aep.planning-md/1
 id: story:agentide-renderer-consumption
 kind: story
-status: active
+status: implemented
 title: Consume the AgentIDE Vue renderer
 summary: Keep hosted transport in Devcenter while rendering through the released AgentIDE Vue target.
 relations:
@@ -21,7 +21,7 @@ scope:
   path: frontend
 - confidence: inferred
   path: openapi.json
-revision: 6
+revision: 7
 ---
 ## Outcome
 
