@@ -1556,27 +1556,79 @@ a {
   border-radius: 0.78rem;
   box-shadow: inset 0 0 0 1px rgb(255 255 255 / 15%);
 }
-.agent-identity p {
-  margin: 0 0 0.08rem;
-  color: var(--muted);
-  font-size: 0.58rem;
-  font-weight: 690;
+.agent-current-control {
+  display: grid;
+  min-width: 0;
+  gap: 0.3rem;
+}
+.agent-picker-label-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.8rem;
+}
+.agent-picker-label-row label {
+  color: var(--accent);
+  font-size: 0.6rem;
+  font-weight: 780;
+  letter-spacing: 0.065em;
   text-transform: uppercase;
 }
-.agent-identity h2 {
-  margin: 0;
-  font-size: 1.02rem;
-  letter-spacing: -0.03em;
+.agent-picker-label-row > span {
+  color: var(--muted);
+  font-size: 0.56rem;
+  font-weight: 620;
+}
+.agent-picker-row {
+  display: flex;
+  align-items: flex-end;
+  gap: 0.72rem;
+}
+.agent-picker-shell {
+  position: relative;
+  display: grid;
+  min-width: 16.5rem;
+}
+.agent-picker {
+  width: 100%;
+  min-width: 0;
+  min-height: 2.75rem;
+  padding: 0.58rem 3.15rem 0.58rem 0.82rem;
+  appearance: none;
+  color: var(--ink);
+  background: color-mix(in srgb, var(--surface) 78%, var(--accent-soft));
+  border: 1px solid color-mix(in srgb, var(--accent) 42%, var(--line));
+  border-radius: 0.72rem;
+  box-shadow:
+    0 1px 2px color-mix(in srgb, var(--ink) 5%, transparent),
+    0 5px 14px color-mix(in srgb, var(--accent) 10%, transparent);
+  cursor: pointer;
+  font-size: 0.92rem;
+  font-weight: 780;
+  letter-spacing: -0.025em;
+}
+.agent-picker:hover {
+  border-color: var(--accent);
+}
+.agent-picker-chevron {
+  position: absolute;
+  top: 50%;
+  right: 0.43rem;
+  display: grid;
+  width: 2rem;
+  height: 2rem;
+  place-items: center;
+  color: var(--on-accent);
+  background: var(--accent);
+  border-radius: 0.52rem;
+  box-shadow: inset 0 0 0 1px color-mix(in srgb, white 14%, transparent);
+  pointer-events: none;
+  transform: translateY(-50%);
 }
 .agent-header-actions {
   display: flex;
   align-items: center;
   gap: 0.6rem;
-}
-.agent-picker {
-  min-width: 10rem;
-  max-width: 16rem;
-  font-size: 0.65rem;
 }
 .agent-facts {
   display: flex;
@@ -2586,8 +2638,8 @@ a {
     width: 100%;
     justify-content: space-between;
   }
-  .agent-picker {
-    max-width: min(20rem, 70vw);
+  .agent-picker-shell {
+    width: min(20rem, 70vw);
   }
   .composer-footer .button {
     width: 100%;

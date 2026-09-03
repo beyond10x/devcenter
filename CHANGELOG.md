@@ -2,6 +2,12 @@
 
 ## Unreleased
 
+## 0.8.8 - 2026-09-03
+
+- Make the compact current-agent selector unmistakable without restoring the persistent roster:
+  strengthen its label, agent name, availability cue, interaction target, and responsive alignment,
+  while preserving deep-link and route-backed agent switching.
+
 ## 0.8.7 - 2026-09-03
 
 - Align the hosted workbench with AgentIDE 0.1.3, Workspace 0.2.7, Agent Platform 0.6.4,

@@ -935,8 +935,14 @@ test("opens a deep-linked agent and creates a governed worker", async ({ page },
   await page.goto("/agents/agent-review");
 
   await expect(page.getByRole("heading", { name: "Change reviewer" })).toBeVisible();
-  await expect(page.getByLabel("Choose agent")).toHaveValue("agent-review");
+  const agentPicker = page.getByLabel("Current agent");
+  await expect(agentPicker).toBeVisible();
+  await expect(agentPicker).toHaveValue("agent-review");
   await expect(page.locator(".agent-chat-workspace > .task-workspace")).toHaveCount(1);
+  await agentPicker.selectOption("agent-release");
+  await expect(page).toHaveURL(/\/agents\/agent-release$/);
+  await expect(page.getByRole("heading", { name: "Release steward" })).toBeVisible();
+  await expect(agentPicker).toHaveValue("agent-release");
   await page.getByRole("button", { name: "New agent" }).click();
   await expect(page.getByRole("dialog")).toBeVisible();
   await page.getByLabel("Name").fill("Evidence keeper");

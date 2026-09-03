@@ -3,6 +3,7 @@ import {
   ArrowUp,
   Bot,
   Check,
+  ChevronDown,
   CircleAlert,
   Clock3,
   Plus,
@@ -129,24 +130,33 @@ function formatInput(input: unknown) {
       <main v-if="selected" class="task-workspace">
         <header class="agent-workspace-header">
           <div class="agent-identity">
-            <span class="large-agent-avatar"><Bot :size="24" /></span>
-            <div>
-              <p>Conversation with</p>
-              <h2>{{ selected.name }}</h2>
+            <div class="agent-current-control">
+              <h2 class="sr-only">{{ selected.name }}</h2>
+              <span class="agent-picker-label-row">
+                <label :for="`agent-picker-${selected.id}`">Current agent</label>
+                <span>{{ workspace.agents.length }} available</span>
+              </span>
+              <span class="agent-picker-row">
+                <span class="large-agent-avatar"><Bot :size="24" /></span>
+                <span class="agent-picker-shell">
+                  <select
+                    :id="`agent-picker-${selected.id}`"
+                    class="agent-picker"
+                    :value="selected.id"
+                    @change="choose(($event.target as HTMLSelectElement).value)"
+                  >
+                    <option v-for="agent in workspace.agents" :key="agent.id" :value="agent.id">
+                      {{ agent.name }}
+                    </option>
+                  </select>
+                  <span class="agent-picker-chevron" aria-hidden="true">
+                    <ChevronDown :size="17" />
+                  </span>
+                </span>
+              </span>
             </div>
           </div>
           <div class="agent-header-actions">
-            <label class="sr-only" :for="`agent-picker-${selected.id}`">Choose agent</label>
-            <select
-              :id="`agent-picker-${selected.id}`"
-              class="agent-picker"
-              :value="selected.id"
-              @change="choose(($event.target as HTMLSelectElement).value)"
-            >
-              <option v-for="agent in workspace.agents" :key="agent.id" :value="agent.id">
-                {{ agent.name }}
-              </option>
-            </select>
             <div class="agent-facts">
               <span
                 ><Sparkles :size="15" /> Revision {{ selected.active_revision ?? "inactive" }}</span
