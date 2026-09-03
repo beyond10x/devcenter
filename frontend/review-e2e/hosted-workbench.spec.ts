@@ -53,11 +53,23 @@ test("runs the standalone hosted workbench and terminal without viewport overflo
     viewport?.height ?? 0,
   );
 
+  await page.setViewportSize({ width: 760, height: 700 });
+  const compactTerminalBounds = await terminalButton.boundingBox();
+  expect(compactTerminalBounds).not.toBeNull();
+  expect(
+    (compactTerminalBounds?.y ?? 0) + (compactTerminalBounds?.height ?? 0),
+  ).toBeLessThanOrEqual(700);
+
   await terminalButton.click();
   await expect(page.locator(".terminal-profile-actions small")).toContainText("network none");
   await page.getByRole("button", { name: "Open terminal", exact: true }).click();
   await expect(page.locator(".terminal-connection.running")).toBeVisible();
   await expect(page.locator(".ghostty-host")).toBeVisible();
+  const compactTerminalHostBounds = await page.locator(".ghostty-host").boundingBox();
+  expect(compactTerminalHostBounds).not.toBeNull();
+  expect(
+    (compactTerminalHostBounds?.y ?? 0) + (compactTerminalHostBounds?.height ?? 0),
+  ).toBeLessThanOrEqual(700);
 
   inputFrames.length = 0;
   outputFrames.length = 0;
