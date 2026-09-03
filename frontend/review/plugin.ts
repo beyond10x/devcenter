@@ -649,9 +649,14 @@ export function reviewApi(): Plugin {
           upstream.once("open", () => {
             clearTimeout(timeout);
             upstream.off("error", failed);
+            // Workspace sends its `attached` lifecycle frame immediately. Pause the upstream
+            // before upgrading the browser side so that frame cannot race ahead of the bridge's
+            // message listener and leave Ghostty stuck in `connecting`.
+            upstream.pause();
             terminalWebSockets.handleUpgrade(request, socket, head, (webSocket) => {
               terminalUpstreams.set(webSocket, upstream);
               terminalWebSockets.emit("connection", webSocket, request);
+              upstream.resume();
             });
           });
           return;

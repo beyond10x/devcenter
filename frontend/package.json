@@ -1,6 +1,6 @@
 {
   "name": "devcenter-frontend",
-  "version": "0.8.6",
+  "version": "0.8.7",
   "private": true,
   "type": "module",
   "packageManager": "pnpm@11.25.0",
@@ -22,7 +22,7 @@
     "check": "pnpm format:check && pnpm lint && pnpm check:generated && pnpm typecheck && pnpm test && pnpm build"
   },
   "dependencies": {
-    "@b10x/service-console-vue": "git+https://github.com/beyond10x/service-sdk.git#e309e3e5757eff4515b6cf5aeb995580c350c138",
+    "@b10x/service-console-vue": "git+https://github.com/beyond10x/service-sdk.git#38fdee9824894f038e5a6013f7e857dbc0807ebc",
     "@fontsource-variable/jetbrains-mono": "5.3.0",
     "@fontsource-variable/manrope": "5.3.0",
     "@lucide/vue": "1.38.0",

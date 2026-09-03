@@ -3,6 +3,7 @@ import { expect, test } from "@playwright/test";
 
 const workspacePath =
   "/projects/project-review-devcenter/sessions/workspace-session-review?pane=editor";
+const realTerminalLab = Boolean(process.env.DEVCENTER_REVIEW_TERMINAL_UPSTREAM);
 
 function frameText(payload: string | Buffer, sequencePrefix: boolean) {
   if (typeof payload === "string") return payload;
@@ -41,7 +42,11 @@ test("runs the standalone hosted workbench and terminal without viewport overflo
   await expect(page.locator(".view-lines")).toContainText("use std::process::ExitCode");
   expect(await page.locator(".view-line span span").count()).toBeGreaterThan(3);
   await expect(page.getByRole("button", { name: /bind/i })).toHaveCount(0);
-  await expect(page.locator(".terminal-panel")).toHaveCount(0);
+  if (realTerminalLab) {
+    await expect(page.locator(".terminal-panel")).toBeVisible();
+  } else {
+    await expect(page.locator(".terminal-panel")).toHaveCount(0);
+  }
 
   const staleAttach = await page.evaluate(
     async (socketOrigin) => {
@@ -94,12 +99,16 @@ test("runs the standalone hosted workbench and terminal without viewport overflo
     (compactTerminalBounds?.y ?? 0) + (compactTerminalBounds?.height ?? 0),
   ).toBeLessThanOrEqual(700);
 
-  await terminalButton.click();
+  if (!realTerminalLab) await terminalButton.click();
   await expect(page.locator(".terminal-profile-actions small")).toContainText("network none");
-  await page.getByRole("button", { name: "Open terminal", exact: true }).click();
+  if (!realTerminalLab) {
+    await page.getByRole("button", { name: "Open terminal", exact: true }).click();
+  }
   await expect(page.locator(".terminal-connection.running")).toBeVisible();
   await expect(page.locator(".ghostty-host")).toBeVisible();
-  const compactTerminalHostBounds = await page.locator(".ghostty-host").boundingBox();
+  const terminalCanvas = page.locator(".ghostty-host canvas");
+  await expect(terminalCanvas).toBeVisible();
+  const compactTerminalHostBounds = await terminalCanvas.boundingBox();
   expect(compactTerminalHostBounds).not.toBeNull();
   expect(
     (compactTerminalHostBounds?.y ?? 0) + (compactTerminalHostBounds?.height ?? 0),
@@ -107,7 +116,7 @@ test("runs the standalone hosted workbench and terminal without viewport overflo
 
   inputFrames.length = 0;
   outputFrames.length = 0;
-  await page.locator(".ghostty-host").click();
+  await page.getByRole("textbox", { name: "Terminal input" }).first().focus();
   await page.keyboard.type("pwd");
   await page.keyboard.press("Enter");
   await expect.poll(() => inputFrames.join(""), { timeout: 5_000 }).toContain("pwd");
@@ -118,9 +127,13 @@ test("runs the standalone hosted workbench and terminal without viewport overflo
   await expect(page.locator(".terminal-connection.running")).toBeVisible();
   await expect.poll(() => terminalConnections).toBeGreaterThan(initialConnections);
 
-  await page.getByRole("button", { name: "Detach Rust stable · confined" }).click();
+  await page.getByTitle("Detach terminal tab").click();
   await expect(page.getByText("No attached terminals", { exact: true })).toBeVisible();
-  await page.getByRole("button", { name: "Open terminal", exact: true }).click();
+  if (realTerminalLab) {
+    await page.reload();
+  } else {
+    await page.getByRole("button", { name: "Open terminal", exact: true }).click();
+  }
   await expect(page.locator(".terminal-connection.running")).toBeVisible();
   await page.getByTitle("Kill terminal process").click();
   await expect(page.locator(".terminal-refused strong")).toHaveText("Terminal terminated");

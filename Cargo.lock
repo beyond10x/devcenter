@@ -15,8 +15,8 @@ dependencies = [
 
 [[package]]
 name = "agent-platform-client"
-version = "0.6.3"
-source = "git+ssh://git@github.com/beyond10x/agent-platform.git?rev=bdacb8f177cb049d33abd6886c720f47fd567a12#bdacb8f177cb049d33abd6886c720f47fd567a12"
+version = "0.6.4"
+source = "git+ssh://git@github.com/beyond10x/agent-platform.git?rev=3df4e57218232ab28c1f9390c4fd1f3c94d66e91#3df4e57218232ab28c1f9390c4fd1f3c94d66e91"
 dependencies = [
  "agent-platform-core",
  "reqwest 0.13.4",
@@ -28,8 +28,8 @@ dependencies = [
 
 [[package]]
 name = "agent-platform-core"
-version = "0.6.3"
-source = "git+ssh://git@github.com/beyond10x/agent-platform.git?rev=bdacb8f177cb049d33abd6886c720f47fd567a12#bdacb8f177cb049d33abd6886c720f47fd567a12"
+version = "0.6.4"
+source = "git+ssh://git@github.com/beyond10x/agent-platform.git?rev=3df4e57218232ab28c1f9390c4fd1f3c94d66e91#3df4e57218232ab28c1f9390c4fd1f3c94d66e91"
 dependencies = [
  "agentide-contracts",
  "schemars 0.8.22",
@@ -40,8 +40,8 @@ dependencies = [
 
 [[package]]
 name = "agentide-contracts"
-version = "0.1.1"
-source = "git+https://github.com/beyond10x/agentide.git?rev=ed6250bb1f1a3ff56f3c5a6acffe11cbd4f07e20#ed6250bb1f1a3ff56f3c5a6acffe11cbd4f07e20"
+version = "0.1.3"
+source = "git+https://github.com/beyond10x/agentide.git?rev=4ee2826eaec8a048e61ec205d81960627952c766#4ee2826eaec8a048e61ec205d81960627952c766"
 dependencies = [
  "chrono",
  "serde",
@@ -755,7 +755,7 @@ dependencies = [
 
 [[package]]
 name = "devcenter-app"
-version = "0.8.6"
+version = "0.8.7"
 dependencies = [
  "anyhow",
  "axum",
@@ -769,7 +769,7 @@ dependencies = [
 
 [[package]]
 name = "devcenter-auth"
-version = "0.8.6"
+version = "0.8.7"
 dependencies = [
  "identity-client 0.5.6",
  "tokio",
@@ -778,7 +778,7 @@ dependencies = [
 
 [[package]]
 name = "devcenter-core"
-version = "0.8.6"
+version = "0.8.7"
 dependencies = [
  "devcenter-auth",
  "serde",
@@ -786,7 +786,7 @@ dependencies = [
 
 [[package]]
 name = "devcenter-http"
-version = "0.8.6"
+version = "0.8.7"
 dependencies = [
  "agent-platform-client",
  "agent-platform-core",
@@ -820,7 +820,7 @@ dependencies = [
 
 [[package]]
 name = "devcenter-mcp"
-version = "0.8.6"
+version = "0.8.7"
 dependencies = [
  "serde",
  "serde_json",
@@ -829,7 +829,7 @@ dependencies = [
 
 [[package]]
 name = "devcenter-store"
-version = "0.8.6"
+version = "0.8.7"
 dependencies = [
  "devcenter-mcp",
  "serde",
@@ -842,7 +842,7 @@ dependencies = [
 
 [[package]]
 name = "devcenter-web-assets"
-version = "0.8.6"
+version = "0.8.7"
 dependencies = [
  "mime_guess",
  "rust-embed",
@@ -850,7 +850,7 @@ dependencies = [
 
 [[package]]
 name = "devcenterctl"
-version = "0.8.6"
+version = "0.8.7"
 dependencies = [
  "anyhow",
  "clap",
@@ -4032,8 +4032,8 @@ checksum = "1ebf944e87a7c253233ad6766e082e3cd714b5d03812acc24c318f549614536e"
 
 [[package]]
 name = "workspace-client"
-version = "0.2.6"
-source = "git+ssh://git@github.com/beyond10x/workspace.git?rev=a4795f5c3ef0510a2541e58cd438a5823490e30d#a4795f5c3ef0510a2541e58cd438a5823490e30d"
+version = "0.2.7"
+source = "git+ssh://git@github.com/beyond10x/workspace.git?rev=e5e0fc3e85e7076148bba29f48aa23e62b343f46#e5e0fc3e85e7076148bba29f48aa23e62b343f46"
 dependencies = [
  "agentide-contracts",
  "reqwest 0.13.4",
@@ -4045,8 +4045,8 @@ dependencies = [
 
 [[package]]
 name = "workspace-core"
-version = "0.2.6"
-source = "git+ssh://git@github.com/beyond10x/workspace.git?rev=a4795f5c3ef0510a2541e58cd438a5823490e30d#a4795f5c3ef0510a2541e58cd438a5823490e30d"
+version = "0.2.7"
+source = "git+ssh://git@github.com/beyond10x/workspace.git?rev=e5e0fc3e85e7076148bba29f48aa23e62b343f46#e5e0fc3e85e7076148bba29f48aa23e62b343f46"
 dependencies = [
  "serde",
  "serde_json",
