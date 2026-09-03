@@ -2,6 +2,11 @@
 
 ## Unreleased
 
+## 0.8.10 - 2026-09-03
+
+- Align the BFF with current Identity 0.5.6, Connectors 0.5.6, Workspace 0.2.12, Agent Platform
+  0.6.7, and AgentIDE 0.2.1 releases through one canonical first-party Cargo source graph.
+
 ## 0.8.9 - 2026-09-03
 
 - Align the hosted workbench with Agent Platform 0.6.6, AgentIDE 0.2.1, Workspace 0.2.10,

@@ -2,7 +2,7 @@
   "openapi": "3.1.0",
   "info": {
     "title": "Devcenter API",
-    "version": "0.8.9",
+    "version": "0.8.10",
     "description": "Authenticated browser/BFF surface for identity, connector custody, agents, and tasks."
   },
   "paths": {
