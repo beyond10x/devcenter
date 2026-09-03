@@ -282,7 +282,11 @@ async function loadTerminals() {
       selectedTerminalProfileId.value = profiles[0]?.id;
     }
     terminalState.value = profiles.length ? "ready" : "refused";
-    if (activeTerminal.value && typeof route.query.terminal !== "string") {
+    const requestedTerminal =
+      typeof route.query.terminal === "string" ? route.query.terminal : undefined;
+    if (requestedTerminal && !sessions.some((terminal) => terminal.id === requestedTerminal)) {
+      await setRoute({ terminal: visibleTerminals.value[0]?.id });
+    } else if (activeTerminal.value && !requestedTerminal) {
       await setRoute({ terminal: activeTerminal.value.id });
       terminalOpen.value = true;
     }

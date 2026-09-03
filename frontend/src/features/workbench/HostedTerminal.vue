@@ -1,7 +1,7 @@
 <script setup lang="ts">
 import { Copy, Link, LoaderCircle, RefreshCw, Search, Unplug, XCircle } from "@lucide/vue";
 import { onBeforeUnmount, onMounted, ref } from "vue";
-import { api, type TerminalSession } from "@/api/client";
+import { api, ApiError, type TerminalSession } from "@/api/client";
 import { currentWorkbenchTheme, type TerminalTheme, WORKBENCH_MONO_FONT } from "./workbenchTheme";
 
 interface Disposable {
@@ -70,6 +70,7 @@ let fit: GhosttyFitAddon | undefined;
 let socket: WebSocket | undefined;
 let reconnectTimer: number | undefined;
 let reconnectAttempt = 0;
+let connectionEpoch = 0;
 let alive = true;
 let hasSequence = false;
 let lastSequence = 0n;
@@ -101,7 +102,7 @@ async function open() {
       if (socket?.readyState === WebSocket.OPEN) socket.send(encoder.encode(data));
     });
     renderer.onResize(({ cols, rows }) => sendResize(cols, rows));
-    connect();
+    void connect();
   } catch (error) {
     connectionState.value = "refused";
     detail.value = error instanceof Error ? error.message : "terminal_renderer_unavailable";
@@ -128,10 +129,37 @@ function loadGhostty(): Promise<GhosttyModule> {
   return ghosttyWindow.__devcenterGhosttyPromise;
 }
 
-function connect() {
+async function connect() {
   if (!alive || !renderer) return;
+  const epoch = ++connectionEpoch;
   connectionState.value = "connecting";
   detail.value = reconnectAttempt ? `Reconnect attempt ${String(reconnectAttempt)}` : "";
+  try {
+    const terminal = await api.terminal(props.terminal.id);
+    if (connectionCancelled(epoch)) return;
+    if (terminal.state !== "running" && terminal.state !== "preparing") {
+      connectionState.value =
+        terminal.state === "exited" || terminal.state === "terminated" ? "exited" : "refused";
+      detail.value = terminal.failure_code ?? terminalExitDetail(terminal.exit);
+      emit("lifecycle");
+      return;
+    }
+  } catch (error) {
+    if (connectionCancelled(epoch)) return;
+    if (
+      error instanceof ApiError &&
+      (error.status === 404 || error.code === "workspace_terminal_not_found")
+    ) {
+      connectionState.value = "refused";
+      detail.value = "This terminal no longer exists. Refreshing the terminal inventory.";
+      emit("lifecycle");
+      return;
+    }
+    connectionState.value = "detached";
+    detail.value = "DevCenter could not verify the terminal session.";
+    scheduleReconnect();
+    return;
+  }
   const candidate = new WebSocket(
     api.terminalSocketUrl(props.terminal.id, hasSequence ? lastSequence : undefined),
   );
@@ -153,6 +181,10 @@ function connect() {
     connectionState.value = "detached";
     scheduleReconnect();
   };
+}
+
+function connectionCancelled(epoch: number) {
+  return !alive || epoch !== connectionEpoch;
 }
 
 function receive(event: MessageEvent<unknown>) {
@@ -217,6 +249,7 @@ function receiveLifecycle(payload: string) {
   if (lifecycle.kind === "refused") {
     connectionState.value = "refused";
     detail.value = typeof lifecycle.code === "string" ? lifecycle.code : "terminal_refused";
+    emit("lifecycle");
     return;
   }
   if (lifecycle.kind === "detached") {
@@ -236,10 +269,10 @@ function terminalExitDetail(value: unknown): string {
 function scheduleReconnect() {
   if (!alive || reconnectTimer !== undefined) return;
   reconnectAttempt += 1;
-  const delay = Math.min(8_000, 500 * 2 ** Math.min(reconnectAttempt, 4));
+  const delay = Math.min(8_000, 500 * 2 ** Math.min(reconnectAttempt - 1, 4));
   reconnectTimer = window.setTimeout(() => {
     reconnectTimer = undefined;
-    connect();
+    void connect();
   }, delay);
 }
 
@@ -257,7 +290,7 @@ function replayRetainedOutput() {
   reconnectAttempt = 0;
   connectionState.value = "connecting";
   detail.value = "Reloading the oldest terminal output still retained by Workspace.";
-  connect();
+  void connect();
 }
 
 function sendResize(columns: number, rows: number) {
@@ -301,6 +334,7 @@ function findNext() {
 
 function dispose() {
   alive = false;
+  connectionEpoch += 1;
   if (reconnectTimer !== undefined) window.clearTimeout(reconnectTimer);
   socket?.close();
   socket = undefined;

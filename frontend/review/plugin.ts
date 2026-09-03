@@ -619,7 +619,16 @@ export function reviewApi(): Plugin {
       server.httpServer?.on("upgrade", (request: IncomingMessage, socket: Duplex, head: Buffer) => {
         const url = new URL(request.url ?? "/", "http://review.local");
         const match = url.pathname.match(/^\/api\/project-terminals\/([^/]+)\/attach$/);
-        if (!match || !reviewTerminals.some((terminal) => terminal.id === match[1])) return;
+        if (!match) return;
+        if (!reviewTerminals.some((terminal) => terminal.id === match[1])) {
+          terminalWebSockets.handleUpgrade(request, socket, head, (webSocket) => {
+            webSocket.send(
+              JSON.stringify({ kind: "refused", code: "workspace_terminal_not_found" }),
+              () => webSocket.close(1008, "workspace_terminal_not_found"),
+            );
+          });
+          return;
+        }
         if (reviewTerminalUpstream) {
           let upstream: WebSocket;
           try {

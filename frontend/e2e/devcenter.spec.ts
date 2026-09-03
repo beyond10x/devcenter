@@ -151,7 +151,11 @@ const todoCatalog = {
 
 async function mockAuthenticatedWorkspace(
   page: Page,
-  options: { agentideWorkspace?: boolean; terminalProfile?: boolean } = {},
+  options: {
+    agentideWorkspace?: boolean;
+    terminalProfile?: boolean;
+    staleTerminal?: boolean;
+  } = {},
 ) {
   const capabilities = [
     {
@@ -245,6 +249,7 @@ async function mockAuthenticatedWorkspace(
     checkpoints: [],
   });
   let currentTerminal: Record<string, unknown> = { ...terminalSession };
+  let terminalInventoryReads = 0;
   const codingTasks: Array<Record<string, unknown>> = [];
   let workflowRun: Record<string, unknown> | undefined;
   let workflowPolls = 0;
@@ -855,7 +860,13 @@ async function mockAuthenticatedWorkspace(
       return;
     }
     if (path === `/api/project-sessions/${codingSession.id}/terminals`) {
-      await route.fulfill({ json: options.terminalProfile ? [currentTerminal] : [] });
+      terminalInventoryReads += 1;
+      await route.fulfill({
+        json:
+          options.terminalProfile && (!options.staleTerminal || terminalInventoryReads === 1)
+            ? [currentTerminal]
+            : [],
+      });
       return;
     }
     if (path === `/api/project-terminals/${terminalSession.id}` && request.method() === "DELETE") {
@@ -869,6 +880,13 @@ async function mockAuthenticatedWorkspace(
       return;
     }
     if (path === `/api/project-terminals/${terminalSession.id}`) {
+      if (options.staleTerminal) {
+        await route.fulfill({
+          status: 404,
+          json: { code: "workspace_terminal_not_found" },
+        });
+        return;
+      }
       await route.fulfill({ json: currentTerminal });
       return;
     }
@@ -1233,6 +1251,22 @@ test("drives the hosted terminal byte channel, recovers partial replay, and keep
   await page.getByRole("button", { name: "Kill", exact: false }).click();
   await expect(page.locator(".terminal-refused strong")).toHaveText("Terminal terminated");
   await expect(page.getByText("SIGKILL", { exact: true })).toBeVisible();
+});
+
+test("drops a stale terminal id instead of reconnecting forever", async ({ page }, testInfo) => {
+  test.skip(testInfo.project.name !== "chromium", "Desktop hosted-terminal behavior");
+  await mockAuthenticatedWorkspace(page, {
+    agentideWorkspace: true,
+    terminalProfile: true,
+    staleTerminal: true,
+  });
+
+  await page.goto(`/projects/${project.id}/sessions/${codingSession.id}?terminal=terminal-test`);
+
+  await expect(page.getByText("No attached terminals", { exact: true })).toBeVisible();
+  await expect(page.locator(".terminal-connection.connecting")).toHaveCount(0);
+  await expect(page.getByRole("button", { name: "Open terminal", exact: true })).toBeEnabled();
+  await expect.poll(() => new URL(page.url()).searchParams.get("terminal")).toBeNull();
 });
 
 test("keeps catalog and connection custody usable on a mobile viewport", async ({
