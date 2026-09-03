@@ -226,6 +226,8 @@ async function mockAuthenticatedWorkspace(
   const agentIdePins: Array<Record<string, unknown>> = [];
   let currentTerminal: Record<string, unknown> = { ...terminalSession };
   const codingTasks: Array<Record<string, unknown>> = [];
+  let workflowRun: Record<string, unknown> | undefined;
+  let workflowPolls = 0;
   await page.route(/^https?:\/\/[^/]+\/api\//, async (route) => {
     const request = route.request();
     const path = new URL(request.url()).pathname;
@@ -650,6 +652,51 @@ async function mockAuthenticatedWorkspace(
       });
       return;
     }
+    if (path === `/api/projects/${project.id}/workflow-runs`) {
+      if (request.method() === "POST") {
+        const submitted = request.postDataJSON() as {
+          definition_id: string;
+          branch: string;
+          commit: string;
+          idempotency_key: string;
+        };
+        expect(submitted).toMatchObject({
+          definition_id: "review.code/v1",
+          branch: project.selected_branch,
+          commit: project.pinned_commit,
+        });
+        expect(submitted.idempotency_key).not.toBe("");
+        workflowRun = {
+          id: "workflow-run-test",
+          definition_id: submitted.definition_id,
+          project_id: project.id,
+          branch: submitted.branch,
+          commit: submitted.commit,
+          state: "accepted",
+          failure_code: null,
+          output: null,
+          created_at_ms: 1_788_260_000_000,
+        };
+        workflowPolls = 0;
+        await route.fulfill({ status: 200, json: workflowRun });
+        return;
+      }
+      if (!workflowRun) {
+        await route.fulfill({ json: [] });
+        return;
+      }
+      workflowPolls += 1;
+      workflowRun = {
+        ...workflowRun,
+        state: workflowPolls === 1 ? "running" : "succeeded",
+        output:
+          workflowPolls === 1
+            ? null
+            : "## Review complete\n\n**No blockers.** The pinned snapshot is ready.",
+      };
+      await route.fulfill({ json: [workflowRun] });
+      return;
+    }
     if (path === `/api/projects/${project.id}/sessions`) {
       await route.fulfill({ json: [codingSession] });
       return;
@@ -930,6 +977,26 @@ test("opens a visible repository as a commit-pinned project", async ({ page }, t
   ).toBeVisible();
   const accessibility = await new AxeBuilder({ page }).withTags(["wcag2a", "wcag2aa"]).analyze();
   expect(accessibility.violations).toEqual([]);
+});
+
+test("advances an accepted workflow and preserves its rendered report", async ({
+  page,
+}, testInfo) => {
+  test.skip(testInfo.project.name !== "chromium", "Desktop project workflow behavior");
+  await mockAuthenticatedWorkspace(page);
+  await page.goto(`/projects/${project.id}`);
+
+  await page.getByRole("button", { name: "workflows" }).click();
+  await page.getByRole("button", { name: /Run at 0123456789/ }).click();
+  const run = page.locator(".workflow-run").filter({ hasText: "review.code/v1" });
+  await expect(run.getByText("running", { exact: true })).toBeVisible();
+  await expect(run.getByText("succeeded", { exact: true })).toBeVisible();
+  await expect(run.getByRole("heading", { name: "Review complete" })).toBeVisible();
+  await expect(run.getByText("No blockers.", { exact: true })).toBeVisible();
+
+  await page.reload();
+  await page.getByRole("button", { name: "workflows" }).click();
+  await expect(page.getByRole("heading", { name: "Review complete" })).toBeVisible();
 });
 
 test("restores the native coding workbench from URL-backed state", async ({ page }, testInfo) => {

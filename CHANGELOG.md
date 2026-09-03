@@ -2,6 +2,15 @@
 
 ## Unreleased
 
+## 0.8.3 - 2026-09-03
+
+- Load and continuously observe durable project workflow runs so accepted work visibly advances to
+  a named terminal state and its final Markdown report remains available after a reload.
+- Relay owned project-chat task events through Workspace and the BFF, then render agent and
+  workflow Markdown live while refusing model-supplied HTML and unsafe links.
+- Align the repository, CI, and image build toolchains with Rust 1.98 and extend the release gate
+  so compiler drift cannot reach an image build after the source gate passes.
+
 ## 0.8.2 - 2026-09-03
 
 - Consume Connectors 0.5.3 in both the BFF contracts and composed hosted runtime so GitLab
