@@ -1103,6 +1103,10 @@ test("restores the native coding workbench from URL-backed state", async ({ page
     `/projects/${project.id}/sessions/${codingSession.id}?pane=diff&mode=patch&layout=side_by_side`,
   );
 
+  await expect(page.locator("[data-agentide-renderer='vue']")).toHaveAttribute(
+    "data-agentide-renderer-protocol",
+    "agentide.renderer-target/1",
+  );
   await expect(page.getByRole("link", { name: project.path_with_namespace })).toBeVisible();
   await expect(page.getByRole("treeitem", { name: /main.rs/ })).toBeVisible();
   await expect(page.getByText("3 entries omitted.")).toBeVisible();
