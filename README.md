@@ -8,6 +8,13 @@ evaluate Devcenter for a particular application; production, redistribution, and
 require a separate agreement with beyond10x. Application and deployment CLI container images remain
 private. Devcenter does not publish native binary archives.
 
+Choose the path that matches what you are trying to do:
+
+- [Review the frontend locally](docs/frontend-review.md) — public, credential-free evaluation.
+- [Build the full service from source](docs/source-build.md) — preview access for approved evaluators.
+- [Check production deployment availability](docs/production-deployment.md) — currently paused and
+  dependent on private artifacts and deployment inputs.
+
 The repository deliberately contains no real deployment values. A deployment supplies its tenant,
 hosts, image mirrors, Identity configuration, generated-service deployment overlays, connector
 catalogue bundle, storage classes, and Secret references separately.
