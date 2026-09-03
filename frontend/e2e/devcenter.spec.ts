@@ -977,14 +977,19 @@ test("restores the native coding workbench from URL-backed state", async ({ page
   await expect(page.locator(".hosted-monaco-editor")).toBeVisible();
 });
 
-test("drives the hosted terminal byte channel and keeps kill explicit", async ({
+test("drives the hosted terminal byte channel, recovers partial replay, and keeps kill explicit", async ({
   page,
 }, testInfo) => {
   test.skip(testInfo.project.name !== "chromium", "Desktop hosted-terminal behavior");
   let input = "";
+  let connections = 0;
+  const pageErrors: string[] = [];
+  page.on("pageerror", (error) => pageErrors.push(error.message));
   await page.routeWebSocket(
     `**/api/project-terminals/${terminalSession.id}/attach*`,
     (webSocket) => {
+      connections += 1;
+      const connection = connections;
       let sequence = 0n;
       const sendOutput = (content: string | Buffer) => {
         sequence += 1n;
@@ -999,7 +1004,10 @@ test("drives the hosted terminal byte channel and keeps kill explicit", async ({
         const chunk = Buffer.from(message);
         input += chunk.toString("utf8");
         sendOutput(chunk);
-        if (chunk.includes(13)) sendOutput("\r\n/workspace\r\n$ ");
+        if (chunk.includes(13)) {
+          if (connection === 1) sequence += 1n;
+          sendOutput("\r\n/workspace\r\n$ ");
+        }
       });
       webSocket.send(
         JSON.stringify({
@@ -1007,6 +1015,11 @@ test("drives the hosted terminal byte channel and keeps kill explicit", async ({
           replay: { complete: true, oldest_sequence: 0, newest_sequence: 0 },
         }),
       );
+      if (connection > 1) {
+        sendOutput(
+          `${Array.from({ length: 80 }, (_, index) => `retained line ${String(index)}`).join("\r\n")}\r\nterminal-search-marker\r\n`,
+        );
+      }
       sendOutput("\u001b[32mactor-1@substrate\u001b[0m:/workspace$ ");
     },
   );
@@ -1018,6 +1031,13 @@ test("drives the hosted terminal byte channel and keeps kill explicit", async ({
   await page.keyboard.type("pwd");
   await page.keyboard.press("Enter");
   await expect.poll(() => input).toContain("pwd");
+  await expect(page.locator(".terminal-connection.partial")).toBeVisible();
+  await page.getByRole("button", { name: "Reload retained output" }).click();
+  await expect(page.locator(".terminal-connection.running")).toBeVisible();
+  await expect.poll(() => connections).toBe(2);
+  await page.getByLabel("Search terminal scrollback").fill("terminal-search-marker");
+  await page.getByLabel("Search terminal scrollback").press("Enter");
+  await expect.poll(() => pageErrors).toEqual([]);
 
   const panel = page.locator(".workbench-terminal");
   const before = await panel.boundingBox();

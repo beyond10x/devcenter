@@ -9,6 +9,9 @@
   repository beyond root-level files.
 - Align the composed AgentIDE and Todo generated services with Service SDK 0.3.2 so every hosted
   factory implements the same exact Connectors 0.5.3 service contract.
+- Add an opt-in, loopback-only review bridge for exercising the vendored Ghostty renderer against
+  Workspace's real Substrate terminal lab, and let partial replay be explicitly reloaded from the
+  oldest output Workspace still retains.
 - Add the native workspace Agent pane and BFF route for typed Agent Platform coding-session turns.
   Each turn carries only the bound Workspace/AgentIDE references, saved open-file digests, prior
   transcript, and deliberately attached selections; context and tool inventories are refreshed by

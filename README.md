@@ -132,6 +132,18 @@ so task journals and suspended approval checkpoints are restart-safe. Workspace 
 the base and writable materialization references; neither Devcenter nor Agent Platform receives a
 second file store.
 
+For an isolated renderer/transport test, Workspace's loopback `workspace-terminal-lab` can replace
+only the review terminal emulator:
+
+```console
+DEVCENTER_REVIEW_TERMINAL_UPSTREAM=ws://127.0.0.1:8095 pnpm --dir frontend review
+```
+
+The terminal profile and process row are then labelled `real daemon lab`, and terminal WebSockets
+are bridged only to a loopback `ws:` or `wss:` origin. Project files, agents, grants, and other
+review data remain explicit samples. With the variable absent, review mode continues to use its
+non-executing protocol emulator.
+
 `DEV_CENTER_IDENTITY_PROVIDERS` contains only opaque Identity-owned IDs and display labels. With
 zero entries, Identity keeps its existing selection behavior; with one, `/auth/sso/start` remains a
 single-click flow; with several, Devcenter requires an explicit choice. It never uses email for
