@@ -2,6 +2,13 @@
 
 ## Unreleased
 
+## 0.8.4 - 2026-09-03
+
+- Make the agent interaction a full-width chat workspace with a compact switcher instead of a
+  persistent roster column, while retaining live rendered Markdown and explicit run state.
+- Link capability profiles directly to MCP publication and select profiles by name and revision so
+  engineers no longer have to discover or paste opaque profile identifiers.
+
 ## 0.8.3 - 2026-09-03
 
 - Load and continuously observe durable project workflow runs so accepted work visibly advances to
