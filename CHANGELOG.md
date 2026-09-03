@@ -2,6 +2,13 @@
 
 ## Unreleased
 
+## 0.8.14 - 2026-09-03
+
+- Preserve Monaco syntax themes under the production Content Security Policy by issuing a fresh
+  per-response nonce and applying it to runtime-created styles without enabling unsafe inline CSS.
+- Exercise the hosted workbench with production-equivalent security headers so editor colors cannot
+  regress behind a passing development-server browser test.
+
 ## 0.8.13 - 2026-09-03
 
 - Isolate the Workflow/Identity chart refusal assertion from the independently enabled AgentIDE

@@ -4,8 +4,15 @@
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <meta name="theme-color" content="#f3f5f4" />
-    <script>
+    <script nonce="__DEVCENTER_CSP_NONCE__">
       (() => {
+        const nonce = document.currentScript?.nonce;
+        const createElement = Document.prototype.createElement;
+        Document.prototype.createElement = function (tagName, options) {
+          const element = createElement.call(this, tagName, options);
+          if (nonce && tagName.toLowerCase() === "style") element.setAttribute("nonce", nonce);
+          return element;
+        };
         const key = "b10x.devcenter.theme.v1";
         const allowed = new Set([
           "system",

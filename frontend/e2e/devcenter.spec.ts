@@ -1176,6 +1176,21 @@ test("advances an accepted workflow and preserves its rendered report", async ({
 
 test("restores the native coding workbench from URL-backed state", async ({ page }, testInfo) => {
   test.skip(testInfo.project.name !== "chromium", "Desktop hosted-workbench behavior");
+  await page.route("**/*", async (route) => {
+    if (route.request().resourceType() !== "document") {
+      await route.continue();
+      return;
+    }
+    const response = await route.fetch();
+    await route.fulfill({
+      response,
+      headers: {
+        ...response.headers(),
+        "content-security-policy":
+          "default-src 'self'; script-src 'self' 'wasm-unsafe-eval' 'nonce-__DEVCENTER_CSP_NONCE__'; style-src 'self' 'nonce-__DEVCENTER_CSP_NONCE__'; font-src 'self'; connect-src 'self' ws:; img-src 'self' data:",
+      },
+    });
+  });
   await mockAuthenticatedWorkspace(page, { agentideWorkspace: true });
   await page.goto(
     `/projects/${project.id}/sessions/${codingSession.id}?pane=diff&mode=patch&layout=side_by_side`,
@@ -1254,6 +1269,17 @@ test("restores the native coding workbench from URL-backed state", async ({ page
       }),
     )
     .toBeGreaterThanOrEqual(3);
+  await expect(page.locator("style")).not.toHaveCount(0);
+  await expect
+    .poll(() =>
+      page.locator("style").evaluateAll((styles) => {
+        return styles.filter((style) => {
+          const target = style as unknown as { nonce: string };
+          return target.nonce !== "__DEVCENTER_CSP_NONCE__";
+        }).length;
+      }),
+    )
+    .toBe(0);
 });
 
 test("drives the hosted terminal byte channel, recovers partial replay, and keeps kill explicit", async ({
