@@ -7,6 +7,10 @@ interface Disposable {
   dispose(): void;
 }
 
+interface GhosttyCell {
+  codepoint: number;
+}
+
 interface GhosttyTerminal {
   cols: number;
   rows: number;
@@ -20,7 +24,7 @@ interface GhosttyTerminal {
   onResize(listener: (size: { cols: number; rows: number }) => void): Disposable;
   getSelection(): string;
   getScrollbackLength(): number;
-  getScrollbackLine(line: number): string | null;
+  getScrollbackLine(line: number): GhosttyCell[] | null;
   scrollToLine(line: number): void;
   paste(content: string): void;
 }
@@ -269,7 +273,13 @@ function findNext() {
   if (!needle || !renderer) return;
   const length = renderer.getScrollbackLength();
   for (let line = length - 1; line >= 0; line -= 1) {
-    if (renderer.getScrollbackLine(line)?.toLocaleLowerCase().includes(needle)) {
+    const cells = renderer.getScrollbackLine(line);
+    const content = cells
+      ?.map((cell) =>
+        cell.codepoint === 0 || cell.codepoint < 32 ? " " : String.fromCodePoint(cell.codepoint),
+      )
+      .join("");
+    if (content?.toLocaleLowerCase().includes(needle)) {
       renderer.scrollToLine(line);
       return;
     }
