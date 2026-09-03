@@ -18,6 +18,7 @@ import {
   api,
   errorMessage,
   type Approval,
+  type CapabilityProfile,
   type ClientAuthorization,
   type Publication,
   type PublicationState,
@@ -27,12 +28,13 @@ const route = useRoute();
 const router = useRouter();
 const loading = ref(true);
 const publications = ref<Publication[]>([]);
+const profiles = ref<CapabilityProfile[]>([]);
 const selectedId = ref<string | undefined>(
   typeof route.query.publication === "string" ? route.query.publication : undefined,
 );
 const clients = ref<ClientAuthorization[]>([]);
 const approvals = ref<Approval[]>([]);
-const profileId = ref("");
+const profileId = ref(typeof route.query.profile === "string" ? route.query.profile : "");
 const error = ref("");
 const notice = ref("");
 const mutating = ref(false);
@@ -48,7 +50,10 @@ async function load() {
   loading.value = true;
   error.value = "";
   try {
-    publications.value = await api.publications();
+    [publications.value, profiles.value] = await Promise.all([
+      api.publications(),
+      api.capabilityProfiles(),
+    ]);
     if (
       !publications.value.some((publication) => publication.publication_id === selectedId.value)
     ) {
@@ -146,6 +151,10 @@ function shortDigest(digest: string) {
   return `${digest.slice(0, 12)}…${digest.slice(-8)}`;
 }
 
+function profileName(id: string) {
+  return profiles.value.find((profile) => profile.id === id)?.name ?? id;
+}
+
 onMounted(() => void load());
 watch(
   () => route.query.publication,
@@ -185,18 +194,21 @@ watch(
         <strong>Publish a capability profile</strong>
         <span>The active immutable profile revision becomes this endpoint’s exact toolset.</span>
       </div>
-      <form @submit.prevent="publish">
+      <form v-if="profiles.length" @submit.prevent="publish">
         <label class="sr-only" for="profile-id">Capability profile ID</label>
-        <input
-          id="profile-id"
-          v-model="profileId"
-          autocomplete="off"
-          placeholder="Capability profile ID"
-        />
+        <select id="profile-id" v-model="profileId">
+          <option value="" disabled>Choose a capability profile</option>
+          <option v-for="profile in profiles" :key="profile.id" :value="profile.id">
+            {{ profile.name }} · revision {{ profile.revision }}
+          </option>
+        </select>
         <button class="button primary" type="submit" :disabled="mutating || !profileId.trim()">
           <Plus :size="16" /> Publish
         </button>
       </form>
+      <button v-else class="button primary" type="button" @click="router.push('/profiles')">
+        <Plus :size="16" /> Create a profile
+      </button>
     </section>
 
     <div v-if="publications.length" class="publication-layout">
@@ -210,7 +222,7 @@ watch(
         >
           <span class="publication-icon"><RadioTower :size="17" /></span>
           <span
-            ><strong>{{ publication.profile_id }}</strong
+            ><strong>{{ profileName(publication.profile_id) }}</strong
             ><small>Revision {{ publication.active_revision }}</small></span
           >
           <span class="status-dot" :class="publication.state"></span>
@@ -221,7 +233,7 @@ watch(
         <header>
           <div>
             <p class="eyebrow">Stable endpoint</p>
-            <h2>{{ selected.profile_id }}</h2>
+            <h2>{{ profileName(selected.profile_id) }}</h2>
           </div>
           <span class="status-pill" :class="selected.state">{{ selected.state }}</span>
         </header>

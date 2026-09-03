@@ -847,6 +847,8 @@ test("opens a deep-linked agent and creates a governed worker", async ({ page },
   await page.goto("/agents/agent-review");
 
   await expect(page.getByRole("heading", { name: "Change reviewer" })).toBeVisible();
+  await expect(page.getByLabel("Choose agent")).toHaveValue("agent-review");
+  await expect(page.locator(".agent-chat-workspace > .task-workspace")).toHaveCount(1);
   await page.getByRole("button", { name: "New agent" }).click();
   await expect(page.getByRole("dialog")).toBeVisible();
   await page.getByLabel("Name").fill("Evidence keeper");
@@ -1268,6 +1270,8 @@ test("shows one stable MCP endpoint and separate client setup commands", async (
   await page.goto("/publications");
 
   await expect(page.getByRole("heading", { name: "Publish governed tools" })).toBeVisible();
+  await expect(page.getByLabel("Capability profile ID")).toHaveText(/Release profile/);
+  await expect(page.getByRole("heading", { name: "Release profile" })).toBeVisible();
   await expect(page.locator(".endpoint-row code")).toHaveText(/\/mcp\/pub-test-1$/);
   await expect(page.getByText(/codex mcp add devcenter/)).toBeVisible();
   await expect(page.getByText(/claude mcp add --transport http/)).toBeVisible();
