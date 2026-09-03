@@ -47,10 +47,16 @@ const endpoint = computed(() =>
   selected.value ? `${window.location.origin}/mcp/${selected.value.publication_id}` : "",
 );
 const oauthResource = computed(() => `${window.location.origin}/mcp`);
-const codexSetup = computed(
-  () =>
-    `codex mcp add devcenter --url ${endpoint.value} --oauth-client-id devcenter-cli --oauth-resource ${oauthResource.value} && codex mcp login devcenter --scopes mcp.tools.call`,
+const codexConfig = computed(
+  () => `[mcp_servers.devcenter]
+url = "${endpoint.value}"
+scopes = ["mcp.tools.call"]
+oauth_resource = "${oauthResource.value}"
+
+[mcp_servers.devcenter.oauth]
+client_id = "devcenter-cli"`,
 );
+const codexLogin = "codex mcp login devcenter --scopes mcp.tools.call";
 const claudeSetup = computed(
   () => `claude mcp add --transport http --client-id devcenter-cli devcenter ${endpoint.value}`,
 );
@@ -326,13 +332,29 @@ watch(
 
         <section class="client-setup">
           <h3>Client setup</h3>
-          <div>
-            <strong>Codex</strong><code>{{ codexSetup }}</code
+          <p>
+            <ShieldCheck :size="15" /> Add or replace the Devcenter block in ~/.codex/config.toml,
+            then run the scoped Codex login.
+          </p>
+          <div class="setup-config-row">
+            <strong>Codex config</strong
+            ><code class="setup-config" data-testid="codex-mcp-config">{{ codexConfig }}</code
             ><button
               class="icon-button"
               type="button"
-              aria-label="Copy Codex setup"
-              @click="copy(codexSetup, 'Codex setup copied.')"
+              aria-label="Copy Codex config"
+              @click="copy(codexConfig, 'Codex config copied.')"
+            >
+              <Clipboard :size="15" />
+            </button>
+          </div>
+          <div>
+            <strong>Codex login</strong><code>{{ codexLogin }}</code
+            ><button
+              class="icon-button"
+              type="button"
+              aria-label="Copy Codex login"
+              @click="copy(codexLogin, 'Codex login copied.')"
             >
               <Clipboard :size="15" />
             </button>
@@ -349,8 +371,7 @@ watch(
             </button>
           </div>
           <p>
-            <ShieldCheck :size="15" /> Each client completes its own OAuth authorization. Browser
-            logout does not revoke it.
+            Each client completes its own OAuth authorization. Browser logout does not revoke it.
           </p>
         </section>
 

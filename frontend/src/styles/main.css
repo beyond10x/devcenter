@@ -1014,6 +1014,12 @@ a {
   overflow: auto;
   font-size: 0.64rem;
 }
+.client-setup > div.setup-config-row {
+  align-items: flex-start;
+}
+.client-setup code.setup-config {
+  white-space: pre;
+}
 .client-setup > p {
   display: flex;
   align-items: center;
