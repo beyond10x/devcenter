@@ -31,14 +31,18 @@ scope:
 - confidence: inferred
   path: frontend/pnpm-lock.yaml
 - confidence: inferred
+  path: frontend/src/api/client.ts
+- confidence: inferred
+  path: frontend/src/features/workbench/HostedWorkspaceView.vue
+- confidence: inferred
   path: openapi.json
-revision: 6
+revision: 8
 ---
 # Release the hosted workbench on AgentIDE v2
 
 ## Context
 
-AgentIDE 0.2.0, Workspace 0.2.8, Agent Platform 0.6.5, Harness 0.11.1, and Service SDK 0.3.4 are released. DevCenter must consume their exact commits so the native editor and terminal use the same sealed hosted protocol that agents validate before each turn. Workspace remains the only file, diff, process, and PTY authority; AgentIDE coordination remains on the generated Service SDK and Eventlog seam.
+AgentIDE 0.2.1, Workspace 0.2.9, and Agent Platform 0.6.6 are aligned as one candidate graph on Harness 0.11.1, Service SDK 0.3.4, and Todo 0.2.6. DevCenter consumes the AgentIDE renderer draft directly and seals authenticated, content-revision-bound selections before submitting each coding turn. Workspace remains the only file, diff, process, and PTY authority; AgentIDE coordination remains on the generated Service SDK and Eventlog seam.
 
 ## Acceptance
 
