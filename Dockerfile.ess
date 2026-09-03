@@ -50,15 +50,12 @@ COPY --from=connectors_binary ["/out/devcenter-connectors","/usr/local/bin/devce
 FROM connectors_installed AS connectors_image
 ENTRYPOINT ["/usr/local/bin/devcenter-connectors"]
 
-FROM rust_source AS rust_with_frontend
-COPY --from=frontend ["/source/frontend/dist","/source/frontend/dist"]
-
-FROM rust_with_frontend AS server_binaries
+FROM rust_source AS ctl_binary
 WORKDIR /source
-RUN --network=default --mount=type=secret,id=github-token,target=/run/secrets/github-token --mount=type=cache,id=devcenter-server-cargo-registry,target=/usr/local/cargo/registry --mount=type=cache,id=devcenter-server-cargo-git,target=/usr/local/cargo/git --mount=type=cache,id=devcenter-target,target=/source/target ["sh","-euc","token=\"$(cat /run/secrets/github-token)\" && git config --global url.\"https://x-access-token:${token}@github.com/\".insteadOf \"ssh://git@github.com/\" && cargo build --locked --release -p devcenter-app -p devcenterctl && install -D /source/target/release/devcenter /out/devcenter && install -D /source/target/release/devcenterctl /out/devcenterctl && git config --global --unset-all url.\"https://x-access-token:${token}@github.com/\".insteadOf"]
+RUN --network=default --mount=type=secret,id=github-token,target=/run/secrets/github-token --mount=type=cache,id=devcenter-ctl-cargo-registry,target=/usr/local/cargo/registry --mount=type=cache,id=devcenter-ctl-cargo-git,target=/usr/local/cargo/git --mount=type=cache,id=devcenter-ctl-target,target=/source/target ["sh","-euc","token=\"$(cat /run/secrets/github-token)\" && git config --global url.\"https://x-access-token:${token}@github.com/\".insteadOf \"ssh://git@github.com/\" && cargo build --locked --release -p devcenterctl && install -D /source/target/release/devcenterctl /out/devcenterctl && git config --global --unset-all url.\"https://x-access-token:${token}@github.com/\".insteadOf"]
 
 FROM ctl_root AS ctl_with_binary
-COPY --from=server_binaries ["/out/devcenterctl","/usr/local/bin/devcenterctl"]
+COPY --from=ctl_binary ["/out/devcenterctl","/usr/local/bin/devcenterctl"]
 
 FROM ctl_with_binary AS ctl_with_helm
 COPY --from=helm_base ["/usr/bin/helm","/usr/local/bin/helm"]
@@ -72,8 +69,15 @@ COPY --from=kubectl_base ["/bin/kubectl","/usr/local/bin/kubectl"]
 FROM ctl_installed AS ctl_image
 ENTRYPOINT ["/usr/local/bin/devcenterctl"]
 
+FROM rust_source AS rust_with_frontend
+COPY --from=frontend ["/source/frontend/dist","/source/frontend/dist"]
+
+FROM rust_with_frontend AS server_binary
+WORKDIR /source
+RUN --network=default --mount=type=secret,id=github-token,target=/run/secrets/github-token --mount=type=cache,id=devcenter-server-cargo-registry,target=/usr/local/cargo/registry --mount=type=cache,id=devcenter-server-cargo-git,target=/usr/local/cargo/git --mount=type=cache,id=devcenter-target,target=/source/target ["sh","-euc","token=\"$(cat /run/secrets/github-token)\" && git config --global url.\"https://x-access-token:${token}@github.com/\".insteadOf \"ssh://git@github.com/\" && cargo build --locked --release -p devcenter-app && install -D /source/target/release/devcenter /out/devcenter && git config --global --unset-all url.\"https://x-access-token:${token}@github.com/\".insteadOf"]
+
 FROM server_root AS server_installed
-COPY --from=server_binaries ["/out/devcenter","/usr/local/bin/devcenter"]
+COPY --from=server_binary ["/out/devcenter","/usr/local/bin/devcenter"]
 
 FROM server_installed AS server_image
 ENTRYPOINT ["/usr/local/bin/devcenter"]

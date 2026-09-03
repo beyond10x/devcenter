@@ -61,7 +61,7 @@ nodes:
     from: frontend
     source: /source/frontend/dist
     destination: /source/frontend/dist
-  - id: server-binaries
+  - id: server-binary
     kind: run
     base: rust-with-frontend
     workdir: /source
@@ -71,9 +71,8 @@ nodes:
       - >-
         token="$(cat /run/secrets/github-token)" && git config --global
         url."https://x-access-token:${token}@github.com/".insteadOf "ssh://git@github.com/" &&
-        cargo build --locked --release -p devcenter-app -p devcenterctl &&
+        cargo build --locked --release -p devcenter-app &&
         install -D /source/target/release/devcenter /out/devcenter &&
-        install -D /source/target/release/devcenterctl /out/devcenterctl &&
         git config --global --unset-all
         url."https://x-access-token:${token}@github.com/".insteadOf
     mounts:
@@ -88,6 +87,34 @@ nodes:
         target: /usr/local/cargo/git
       - kind: cache
         id: devcenter-target
+        target: /source/target
+    network: sandbox
+  - id: ctl-binary
+    kind: run
+    base: rust-source
+    workdir: /source
+    argv:
+      - sh
+      - -euc
+      - >-
+        token="$(cat /run/secrets/github-token)" && git config --global
+        url."https://x-access-token:${token}@github.com/".insteadOf "ssh://git@github.com/" &&
+        cargo build --locked --release -p devcenterctl &&
+        install -D /source/target/release/devcenterctl /out/devcenterctl &&
+        git config --global --unset-all
+        url."https://x-access-token:${token}@github.com/".insteadOf
+    mounts:
+      - kind: secret
+        secret: github-token
+        target: /run/secrets/github-token
+      - kind: cache
+        id: devcenter-ctl-cargo-registry
+        target: /usr/local/cargo/registry
+      - kind: cache
+        id: devcenter-ctl-cargo-git
+        target: /usr/local/cargo/git
+      - kind: cache
+        id: devcenter-ctl-target
         target: /source/target
     network: sandbox
   - id: connectors-binary
@@ -134,7 +161,7 @@ nodes:
   - id: server-installed
     kind: copy
     base: server-root
-    from: server-binaries
+    from: server-binary
     source: /out/devcenter
     destination: /usr/local/bin/devcenter
   - id: server-image
@@ -181,7 +208,7 @@ nodes:
   - id: ctl-with-binary
     kind: copy
     base: ctl-root
-    from: server-binaries
+    from: ctl-binary
     source: /out/devcenterctl
     destination: /usr/local/bin/devcenterctl
   - id: ctl-with-helm

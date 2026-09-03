@@ -2,13 +2,13 @@
 format: aep.planning-md/1
 id: release-plan:devcenter-0-8-14
 kind: release-plan
-status: active
+status: implemented
 title: Release DevCenter 0.8.14
 summary: Publish the production CSP editor-style fix as patch release 0.8.14.
 relations:
 - delivers: story:production-editor-csp-styling
 - supersedes: release-plan:devcenter-0-8-13
-revision: 3
+revision: 4
 ---
 # Release plan: DevCenter 0.8.14
 
