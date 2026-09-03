@@ -172,11 +172,23 @@ function receiveLifecycle(payload: string) {
     return;
   }
   if (lifecycle.kind === "attached") {
-    const replay = lifecycle.replay as { complete?: unknown } | undefined;
+    const replay = lifecycle.replay as
+      { complete?: unknown; newest_sequence?: unknown } | undefined;
+    const newest = replay?.newest_sequence;
+    const sequenceRestarted =
+      hasSequence &&
+      (newest === null ||
+        (typeof newest === "number" &&
+          Number.isSafeInteger(newest) &&
+          BigInt(newest) < lastSequence));
+    const partial = replay?.complete === false || sequenceRestarted;
     reconnectAttempt = 0;
-    connectionState.value = replay?.complete === false ? "partial" : "running";
-    detail.value =
-      replay?.complete === false ? "Earlier output is outside the 4 MiB replay window." : "";
+    connectionState.value = partial ? "partial" : "running";
+    detail.value = sequenceRestarted
+      ? "The terminal output sequence restarted. Reload the output Workspace still retains."
+      : replay?.complete === false
+        ? "Earlier output is outside the 4 MiB replay window."
+        : "";
     renderer?.focus();
     return;
   }
