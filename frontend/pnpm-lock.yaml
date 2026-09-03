@@ -7,6 +7,9 @@ settings:
 importers:
   .:
     dependencies:
+      "@b10x/agentide-ui":
+        specifier: git+https://github.com/beyond10x/agentide.git#74162248238f91846d713cb2571e8cc6625b4922
+        version: https://codeload.github.com/beyond10x/agentide/tar.gz/74162248238f91846d713cb2571e8cc6625b4922(vue@3.5.42(typescript@5.9.3))
       "@b10x/service-console-vue":
         specifier: git+https://github.com/beyond10x/service-sdk.git#a57d5a0f4b4cf7a98bf9bd38bd8cacbe94ae7e5b
         version: https://codeload.github.com/beyond10x/service-sdk/tar.gz/a57d5a0f4b4cf7a98bf9bd38bd8cacbe94ae7e5b(typescript@5.9.3)
@@ -131,6 +134,17 @@ packages:
       }
     peerDependencies:
       playwright-core: ">= 1.0.0"
+
+  "@b10x/agentide-ui@https://codeload.github.com/beyond10x/agentide/tar.gz/74162248238f91846d713cb2571e8cc6625b4922":
+    resolution:
+      {
+        gitHosted: true,
+        integrity: sha512-BOzm1o81PazdkzNZovYa3iRaMOdadsult4cDTtb7KWDb7pYMaBuhh4OGCSLdP9HDLPckV747MOGJmh8cTsLRAQ==,
+        tarball: https://codeload.github.com/beyond10x/agentide/tar.gz/74162248238f91846d713cb2571e8cc6625b4922,
+      }
+    version: 0.3.0
+    peerDependencies:
+      vue: ^3.5.0
 
   "@b10x/service-console-vue@https://codeload.github.com/beyond10x/service-sdk/tar.gz/a57d5a0f4b4cf7a98bf9bd38bd8cacbe94ae7e5b":
     resolution:
@@ -3236,6 +3250,10 @@ snapshots:
     dependencies:
       axe-core: 4.13.0
       playwright-core: 1.62.1
+
+  "@b10x/agentide-ui@https://codeload.github.com/beyond10x/agentide/tar.gz/74162248238f91846d713cb2571e8cc6625b4922(vue@3.5.42(typescript@5.9.3))":
+    dependencies:
+      vue: 3.5.42(typescript@5.9.3)
 
   "@b10x/service-console-vue@https://codeload.github.com/beyond10x/service-sdk/tar.gz/a57d5a0f4b4cf7a98bf9bd38bd8cacbe94ae7e5b(typescript@5.9.3)":
     dependencies:

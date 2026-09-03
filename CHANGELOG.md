@@ -2,9 +2,13 @@
 
 ## Unreleased
 
+## 0.8.11 - 2026-09-03
+
 - Replace the Codex add-time OAuth command with an explicit least-privilege server configuration
   and scoped login instruction, preventing shared Identity discovery from requesting unrelated
   Connector, Secrets, or Substrate authority.
+- Compose the hosted coding workspace through AgentIDE's released, transport-neutral Vue renderer
+  target while retaining Devcenter-owned authority, API, editor, diff, agent, and terminal adapters.
 
 ## 0.8.10 - 2026-09-03
 

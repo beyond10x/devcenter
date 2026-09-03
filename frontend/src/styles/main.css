@@ -794,7 +794,8 @@ a {
 .coding-session-main > .review-banner {
   flex: 0 0 auto;
 }
-.coding-session-main > .hosted-workbench {
+.coding-session-main > .hosted-workbench,
+.coding-session-main > .agentide-vue-workbench {
   min-height: 0;
   flex: 1;
   overflow: hidden;
@@ -4269,7 +4270,8 @@ pre,
 }
 
 /* Native hosted coding workbench */
-.hosted-workbench {
+.hosted-workbench,
+.agentide-vue-workbench {
   display: flex;
   min-width: 0;
   min-height: calc(100vh - 4rem);
@@ -5485,7 +5487,8 @@ pre,
 }
 
 @media (max-width: 780px) {
-  .hosted-workbench {
+  .hosted-workbench,
+  .agentide-vue-workbench {
     min-height: calc(100vh - 4.15rem);
   }
   .workbench-titlebar {
