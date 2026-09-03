@@ -1,0 +1,16 @@
+components:
+  - component: devcenter-app
+    summary: Serves the browser application and its governed backend-for-frontend API.
+    owns:
+      domains: [devcenter.workspace]
+    accepts:
+      commands:
+        - devcenter.workspace.OpenRepository
+        - devcenter.workspace.SendAgentMessage
+        - devcenter.workspace.StartWorkflow
+    publishes:
+      events:
+        - devcenter.workspace.RepositoryOpened
+        - devcenter.workspace.AgentMessageAccepted
+        - devcenter.workspace.WorkflowAccepted
+    reached_by: network

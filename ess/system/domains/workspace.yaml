@@ -1,0 +1,102 @@
+domain: devcenter.workspace
+
+summary: Open an authorized repository and work with agents and workflows in that context.
+
+types:
+  - name: devcenter.workspace.RepositoryId
+    kind: newtype
+    of: String
+
+  - name: devcenter.workspace.ConversationId
+    kind: newtype
+    of: Uuid
+
+  - name: devcenter.workspace.Message
+    kind: newtype
+    of: String
+
+  - name: devcenter.workspace.WorkflowId
+    kind: newtype
+    of: String
+
+errors:
+  - name: devcenter.workspace.AuthorityRefused
+    summary: Current Identity and Connector grants do not admit the requested operation.
+
+  - name: devcenter.workspace.WorkflowUnavailable
+    summary: The selected workflow is not currently available in this repository context.
+
+commands:
+  - name: devcenter.workspace.OpenRepository
+    input:
+      - name: repository
+        type: devcenter.workspace.RepositoryId
+    outcomes:
+      - name: opened
+        emits: [devcenter.workspace.RepositoryOpened]
+        payload:
+          devcenter.workspace.RepositoryOpened:
+            repository: input.repository
+      - name: refused
+        external: Identity or the current Connector grant refuses repository access
+        error: devcenter.workspace.AuthorityRefused
+
+  - name: devcenter.workspace.SendAgentMessage
+    input:
+      - name: conversation
+        type: devcenter.workspace.ConversationId
+      - name: message
+        type: devcenter.workspace.Message
+    outcomes:
+      - name: accepted
+        emits: [devcenter.workspace.AgentMessageAccepted]
+        payload:
+          devcenter.workspace.AgentMessageAccepted:
+            conversation: input.conversation
+      - name: refused
+        external: current authority or an agent capability refuses the operation
+        error: devcenter.workspace.AuthorityRefused
+
+  - name: devcenter.workspace.StartWorkflow
+    input:
+      - name: repository
+        type: devcenter.workspace.RepositoryId
+      - name: workflow
+        type: devcenter.workspace.WorkflowId
+    outcomes:
+      - name: accepted
+        emits: [devcenter.workspace.WorkflowAccepted]
+        payload:
+          devcenter.workspace.WorkflowAccepted:
+            repository: input.repository
+            workflow: input.workflow
+      - name: unavailable
+        external: the workflow executor cannot start the selected workflow
+        error: devcenter.workspace.WorkflowUnavailable
+
+events:
+  - name: devcenter.workspace.RepositoryOpened
+    fields:
+      - name: repository
+        type: devcenter.workspace.RepositoryId
+
+  - name: devcenter.workspace.AgentMessageAccepted
+    fields:
+      - name: conversation
+        type: devcenter.workspace.ConversationId
+
+  - name: devcenter.workspace.WorkflowAccepted
+    fields:
+      - name: repository
+        type: devcenter.workspace.RepositoryId
+      - name: workflow
+        type: devcenter.workspace.WorkflowId
+
+actors:
+  - name: devcenter.workspace.Engineer
+    may:
+      - devcenter.workspace.OpenRepository
+      - devcenter.workspace.SendAgentMessage
+      - devcenter.workspace.StartWorkflow
+    naming:
+      display: Engineer

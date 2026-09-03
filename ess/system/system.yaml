@@ -1,0 +1,9 @@
+format: ess/1
+system: devcenter
+version: v1
+
+summary: >-
+  A governed engineering workbench for repository-scoped agent conversations and workflows.
+
+domains:
+  - devcenter.workspace

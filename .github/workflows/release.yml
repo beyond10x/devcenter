@@ -70,51 +70,23 @@ jobs:
           registry: ghcr.io
           username: ${{ github.actor }}
           password: ${{ secrets.GITHUB_TOKEN }}
-      - name: Build and publish server image
-        uses: docker/build-push-action@10e90e3645eae34f1e60eeb005ba3a3d33f178e8 # v6
-        with:
-          context: .
-          target: server
-          platforms: ${{ matrix.platform }}
-          push: true
-          provenance: mode=max
-          sbom: true
-          cache-from: type=gha,scope=devcenter-release-${{ matrix.arch }}
-          cache-to: type=gha,mode=max,scope=devcenter-release-${{ matrix.arch }}
-          build-args: SOURCE_SHA=${{ github.sha }}
-          secrets: |
-            github_token=${{ steps.app-token.outputs.token }}
-          tags: ghcr.io/beyond10x/devcenter:${{ github.ref_name }}-${{ matrix.arch }}
-      - name: Build and publish deployment CLI image
-        uses: docker/build-push-action@10e90e3645eae34f1e60eeb005ba3a3d33f178e8 # v6
-        with:
-          context: .
-          target: ctl
-          platforms: ${{ matrix.platform }}
-          push: true
-          provenance: mode=max
-          sbom: true
-          cache-from: type=gha,scope=devcenter-release-${{ matrix.arch }}
-          cache-to: type=gha,mode=max,scope=devcenter-release-${{ matrix.arch }}
-          build-args: SOURCE_SHA=${{ github.sha }}
-          secrets: |
-            github_token=${{ steps.app-token.outputs.token }}
-          tags: ghcr.io/beyond10x/devcenterctl:${{ github.ref_name }}-${{ matrix.arch }}
-      - name: Build and publish composed Connectors image
-        uses: docker/build-push-action@10e90e3645eae34f1e60eeb005ba3a3d33f178e8 # v6
-        with:
-          context: .
-          target: connectors
-          platforms: ${{ matrix.platform }}
-          push: true
-          provenance: mode=max
-          sbom: true
-          cache-from: type=gha,scope=devcenter-connectors-release-${{ matrix.arch }}
-          cache-to: type=gha,mode=max,scope=devcenter-connectors-release-${{ matrix.arch }}
-          build-args: SOURCE_SHA=${{ github.sha }}
-          secrets: |
-            github_token=${{ steps.app-token.outputs.token }}
-          tags: ghcr.io/beyond10x/devcenter:connectors-${{ github.ref_name }}-${{ matrix.arch }}
+      - name: Build the shared graph once and publish every image
+        env:
+          TOKEN: ${{ steps.app-token.outputs.token }}
+        run: |
+          docker buildx bake --file docker-bake.hcl \
+            server connectors deployment-cli \
+            --push \
+            --provenance=mode=max \
+            --sbom=true \
+            --set '*.platform=${{ matrix.platform }}' \
+            --set '*.secrets=id=github-token,env=TOKEN' \
+            --set '*.labels.org.opencontainers.image.revision=${{ github.sha }}' \
+            --set '*.cache-from=type=gha,scope=devcenter-release-${{ matrix.arch }}' \
+            --set '*.cache-to=type=gha,mode=max,scope=devcenter-release-${{ matrix.arch }}' \
+            --set 'server.tags=ghcr.io/${{ github.repository_owner }}/devcenter:${{ github.ref_name }}-${{ matrix.arch }}' \
+            --set 'connectors.tags=ghcr.io/${{ github.repository_owner }}/devcenter:connectors-${{ github.ref_name }}-${{ matrix.arch }}' \
+            --set 'deployment-cli.tags=ghcr.io/${{ github.repository_owner }}/devcenterctl:${{ github.ref_name }}-${{ matrix.arch }}'
 
   image-manifests:
     needs: images
