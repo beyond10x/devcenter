@@ -48,6 +48,19 @@ bash ci/check-chart-rollouts.sh
 cargo run --locked --bin devcenterctl -- leak-check --root . --deny-file ci/denylist.example
 ```
 
+## Planning artifacts
+
+Use the repository's AEP store for every non-trivial implementation, cross-repository migration,
+and release or deployment change. Before implementation begins, run `aep artifact list` and
+`aep artifact kinds`, create or select the owning artifact, and record its relations and
+machine-readable scope through `aep artifact`. Keep lifecycle and evidence current as work lands,
+and run `aep artifact validate` after every mutation batch. Never edit
+`.engineering/planning/` directly or substitute a transient chat plan for the governed record.
+
+Use the release-pinned `aep-planning` plugin as the instruction authority. If that plugin or the
+`aep` command is unavailable, stop before planning-store writes and restore the documented tooling
+instead of guessing the store format.
+
 Automated commits and pushes use the organization bot. Preserve unrelated work and never commit
 deployment values, credentials, rendered Secrets, or private connector bundles.
 
