@@ -17,6 +17,64 @@ immutable artifacts, environment obligations, and resulting rollout are separate
 exact identities. Each stage can therefore be reviewed and refused before anything reaches a
 cluster.
 
+## From source to rollout
+
+```mermaid
+flowchart LR
+  subgraph authored["Repository-owned ESS"]
+    semantics["System semantics"]
+    source["Source tree"]
+    build["Typed build DAG"]
+    runtime["Runtime obligations"]
+    source --> build
+    semantics --> runtime
+    build --> runtime
+  end
+
+  subgraph shared["Shared build work"]
+    frontend["Frontend build"]
+    rust["Shared Rust build"]
+    connectorBuild["Connectors build"]
+    chartBuild["Chart package"]
+    build --> frontend --> rust
+    build --> connectorBuild
+    build --> chartBuild
+  end
+
+  subgraph units["Independent release units"]
+    server["Server image + evidence"]
+    cli["Deployment CLI image + evidence"]
+    connectors["Connectors image + evidence"]
+    chart["Helm chart + evidence"]
+    rust --> server
+    rust --> cli
+    connectorBuild --> connectors
+    chartBuild --> chart
+  end
+
+  catalog["Offline release catalogue"]
+  stack["Compatible stack constraints"]
+  lock["Exact stack lock"]
+  environment["Private environment bindings"]
+  deployment["Exact deployment IR"]
+  rollout["Independent Helm releases"]
+
+  server --> catalog
+  cli --> catalog
+  connectors --> catalog
+  chart --> catalog
+  catalog --> lock
+  stack --> lock
+  runtime --> lock
+  lock --> deployment
+  environment --> deployment
+  deployment --> rollout
+```
+
+The left side is stable, reviewable intent. CI performs the build in the middle and publishes
+immutable release evidence. Resolution and environment compilation on the right decide what may be
+deployed; only the authorized reconciler performs the final rollout.
+
 ## Systems own their truth
 
 Each component repository describes the system it implements: its semantic operations and
