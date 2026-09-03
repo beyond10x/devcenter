@@ -164,7 +164,6 @@ authority and an exact service-account-to-tenant grant. Secret values and key by
 chart values or rendered ConfigMaps.
 
 <!-- b10x-docs:start -->
-
 ## Documentation
 
 [Devcenter documentation](https://beyond10x.github.io/docs/devcenter/) · [Start](https://beyond10x.github.io/) · [Ecosystem](https://beyond10x.github.io/ecosystem/) · [Impact](https://beyond10x.github.io/changes/) · [Releases](https://beyond10x.github.io/releases/)
