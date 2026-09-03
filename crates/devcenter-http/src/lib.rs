@@ -73,6 +73,7 @@ const MAX_PENDING_LOGINS: usize = 1_024;
 const MAX_PROVIDER_CREDENTIAL_BYTES: usize = 64 * 1024;
 const CONNECTORS_AUDIENCE: &str = "urn:b10x:connectors";
 const CONNECTORS_SELF_SCOPE: &str = "connectors.connections.self";
+const CSP_NONCE_PLACEHOLDER: &str = "__DEVCENTER_CSP_NONCE__";
 const CONNECTORS_CATALOG_SCOPE: &str = "connectors.catalog.read";
 const CONNECTORS_INVOKE_SCOPE: &str = "connectors.invoke";
 const CONNECTORS_APPROVAL_SCOPE: &str = "connectors.approvals.issue";
@@ -670,13 +671,39 @@ fn coding_coordination_routes() -> Router<AppState> {
 }
 
 async fn app() -> Response {
-    let mut response = embedded_asset("index.html", false);
+    let Ok(nonce) = random_token(24) else {
+        return StatusCode::INTERNAL_SERVER_ERROR.into_response();
+    };
+    let Some(asset) = devcenter_web_assets::get("index.html") else {
+        return StatusCode::NOT_FOUND.into_response();
+    };
+    let Ok(html) = String::from_utf8(asset.bytes.into_owned()) else {
+        return StatusCode::INTERNAL_SERVER_ERROR.into_response();
+    };
+    if !html.contains(CSP_NONCE_PLACEHOLDER) {
+        return StatusCode::INTERNAL_SERVER_ERROR.into_response();
+    }
+    let mut response = Response::new(Body::from(html.replace(CSP_NONCE_PLACEHOLDER, &nonce)));
     response.headers_mut().insert(
-        header::CONTENT_SECURITY_POLICY,
-        HeaderValue::from_static(
-            "default-src 'self'; script-src 'self' 'wasm-unsafe-eval'; style-src 'self'; font-src 'self'; connect-src 'self'; img-src 'self' data:; base-uri 'none'; form-action 'self'; frame-ancestors 'none'; object-src 'none'",
-        ),
+        header::CONTENT_TYPE,
+        HeaderValue::from_static("text/html; charset=utf-8"),
     );
+    response
+        .headers_mut()
+        .insert(header::CACHE_CONTROL, HeaderValue::from_static("no-store"));
+    response.headers_mut().insert(
+        header::X_CONTENT_TYPE_OPTIONS,
+        HeaderValue::from_static("nosniff"),
+    );
+    let policy = format!(
+        "default-src 'self'; script-src 'self' 'wasm-unsafe-eval' 'nonce-{nonce}'; style-src 'self' 'nonce-{nonce}'; font-src 'self'; connect-src 'self'; img-src 'self' data:; base-uri 'none'; form-action 'self'; frame-ancestors 'none'; object-src 'none'"
+    );
+    let Ok(policy) = HeaderValue::from_str(&policy) else {
+        return StatusCode::INTERNAL_SERVER_ERROR.into_response();
+    };
+    response
+        .headers_mut()
+        .insert(header::CONTENT_SECURITY_POLICY, policy);
     response
 }
 
@@ -5409,19 +5436,26 @@ mod tests {
             .get(header::CONTENT_SECURITY_POLICY)
             .expect("application CSP")
             .to_str()
-            .unwrap();
+            .unwrap()
+            .to_owned();
         assert!(!policy.contains("unsafe-inline"));
         assert!(policy.contains("script-src 'self'"));
         assert!(policy.contains("'wasm-unsafe-eval'"));
-        assert!(
-            !response
-                .into_body()
-                .collect()
-                .await
-                .unwrap()
-                .to_bytes()
-                .is_empty()
-        );
+        let nonce_source = policy
+            .split_ascii_whitespace()
+            .find(|source| source.starts_with("'nonce-"))
+            .expect("CSP nonce")
+            .trim_end_matches(';');
+        assert_eq!(policy.matches(nonce_source).count(), 2);
+        let nonce = nonce_source
+            .trim_matches('\'')
+            .strip_prefix("nonce-")
+            .expect("nonce source")
+            .to_owned();
+        let body = response.into_body().collect().await.unwrap().to_bytes();
+        let html = String::from_utf8(body.to_vec()).expect("UTF-8 application");
+        assert!(html.contains(&format!("nonce=\"{nonce}\"")));
+        assert!(!html.contains(CSP_NONCE_PLACEHOLDER));
     }
 
     async fn assert_immutable_asset(path: &str, content_type: &str) {

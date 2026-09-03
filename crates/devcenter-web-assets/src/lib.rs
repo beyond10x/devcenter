@@ -36,6 +36,7 @@ mod tests {
         let html = String::from_utf8(index.bytes.into_owned()).expect("UTF-8 index");
         assert!(html.contains("<div id=\"app\"></div>"));
         assert!(html.contains("/assets/"));
+        assert!(html.contains("nonce=\"__DEVCENTER_CSP_NONCE__\""));
         assert!(!html.contains("/src/main.ts"));
 
         let paths = WebAssets::iter().collect::<Vec<_>>();
