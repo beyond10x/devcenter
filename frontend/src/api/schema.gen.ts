@@ -619,6 +619,74 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/project-sessions/{session_id}/terminal-profiles": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get: operations["listCodingTerminalProfiles"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/project-sessions/{session_id}/terminals": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                session_id: components["parameters"]["CodingSessionId"];
+            };
+            cookie?: never;
+        };
+        get: operations["listCodingTerminals"];
+        put?: never;
+        post: operations["createCodingTerminal"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/project-terminals/{terminal_id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                terminal_id: components["parameters"]["TerminalId"];
+            };
+            cookie?: never;
+        };
+        get: operations["getCodingTerminal"];
+        put?: never;
+        post?: never;
+        delete: operations["terminateCodingTerminal"];
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/project-terminals/{terminal_id}/attach": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get: operations["attachCodingTerminal"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/projects/{project_id}/tree": {
         parameters: {
             query?: never;
@@ -1230,6 +1298,60 @@ export interface components {
             deletions: number;
             partial: boolean;
         };
+        TerminalLimits: {
+            timeout_ms: number;
+            cpu_millis: number;
+            memory_bytes: number;
+            processes: number;
+            output_bytes: number;
+            input_bytes: number;
+            frame_bytes: number;
+            queued_frames: number;
+            lease_ttl_ms: number;
+        };
+        TerminalProfile: {
+            id: string;
+            label: string;
+            runtime_ref: string;
+            shell: string;
+            arguments: string[];
+            working_directory: string;
+            environment: {
+                [key: string]: string;
+            };
+            /** @enum {string} */
+            workspace_access: "read_only" | "read_write";
+            /** @enum {string} */
+            network: "none";
+            limits: components["schemas"]["TerminalLimits"];
+        };
+        CreateTerminal: {
+            agentide_session_id: string;
+            authority_grant_id: string;
+            profile_id: string;
+            columns: number;
+            rows: number;
+            idempotency_key: string;
+        };
+        TerminalExit: {
+            code?: number | null;
+            signal?: string | null;
+        };
+        TerminalSession: {
+            id: string;
+            coding_session_id: string;
+            agentide_session_id: string;
+            authority_grant_id: string;
+            profile: components["schemas"]["TerminalProfile"];
+            actor: string;
+            process_id?: string | null;
+            /** @enum {string} */
+            state: "preparing" | "running" | "exited" | "terminated" | "refused" | "unknown";
+            exit?: components["schemas"]["TerminalExit"] | null;
+            failure_code?: string | null;
+            created_at_ms: number;
+            updated_at_ms: number;
+        };
         DiffRange: {
             start: number;
             lines: number;
@@ -1392,6 +1514,7 @@ export interface components {
         PublicationId: string;
         ProjectId: string;
         CodingSessionId: string;
+        TerminalId: string;
         ThreadId: string;
     };
     requestBodies: never;
@@ -2647,6 +2770,163 @@ export interface operations {
             403: components["responses"]["Problem"];
             404: components["responses"]["Problem"];
             422: components["responses"]["Problem"];
+            503: components["responses"]["Unavailable"];
+        };
+    };
+    listCodingTerminalProfiles: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                session_id: components["parameters"]["CodingSessionId"];
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Deployment-declared terminal profiles admitted for this workspace */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["TerminalProfile"][];
+                };
+            };
+            403: components["responses"]["Problem"];
+            404: components["responses"]["Problem"];
+            503: components["responses"]["Unavailable"];
+        };
+    };
+    listCodingTerminals: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                session_id: components["parameters"]["CodingSessionId"];
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Owned durable terminal lifecycle records */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["TerminalSession"][];
+                };
+            };
+            403: components["responses"]["Problem"];
+            404: components["responses"]["Problem"];
+            503: components["responses"]["Unavailable"];
+        };
+    };
+    createCodingTerminal: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                session_id: components["parameters"]["CodingSessionId"];
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["CreateTerminal"];
+            };
+        };
+        responses: {
+            /** @description Confined Substrate PTY created under the exact human grant */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["TerminalSession"];
+                };
+            };
+            403: components["responses"]["Problem"];
+            404: components["responses"]["Problem"];
+            409: components["responses"]["Problem"];
+            422: components["responses"]["Problem"];
+            503: components["responses"]["Unavailable"];
+        };
+    };
+    getCodingTerminal: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                terminal_id: components["parameters"]["TerminalId"];
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Owned terminal lifecycle record */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["TerminalSession"];
+                };
+            };
+            403: components["responses"]["Problem"];
+            404: components["responses"]["Problem"];
+            503: components["responses"]["Unavailable"];
+        };
+    };
+    terminateCodingTerminal: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                terminal_id: components["parameters"]["TerminalId"];
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Terminal explicitly terminated; closing a browser pane never calls this operation */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["TerminalSession"];
+                };
+            };
+            403: components["responses"]["Problem"];
+            404: components["responses"]["Problem"];
+            503: components["responses"]["Unavailable"];
+        };
+    };
+    attachCodingTerminal: {
+        parameters: {
+            query?: {
+                from_sequence?: number;
+            };
+            header?: never;
+            path: {
+                terminal_id: components["parameters"]["TerminalId"];
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Same-origin WebSocket carrying binary sequenced PTY output and JSON lifecycle frames */
+            101: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            403: components["responses"]["Problem"];
+            404: components["responses"]["Problem"];
+            409: components["responses"]["Problem"];
             503: components["responses"]["Unavailable"];
         };
     };

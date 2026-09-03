@@ -194,6 +194,45 @@ export interface DiffProjection {
   deletions: number;
   partial: boolean;
 }
+export type TerminalWorkspaceAccess = "read_only" | "read_write";
+export interface TerminalProfile {
+  id: string;
+  label: string;
+  runtime_ref: string;
+  shell: string;
+  arguments: string[];
+  working_directory: string;
+  environment: Record<string, string>;
+  workspace_access: TerminalWorkspaceAccess;
+  network: "none";
+  limits: {
+    timeout_ms: number;
+    cpu_millis: number;
+    memory_bytes: number;
+    processes: number;
+    output_bytes: number;
+    input_bytes: number;
+    frame_bytes: number;
+    queued_frames: number;
+    lease_ttl_ms: number;
+  };
+}
+export type TerminalState =
+  "preparing" | "running" | "exited" | "terminated" | "refused" | "unknown";
+export interface TerminalSession {
+  id: string;
+  coding_session_id: string;
+  agentide_session_id: string;
+  authority_grant_id: string;
+  profile: TerminalProfile;
+  actor: string;
+  process_id?: string | null;
+  state: TerminalState;
+  exit?: { code?: number | null; signal?: string | null } | null;
+  failure_code?: string | null;
+  created_at_ms: number;
+  updated_at_ms: number;
+}
 export type CapabilityPosture = "allow" | "approval_required" | "deny";
 export interface CapabilityConnection {
   connection_ref: string;
@@ -384,6 +423,41 @@ export const api = {
       method: "POST",
       body: JSON.stringify({ selector, mode }),
     }),
+  terminalProfiles: (sessionId: string) =>
+    request<TerminalProfile[]>(
+      `/api/project-sessions/${encodeURIComponent(sessionId)}/terminal-profiles`,
+    ),
+  terminals: (sessionId: string) =>
+    request<TerminalSession[]>(`/api/project-sessions/${encodeURIComponent(sessionId)}/terminals`),
+  createTerminal: (
+    sessionId: string,
+    input: {
+      agentide_session_id: string;
+      authority_grant_id: string;
+      profile_id: string;
+      columns: number;
+      rows: number;
+      idempotency_key: string;
+    },
+  ) =>
+    request<TerminalSession>(`/api/project-sessions/${encodeURIComponent(sessionId)}/terminals`, {
+      method: "POST",
+      body: JSON.stringify(input),
+    }),
+  terminal: (terminalId: string) =>
+    request<TerminalSession>(`/api/project-terminals/${encodeURIComponent(terminalId)}`),
+  terminateTerminal: (terminalId: string) =>
+    request<TerminalSession>(`/api/project-terminals/${encodeURIComponent(terminalId)}`, {
+      method: "DELETE",
+    }),
+  terminalSocketUrl: (terminalId: string, fromSequence?: bigint) => {
+    const scheme = window.location.protocol === "https:" ? "wss:" : "ws:";
+    const endpoint = new URL(
+      `${scheme}//${window.location.host}/api/project-terminals/${encodeURIComponent(terminalId)}/attach`,
+    );
+    if (fromSequence != null) endpoint.searchParams.set("from_sequence", fromSequence.toString());
+    return endpoint.toString();
+  },
   connections: () => request<ConnectorConnection[]>("/api/connections"),
   connectorCatalog: (query = "", offset = 0, limit = 24) => {
     const parameters = new URLSearchParams({

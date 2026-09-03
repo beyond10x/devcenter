@@ -1234,6 +1234,139 @@
         }
       }
     },
+    "/api/project-sessions/{session_id}/terminal-profiles": {
+      "get": {
+        "operationId": "listCodingTerminalProfiles",
+        "parameters": [{ "$ref": "#/components/parameters/CodingSessionId" }],
+        "security": [{ "browserSession": [] }, { "identityBearer": [] }],
+        "responses": {
+          "200": {
+            "description": "Deployment-declared terminal profiles admitted for this workspace",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "array",
+                  "items": { "$ref": "#/components/schemas/TerminalProfile" }
+                }
+              }
+            }
+          },
+          "403": { "$ref": "#/components/responses/Problem" },
+          "404": { "$ref": "#/components/responses/Problem" },
+          "503": { "$ref": "#/components/responses/Unavailable" }
+        }
+      }
+    },
+    "/api/project-sessions/{session_id}/terminals": {
+      "parameters": [{ "$ref": "#/components/parameters/CodingSessionId" }],
+      "get": {
+        "operationId": "listCodingTerminals",
+        "security": [{ "browserSession": [] }, { "identityBearer": [] }],
+        "responses": {
+          "200": {
+            "description": "Owned durable terminal lifecycle records",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "array",
+                  "items": { "$ref": "#/components/schemas/TerminalSession" }
+                }
+              }
+            }
+          },
+          "403": { "$ref": "#/components/responses/Problem" },
+          "404": { "$ref": "#/components/responses/Problem" },
+          "503": { "$ref": "#/components/responses/Unavailable" }
+        }
+      },
+      "post": {
+        "operationId": "createCodingTerminal",
+        "security": [{ "browserSession": [] }, { "identityBearer": [] }],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": { "$ref": "#/components/schemas/CreateTerminal" }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Confined Substrate PTY created under the exact human grant",
+            "content": {
+              "application/json": {
+                "schema": { "$ref": "#/components/schemas/TerminalSession" }
+              }
+            }
+          },
+          "403": { "$ref": "#/components/responses/Problem" },
+          "404": { "$ref": "#/components/responses/Problem" },
+          "409": { "$ref": "#/components/responses/Problem" },
+          "422": { "$ref": "#/components/responses/Problem" },
+          "503": { "$ref": "#/components/responses/Unavailable" }
+        }
+      }
+    },
+    "/api/project-terminals/{terminal_id}": {
+      "parameters": [{ "$ref": "#/components/parameters/TerminalId" }],
+      "get": {
+        "operationId": "getCodingTerminal",
+        "security": [{ "browserSession": [] }, { "identityBearer": [] }],
+        "responses": {
+          "200": {
+            "description": "Owned terminal lifecycle record",
+            "content": {
+              "application/json": {
+                "schema": { "$ref": "#/components/schemas/TerminalSession" }
+              }
+            }
+          },
+          "403": { "$ref": "#/components/responses/Problem" },
+          "404": { "$ref": "#/components/responses/Problem" },
+          "503": { "$ref": "#/components/responses/Unavailable" }
+        }
+      },
+      "delete": {
+        "operationId": "terminateCodingTerminal",
+        "security": [{ "browserSession": [] }, { "identityBearer": [] }],
+        "responses": {
+          "200": {
+            "description": "Terminal explicitly terminated; closing a browser pane never calls this operation",
+            "content": {
+              "application/json": {
+                "schema": { "$ref": "#/components/schemas/TerminalSession" }
+              }
+            }
+          },
+          "403": { "$ref": "#/components/responses/Problem" },
+          "404": { "$ref": "#/components/responses/Problem" },
+          "503": { "$ref": "#/components/responses/Unavailable" }
+        }
+      }
+    },
+    "/api/project-terminals/{terminal_id}/attach": {
+      "get": {
+        "operationId": "attachCodingTerminal",
+        "parameters": [
+          { "$ref": "#/components/parameters/TerminalId" },
+          {
+            "name": "from_sequence",
+            "in": "query",
+            "schema": { "type": "integer", "minimum": 0 }
+          }
+        ],
+        "security": [{ "browserSession": [] }, { "identityBearer": [] }],
+        "responses": {
+          "101": {
+            "description": "Same-origin WebSocket carrying binary sequenced PTY output and JSON lifecycle frames"
+          },
+          "403": { "$ref": "#/components/responses/Problem" },
+          "404": { "$ref": "#/components/responses/Problem" },
+          "409": { "$ref": "#/components/responses/Problem" },
+          "503": { "$ref": "#/components/responses/Unavailable" }
+        }
+      }
+    },
     "/api/projects/{project_id}/tree": {
       "get": {
         "operationId": "listProjectTree",
@@ -1555,6 +1688,12 @@
       },
       "CodingSessionId": {
         "name": "session_id",
+        "in": "path",
+        "required": true,
+        "schema": { "type": "string", "maxLength": 128 }
+      },
+      "TerminalId": {
+        "name": "terminal_id",
         "in": "path",
         "required": true,
         "schema": { "type": "string", "maxLength": 128 }
@@ -2461,6 +2600,138 @@
           "additions": { "type": "integer", "minimum": 0 },
           "deletions": { "type": "integer", "minimum": 0 },
           "partial": { "type": "boolean" }
+        },
+        "additionalProperties": false
+      },
+      "TerminalLimits": {
+        "type": "object",
+        "required": [
+          "timeout_ms",
+          "cpu_millis",
+          "memory_bytes",
+          "processes",
+          "output_bytes",
+          "input_bytes",
+          "frame_bytes",
+          "queued_frames",
+          "lease_ttl_ms"
+        ],
+        "properties": {
+          "timeout_ms": { "type": "integer", "minimum": 1 },
+          "cpu_millis": { "type": "integer", "minimum": 1 },
+          "memory_bytes": { "type": "integer", "minimum": 1 },
+          "processes": { "type": "integer", "minimum": 1 },
+          "output_bytes": { "type": "integer", "minimum": 1 },
+          "input_bytes": { "type": "integer", "minimum": 1 },
+          "frame_bytes": { "type": "integer", "minimum": 1 },
+          "queued_frames": { "type": "integer", "minimum": 1 },
+          "lease_ttl_ms": { "type": "integer", "minimum": 1 }
+        },
+        "additionalProperties": false
+      },
+      "TerminalProfile": {
+        "type": "object",
+        "required": [
+          "id",
+          "label",
+          "runtime_ref",
+          "shell",
+          "arguments",
+          "working_directory",
+          "environment",
+          "workspace_access",
+          "network",
+          "limits"
+        ],
+        "properties": {
+          "id": { "type": "string" },
+          "label": { "type": "string" },
+          "runtime_ref": { "type": "string" },
+          "shell": { "type": "string" },
+          "arguments": { "type": "array", "items": { "type": "string" } },
+          "working_directory": { "type": "string" },
+          "environment": {
+            "type": "object",
+            "additionalProperties": { "type": "string" }
+          },
+          "workspace_access": {
+            "type": "string",
+            "enum": ["read_only", "read_write"]
+          },
+          "network": { "type": "string", "enum": ["none"] },
+          "limits": { "$ref": "#/components/schemas/TerminalLimits" }
+        },
+        "additionalProperties": false
+      },
+      "CreateTerminal": {
+        "type": "object",
+        "required": [
+          "agentide_session_id",
+          "authority_grant_id",
+          "profile_id",
+          "columns",
+          "rows",
+          "idempotency_key"
+        ],
+        "properties": {
+          "agentide_session_id": { "type": "string" },
+          "authority_grant_id": { "type": "string" },
+          "profile_id": { "type": "string" },
+          "columns": { "type": "integer", "minimum": 2, "maximum": 1000 },
+          "rows": { "type": "integer", "minimum": 2, "maximum": 1000 },
+          "idempotency_key": { "type": "string" }
+        },
+        "additionalProperties": false
+      },
+      "TerminalExit": {
+        "type": "object",
+        "properties": {
+          "code": { "type": ["integer", "null"] },
+          "signal": { "type": ["string", "null"] }
+        },
+        "additionalProperties": false
+      },
+      "TerminalSession": {
+        "type": "object",
+        "required": [
+          "id",
+          "coding_session_id",
+          "agentide_session_id",
+          "authority_grant_id",
+          "profile",
+          "actor",
+          "state",
+          "created_at_ms",
+          "updated_at_ms"
+        ],
+        "properties": {
+          "id": { "type": "string" },
+          "coding_session_id": { "type": "string" },
+          "agentide_session_id": { "type": "string" },
+          "authority_grant_id": { "type": "string" },
+          "profile": { "$ref": "#/components/schemas/TerminalProfile" },
+          "actor": { "type": "string" },
+          "process_id": { "type": ["string", "null"] },
+          "state": {
+            "type": "string",
+            "enum": [
+              "preparing",
+              "running",
+              "exited",
+              "terminated",
+              "refused",
+              "unknown"
+            ]
+          },
+          "exit": {
+            "oneOf": [
+              { "$ref": "#/components/schemas/TerminalExit" },
+              { "type": "null" }
+            ]
+          },
+          "failure_code": { "type": ["string", "null"] },
+          "created_at_ms": { "type": "integer", "minimum": 0 },
+          "updated_at_ms": { "type": "integer", "minimum": 0 }
         },
         "additionalProperties": false
       },

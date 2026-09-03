@@ -7,6 +7,11 @@
 - Add the disabled-by-default native hosted coding workbench with Monaco editing, bounded Workspace
   tree and file reads, digest-guarded saves and conflict review, canonical Workspace diff rendering,
   URL-restored panes, and explicit terminal refusal when no admitted Substrate profile exists.
+- Add multiple resizable interactive terminal tabs using a CSP-compatible, self-hosted lazy
+  `ghostty-web` renderer and a same-origin Devcenter WebSocket BFF. Terminal creation requires an
+  exact human AgentIDE grant and a deployment-declared Workspace profile; browser close detaches,
+  Kill explicitly terminates, reconnect uses bounded sequenced replay, and no host-shell fallback
+  or credential-bearing browser URL exists.
 - Compose AgentIDE's generated Service SDK factory beside Todo using the existing Eventlog
   PostgreSQL adapter, and bind Workspace sessions to durable grants, context references, and exact
   approval checkpoints without adding an AgentIDE file store or a second Devcenter service layer.

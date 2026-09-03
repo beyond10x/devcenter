@@ -1,5 +1,6 @@
 import AxeBuilder from "@axe-core/playwright";
 import { expect, test, type Page } from "@playwright/test";
+import { Buffer } from "node:buffer";
 
 const agents = [
   {
@@ -57,6 +58,42 @@ const codingSession = {
   created_at_ms: 1_788_260_000_000,
   updated_at_ms: 1_788_260_000_000,
 };
+const terminalProfile = {
+  id: "rust-stable-confined",
+  label: "Rust stable · confined",
+  runtime_ref: "substrate:image:rust-stable-test",
+  shell: "/bin/bash",
+  arguments: ["--noprofile", "--norc"],
+  working_directory: "/workspace",
+  environment: { TERM: "xterm-256color", COLORTERM: "truecolor" },
+  workspace_access: "read_write",
+  network: "none",
+  limits: {
+    timeout_ms: 3_600_000,
+    cpu_millis: 2_000,
+    memory_bytes: 536_870_912,
+    processes: 128,
+    output_bytes: 4_194_304,
+    input_bytes: 65_536,
+    frame_bytes: 65_536,
+    queued_frames: 256,
+    lease_ttl_ms: 3_600_000,
+  },
+} as const;
+const terminalSession = {
+  id: "terminal-test",
+  coding_session_id: codingSession.id,
+  agentide_session_id: "agentide-session-test",
+  authority_grant_id: "grant-terminal-test",
+  profile: terminalProfile,
+  actor: "actor-1",
+  process_id: "substrate-process-test",
+  state: "running",
+  exit: null,
+  failure_code: null,
+  created_at_ms: 1_788_260_100_000,
+  updated_at_ms: 1_788_260_100_000,
+} as const;
 const todoCatalog = {
   format: "service-catalog/1",
   service_ref: "service:todo",
@@ -114,7 +151,7 @@ const todoCatalog = {
 
 async function mockAuthenticatedWorkspace(
   page: Page,
-  options: { agentideWorkspace?: boolean } = {},
+  options: { agentideWorkspace?: boolean; terminalProfile?: boolean } = {},
 ) {
   const capabilities = [
     {
@@ -187,6 +224,7 @@ async function mockAuthenticatedWorkspace(
   let agentIdeVersion = 1;
   const agentIdeGrants: Array<Record<string, unknown>> = [];
   const agentIdePins: Array<Record<string, unknown>> = [];
+  let currentTerminal: Record<string, unknown> = { ...terminalSession };
   await page.route(/^https?:\/\/[^/]+\/api\//, async (route) => {
     const request = route.request();
     const path = new URL(request.url()).pathname;
@@ -327,8 +365,9 @@ async function mockAuthenticatedWorkspace(
       }
       if (submitted.operation_ref === "agentide.create_grant" && submitted.confirmed) {
         agentIdeVersion += 1;
+        const grantId = "grant-test";
         agentIdeGrants.push({
-          grant_id: "grant-test",
+          grant_id: grantId,
           grantee: submitted.input.grantee,
           allowed_intents: submitted.input.allowed_intents,
           path_prefixes: submitted.input.path_prefixes,
@@ -341,7 +380,9 @@ async function mockAuthenticatedWorkspace(
           json: {
             output: {
               outcome: "created",
-              events: [{ name: "agentide.coordination.GrantCreated", fields: {} }],
+              events: [
+                { name: "agentide.coordination.GrantCreated", fields: { grant_id: grantId } },
+              ],
               through_version: agentIdeVersion,
               replayed: false,
             },
@@ -617,6 +658,28 @@ async function mockAuthenticatedWorkspace(
       });
       return;
     }
+    if (path === `/api/project-sessions/${codingSession.id}/terminal-profiles`) {
+      await route.fulfill({ json: options.terminalProfile ? [terminalProfile] : [] });
+      return;
+    }
+    if (path === `/api/project-sessions/${codingSession.id}/terminals`) {
+      await route.fulfill({ json: options.terminalProfile ? [currentTerminal] : [] });
+      return;
+    }
+    if (path === `/api/project-terminals/${terminalSession.id}` && request.method() === "DELETE") {
+      currentTerminal = {
+        ...currentTerminal,
+        state: "terminated",
+        exit: { code: null, signal: "SIGKILL" },
+        updated_at_ms: terminalSession.updated_at_ms + 1,
+      };
+      await route.fulfill({ json: currentTerminal });
+      return;
+    }
+    if (path === `/api/project-terminals/${terminalSession.id}`) {
+      await route.fulfill({ json: currentTerminal });
+      return;
+    }
     if (path === "/api/agents" && request.method() === "POST") {
       const submitted = request.postDataJSON() as { name: string };
       await route.fulfill({ json: { ...agents[0], id: "agent-new", name: submitted.name } });
@@ -825,6 +888,60 @@ test("restores the native coding workbench from URL-backed state", async ({ page
   await page.getByRole("button", { name: /Editor/ }).click();
   await expect(page).toHaveURL(/pane=editor/);
   await expect(page.locator(".hosted-monaco-editor")).toBeVisible();
+});
+
+test("drives the hosted terminal byte channel and keeps kill explicit", async ({
+  page,
+}, testInfo) => {
+  test.skip(testInfo.project.name !== "chromium", "Desktop hosted-terminal behavior");
+  let input = "";
+  await page.routeWebSocket(
+    `**/api/project-terminals/${terminalSession.id}/attach*`,
+    (webSocket) => {
+      let sequence = 0n;
+      const sendOutput = (content: string | Buffer) => {
+        sequence += 1n;
+        const payload = typeof content === "string" ? Buffer.from(content) : content;
+        const frame = Buffer.allocUnsafe(payload.byteLength + 8);
+        frame.writeBigUInt64BE(sequence, 0);
+        payload.copy(frame, 8);
+        webSocket.send(frame);
+      };
+      webSocket.onMessage((message) => {
+        if (typeof message === "string") return;
+        const chunk = Buffer.from(message);
+        input += chunk.toString("utf8");
+        sendOutput(chunk);
+        if (chunk.includes(13)) sendOutput("\r\n/workspace\r\n$ ");
+      });
+      webSocket.send(
+        JSON.stringify({
+          kind: "attached",
+          replay: { complete: true, oldest_sequence: 0, newest_sequence: 0 },
+        }),
+      );
+      sendOutput("\u001b[32mactor-1@substrate\u001b[0m:/workspace$ ");
+    },
+  );
+  await mockAuthenticatedWorkspace(page, { agentideWorkspace: true, terminalProfile: true });
+  await page.goto(`/projects/${project.id}/sessions/${codingSession.id}?terminal=terminal-test`);
+
+  await expect(page.locator(".terminal-connection.running")).toBeVisible();
+  await page.locator(".ghostty-host").click();
+  await page.keyboard.type("pwd");
+  await page.keyboard.press("Enter");
+  await expect.poll(() => input).toContain("pwd");
+
+  const panel = page.locator(".workbench-terminal");
+  const before = await panel.boundingBox();
+  await page.getByRole("separator", { name: "Resize terminal panel" }).press("ArrowUp");
+  await expect
+    .poll(async () => (await panel.boundingBox())?.height ?? 0)
+    .toBeGreaterThan(before?.height ?? 0);
+
+  await page.getByRole("button", { name: "Kill", exact: false }).click();
+  await expect(page.locator(".terminal-refused strong")).toHaveText("Terminal terminated");
+  await expect(page.getByText("SIGKILL", { exact: true })).toBeVisible();
 });
 
 test("keeps catalog and connection custody usable on a mobile viewport", async ({

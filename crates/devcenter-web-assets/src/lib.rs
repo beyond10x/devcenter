@@ -41,5 +41,15 @@ mod tests {
         let paths = WebAssets::iter().collect::<Vec<_>>();
         assert!(paths.iter().any(|path| path.ends_with(".js")));
         assert!(paths.iter().any(|path| path.ends_with(".css")));
+
+        let ghostty = get("vendor/ghostty-web/ghostty-web.js").expect("vendored terminal renderer");
+        assert!(ghostty.bytes.len() > 600_000);
+        assert_eq!(ghostty.content_type, "text/javascript");
+        let loader = get("vendor/ghostty-web/loader.js").expect("lazy terminal renderer loader");
+        assert!(loader.bytes.len() > 40);
+        assert_eq!(loader.content_type, "text/javascript");
+        let wasm = get("ghostty-vt.wasm").expect("vendored terminal renderer WASM");
+        assert!(wasm.bytes.len() > 400_000);
+        assert_eq!(wasm.content_type, "application/wasm");
     }
 }

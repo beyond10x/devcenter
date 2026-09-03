@@ -9,6 +9,7 @@ export default tseslint.config(
       "playwright-report",
       "test-results",
       "scripts",
+      "public/vendor",
       "src/api/schema.gen.ts",
       "*.config.*",
     ],
@@ -20,6 +21,7 @@ export default tseslint.config(
     languageOptions: {
       globals: {
         document: "readonly",
+        navigator: "readonly",
         window: "readonly",
       },
       parserOptions: {

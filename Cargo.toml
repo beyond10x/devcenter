@@ -32,11 +32,11 @@ agent-platform-client = { git = "ssh://git@github.com/beyond10x/agent-platform.g
 agent-platform-core = { git = "ssh://git@github.com/beyond10x/agent-platform.git", tag = "0.6.3" }
 connectors-client = { git = "ssh://git@github.com/beyond10x/connectors.git", tag = "v0.5.2" }
 connectors-protocol = { package = "protocol", git = "ssh://git@github.com/beyond10x/connectors.git", tag = "v0.5.2" }
-workspace-client = { git = "ssh://git@github.com/beyond10x/workspace.git", rev = "5f77ed38ac3b73f29c43e1eb8483c954ec9d1d46" }
-workspace-core = { git = "ssh://git@github.com/beyond10x/workspace.git", rev = "5f77ed38ac3b73f29c43e1eb8483c954ec9d1d46" }
+workspace-client = { git = "ssh://git@github.com/beyond10x/workspace.git", rev = "df8a3ec80a39ad86302e0b20c10b378d206c57c5" }
+workspace-core = { git = "ssh://git@github.com/beyond10x/workspace.git", rev = "df8a3ec80a39ad86302e0b20c10b378d206c57c5" }
 
 anyhow = "1"
-axum = "0.8"
+axum = { version = "0.8", features = ["ws"] }
 base64 = "0.22"
 clap = { version = "4.6", features = ["derive", "env"] }
 getrandom = "0.3"
@@ -48,11 +48,13 @@ serde = { version = "1", features = ["derive"] }
 serde_json = "1"
 serde_yaml = "0.9"
 sha2 = "0.10"
+futures-util = "0.3"
 sqlx = { version = "0.8", default-features = false, features = ["any", "runtime-tokio", "sqlite", "postgres"] }
 tempfile = "3"
 thiserror = "2"
 toml = "0.9"
-tokio = { version = "1", features = ["macros", "net", "rt-multi-thread", "signal", "sync"] }
+tokio = { version = "1", features = ["macros", "net", "rt-multi-thread", "signal", "sync", "time"] }
+tokio-tungstenite = { version = "0.29", features = ["rustls-tls-native-roots"] }
 tower = { version = "0.5", features = ["util"] }
 url = "2"
 walkdir = "2"

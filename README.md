@@ -116,7 +116,13 @@ AgentIDE stores only coordination state—session binding, bounded grants, conte
 digests, and approval checkpoints—through its generated Service SDK/Eventlog service. Unsaved editor
 buffers and selected source bytes remain in the browser until an explicit save or attachment action.
 No host shell fallback exists: without a deployment-declared Substrate terminal profile and an
-explicit grant, the terminal pane renders a refusal.
+explicit grant, the terminal pane renders a refusal. With both authorities present, Devcenter
+lazily loads its vendored `ghostty-web` renderer and attaches through a same-origin WebSocket BFF;
+the BFF carries the current Identity authority to Workspace in a header and never exposes it in a
+URL. Binary input and sequenced PTY output remain byte-exact, lifecycle and replay bounds remain
+explicit, browser tab close only detaches, and the separate Kill action terminates the Substrate
+process. The terminal row is keyboard- and pointer-resizable, while scrollback enters AgentIDE
+context only when a human explicitly attaches a selection.
 
 `DEV_CENTER_IDENTITY_PROVIDERS` contains only opaque Identity-owned IDs and display labels. With
 zero entries, Identity keeps its existing selection behavior; with one, `/auth/sso/start` remains a

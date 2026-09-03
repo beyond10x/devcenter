@@ -3,7 +3,7 @@
 use std::collections::BTreeMap;
 use std::fmt;
 use std::sync::{Arc, Mutex};
-use std::time::{SystemTime, UNIX_EPOCH};
+use std::time::{Duration, SystemTime, UNIX_EPOCH};
 
 use agent_platform_client::{
     ActivateRevision, AgentId, AgentPlatformClient, ClientError as AgentPlatformError, CreateAgent,
@@ -17,6 +17,7 @@ use agent_platform_core::{
     ConnectorEffectClass, ConnectorOperationDescription,
 };
 use axum::body::Body;
+use axum::extract::ws::{Message as BrowserMessage, WebSocket, WebSocketUpgrade};
 use axum::extract::{Path, Query, State};
 use axum::http::{HeaderMap, HeaderValue, StatusCode, header};
 use axum::response::{IntoResponse, Redirect, Response};
@@ -36,14 +37,16 @@ use devcenter_mcp::{
     Outcome as McpOutcome, Request as McpRequest, Toolset,
 };
 use devcenter_store::{Publication, PublicationRevision, PublicationState, Store, StoreError};
+use futures_util::{SinkExt as _, StreamExt as _};
 use serde::{Deserialize, Serialize};
 use serde_json::{Value, json};
 use sha2::{Digest, Sha256};
+use tokio_tungstenite::tungstenite::client::IntoClientRequest as _;
 use url::Url;
 use workspace_client::{ClientError as WorkspaceError, WorkspaceClient};
 use workspace_core::{
-    CreateCodingSession, CreateMessage, CreateThread, OpenProject, ResolveDiff, SelectBranch,
-    StartWorkflow, WriteFile,
+    CreateCodingSession, CreateMessage, CreateTerminal, CreateThread, OpenProject, ResolveDiff,
+    SelectBranch, StartWorkflow, WriteFile,
 };
 use zeroize::Zeroizing;
 
@@ -59,6 +62,7 @@ const CONNECTORS_APPROVAL_SCOPE: &str = "connectors.approvals.issue";
 const CONNECTOR_APPROVAL_TTL_SECONDS: u64 = 120;
 const SERVICE_CATALOG_LIST_OPERATION: &str = "service_catalog.list_services";
 const SERVICE_CATALOG_GET_OPERATION: &str = "service_catalog.get_service";
+const MAX_TERMINAL_WEBSOCKET_FRAME_BYTES: usize = 64 * 1024;
 
 #[derive(Clone)]
 struct AppState {
@@ -150,6 +154,8 @@ fn frontend_routes() -> Router<AppState> {
         .route("/docs", get(app))
         .route("/docs/", get(app))
         .route("/assets/{*path}", get(static_asset))
+        .route("/vendor/ghostty-web/{*path}", get(ghostty_web_asset))
+        .route("/ghostty-vt.wasm", get(ghostty_wasm))
         .route("/openapi.json", get(openapi))
         .route("/healthz", get(health))
         .route("/readyz", get(ready))
@@ -314,6 +320,22 @@ fn project_routes() -> Router<AppState> {
             "/api/project-sessions/{session_id}/diff",
             post(resolve_coding_diff),
         )
+        .route(
+            "/api/project-sessions/{session_id}/terminal-profiles",
+            get(list_terminal_profiles),
+        )
+        .route(
+            "/api/project-sessions/{session_id}/terminals",
+            get(list_terminals).post(create_terminal),
+        )
+        .route(
+            "/api/project-terminals/{terminal_id}",
+            get(get_terminal).delete(terminate_terminal),
+        )
+        .route(
+            "/api/project-terminals/{terminal_id}/attach",
+            get(attach_terminal),
+        )
 }
 
 async fn app() -> Response {
@@ -321,7 +343,7 @@ async fn app() -> Response {
     response.headers_mut().insert(
         header::CONTENT_SECURITY_POLICY,
         HeaderValue::from_static(
-            "default-src 'self'; script-src 'self'; style-src 'self'; font-src 'self'; connect-src 'self'; img-src 'self' data:; base-uri 'none'; form-action 'self'; frame-ancestors 'none'; object-src 'none'",
+            "default-src 'self'; script-src 'self' 'wasm-unsafe-eval'; style-src 'self'; font-src 'self'; connect-src 'self'; img-src 'self' data:; base-uri 'none'; form-action 'self'; frame-ancestors 'none'; object-src 'none'",
         ),
     );
     response
@@ -329,6 +351,14 @@ async fn app() -> Response {
 
 async fn static_asset(Path(path): Path<String>) -> Response {
     embedded_asset(&format!("assets/{path}"), true)
+}
+
+async fn ghostty_web_asset(Path(path): Path<String>) -> Response {
+    embedded_asset(&format!("vendor/ghostty-web/{path}"), true)
+}
+
+async fn ghostty_wasm() -> Response {
+    embedded_asset("ghostty-vt.wasm", true)
 }
 
 fn embedded_asset(path: &str, immutable: bool) -> Response {
@@ -1577,6 +1607,229 @@ async fn resolve_coding_diff(
         Ok(diff) => confidential_json(diff),
         Err(error) => workspace_error(&error),
     }
+}
+
+async fn list_terminal_profiles(
+    State(state): State<AppState>,
+    headers: HeaderMap,
+    Path(session_id): Path<String>,
+) -> Response {
+    let workspace = match require_coding_workbench(&state) {
+        Ok(workspace) => workspace,
+        Err(refusal) => return refusal.response(),
+    };
+    let authenticated = match authenticate(&state, &headers, false).await {
+        Ok(authenticated) => authenticated,
+        Err(response) => return response,
+    };
+    match workspace
+        .terminal_profiles(authenticated.authorization.as_str(), &session_id)
+        .await
+    {
+        Ok(profiles) => confidential_json(profiles),
+        Err(error) => workspace_error(&error),
+    }
+}
+
+async fn list_terminals(
+    State(state): State<AppState>,
+    headers: HeaderMap,
+    Path(session_id): Path<String>,
+) -> Response {
+    let workspace = match require_coding_workbench(&state) {
+        Ok(workspace) => workspace,
+        Err(refusal) => return refusal.response(),
+    };
+    let authenticated = match authenticate(&state, &headers, false).await {
+        Ok(authenticated) => authenticated,
+        Err(response) => return response,
+    };
+    match workspace
+        .terminals(authenticated.authorization.as_str(), &session_id)
+        .await
+    {
+        Ok(terminals) => confidential_json(terminals),
+        Err(error) => workspace_error(&error),
+    }
+}
+
+async fn create_terminal(
+    State(state): State<AppState>,
+    headers: HeaderMap,
+    Path(session_id): Path<String>,
+    Json(input): Json<CreateTerminal>,
+) -> Response {
+    let workspace = match require_coding_workbench(&state) {
+        Ok(workspace) => workspace,
+        Err(refusal) => return refusal.response(),
+    };
+    let authenticated = match authenticate(&state, &headers, true).await {
+        Ok(authenticated) => authenticated,
+        Err(response) => return response,
+    };
+    match workspace
+        .create_terminal(authenticated.authorization.as_str(), &session_id, &input)
+        .await
+    {
+        Ok(terminal) => confidential_json(terminal),
+        Err(error) => workspace_error(&error),
+    }
+}
+
+async fn get_terminal(
+    State(state): State<AppState>,
+    headers: HeaderMap,
+    Path(terminal_id): Path<String>,
+) -> Response {
+    let workspace = match require_coding_workbench(&state) {
+        Ok(workspace) => workspace,
+        Err(refusal) => return refusal.response(),
+    };
+    let authenticated = match authenticate(&state, &headers, false).await {
+        Ok(authenticated) => authenticated,
+        Err(response) => return response,
+    };
+    match workspace
+        .terminal(authenticated.authorization.as_str(), &terminal_id)
+        .await
+    {
+        Ok(terminal) => confidential_json(terminal),
+        Err(error) => workspace_error(&error),
+    }
+}
+
+async fn terminate_terminal(
+    State(state): State<AppState>,
+    headers: HeaderMap,
+    Path(terminal_id): Path<String>,
+) -> Response {
+    let workspace = match require_coding_workbench(&state) {
+        Ok(workspace) => workspace,
+        Err(refusal) => return refusal.response(),
+    };
+    let authenticated = match authenticate(&state, &headers, true).await {
+        Ok(authenticated) => authenticated,
+        Err(response) => return response,
+    };
+    match workspace
+        .terminate_terminal(authenticated.authorization.as_str(), &terminal_id)
+        .await
+    {
+        Ok(terminal) => confidential_json(terminal),
+        Err(error) => workspace_error(&error),
+    }
+}
+
+#[derive(Default, Deserialize)]
+#[serde(default, deny_unknown_fields)]
+struct TerminalAttachQuery {
+    from_sequence: Option<u64>,
+}
+
+async fn attach_terminal(
+    State(state): State<AppState>,
+    headers: HeaderMap,
+    Path(terminal_id): Path<String>,
+    query: Result<Query<TerminalAttachQuery>, axum::extract::rejection::QueryRejection>,
+    upgrade: Result<WebSocketUpgrade, axum::extract::ws::rejection::WebSocketUpgradeRejection>,
+) -> Response {
+    let Ok(Query(query)) = query else {
+        return problem(
+            StatusCode::UNPROCESSABLE_ENTITY,
+            "terminal_replay_cursor_invalid",
+        );
+    };
+    let workspace = match require_coding_workbench(&state) {
+        Ok(workspace) => workspace,
+        Err(refusal) => return refusal.response(),
+    };
+    // The WebSocket is an effect-bearing human input channel, so cookie authentication receives
+    // the same exact-origin requirement as a mutating REST call.
+    let authenticated = match authenticate(&state, &headers, true).await {
+        Ok(authenticated) => authenticated,
+        Err(response) => return response,
+    };
+    let Ok(upgrade) = upgrade else {
+        return problem(
+            StatusCode::BAD_REQUEST,
+            "terminal_websocket_upgrade_required",
+        );
+    };
+    let endpoint = match workspace.terminal_attachment_url(&terminal_id, query.from_sequence) {
+        Ok(endpoint) => endpoint,
+        Err(error) => return workspace_error(&error),
+    };
+    let Ok(mut request) = endpoint.as_str().into_client_request() else {
+        return unavailable("workspace_terminal_transport_invalid");
+    };
+    let Ok(authorization) = HeaderValue::from_str(authenticated.authorization.as_str()) else {
+        return problem(StatusCode::UNAUTHORIZED, "session_invalid");
+    };
+    request
+        .headers_mut()
+        .insert(header::AUTHORIZATION, authorization);
+    let Ok(Ok((upstream, _response))) = tokio::time::timeout(
+        Duration::from_secs(10),
+        tokio_tungstenite::connect_async(request),
+    )
+    .await
+    else {
+        return unavailable("workspace_terminal_unavailable");
+    };
+    upgrade
+        .max_frame_size(MAX_TERMINAL_WEBSOCKET_FRAME_BYTES)
+        .max_message_size(MAX_TERMINAL_WEBSOCKET_FRAME_BYTES)
+        .on_upgrade(move |browser| bridge_terminal(browser, upstream))
+        .into_response()
+}
+
+async fn bridge_terminal(
+    mut browser: WebSocket,
+    mut upstream: tokio_tungstenite::WebSocketStream<
+        tokio_tungstenite::MaybeTlsStream<tokio::net::TcpStream>,
+    >,
+) {
+    loop {
+        tokio::select! {
+            browser_frame = browser.recv() => {
+                let Some(Ok(frame)) = browser_frame else { break };
+                let forwarded = match frame {
+                    BrowserMessage::Binary(bytes) => tokio_tungstenite::tungstenite::Message::Binary(bytes),
+                    BrowserMessage::Text(text) => tokio_tungstenite::tungstenite::Message::Text(text.to_string().into()),
+                    BrowserMessage::Ping(bytes) => tokio_tungstenite::tungstenite::Message::Ping(bytes),
+                    BrowserMessage::Pong(bytes) => tokio_tungstenite::tungstenite::Message::Pong(bytes),
+                    BrowserMessage::Close(_) => break,
+                };
+                if !tokio::time::timeout(Duration::from_secs(2), upstream.send(forwarded))
+                    .await
+                    .is_ok_and(|result| result.is_ok())
+                {
+                    break;
+                }
+            }
+            upstream_frame = upstream.next() => {
+                let Some(Ok(frame)) = upstream_frame else { break };
+                let forwarded = match frame {
+                    tokio_tungstenite::tungstenite::Message::Binary(bytes) => BrowserMessage::Binary(bytes),
+                    tokio_tungstenite::tungstenite::Message::Text(text) => BrowserMessage::Text(text.to_string().into()),
+                    tokio_tungstenite::tungstenite::Message::Ping(bytes) => BrowserMessage::Ping(bytes),
+                    tokio_tungstenite::tungstenite::Message::Pong(bytes) => BrowserMessage::Pong(bytes),
+                    tokio_tungstenite::tungstenite::Message::Close(_) => break,
+                    tokio_tungstenite::tungstenite::Message::Frame(_) => continue,
+                };
+                if !tokio::time::timeout(Duration::from_secs(2), browser.send(forwarded))
+                    .await
+                    .is_ok_and(|result| result.is_ok())
+                {
+                    break;
+                }
+            }
+        }
+    }
+    // Closing this same-origin proxy socket only drops one Workspace browser attachment. The
+    // Workspace terminal broker, not Devcenter, owns the single Substrate attachment and PTY.
+    let _ = upstream.close(None).await;
+    let _ = browser.close().await;
 }
 
 async fn logout(State(state): State<AppState>, headers: HeaderMap) -> Response {
@@ -3359,6 +3612,48 @@ mod tests {
         .unwrap()
     }
 
+    async fn assert_embedded_application_route(path: &str) {
+        let response = test_router(devcenter_auth::Authentication::Unconfigured)
+            .oneshot(Request::builder().uri(path).body(Body::empty()).unwrap())
+            .await
+            .unwrap();
+        assert_eq!(response.status(), StatusCode::OK);
+        let policy = response
+            .headers()
+            .get(header::CONTENT_SECURITY_POLICY)
+            .expect("application CSP")
+            .to_str()
+            .unwrap();
+        assert!(!policy.contains("unsafe-inline"));
+        assert!(policy.contains("script-src 'self'"));
+        assert!(policy.contains("'wasm-unsafe-eval'"));
+        assert!(
+            !response
+                .into_body()
+                .collect()
+                .await
+                .unwrap()
+                .to_bytes()
+                .is_empty()
+        );
+    }
+
+    async fn assert_immutable_asset(path: &str, content_type: &str) {
+        let response = test_router(devcenter_auth::Authentication::Unconfigured)
+            .oneshot(Request::builder().uri(path).body(Body::empty()).unwrap())
+            .await
+            .unwrap();
+        assert_eq!(response.status(), StatusCode::OK);
+        assert_eq!(
+            response.headers().get(header::CONTENT_TYPE).unwrap(),
+            content_type
+        );
+        assert_eq!(
+            response.headers().get(header::CACHE_CONTROL).unwrap(),
+            "public, max-age=31536000, immutable"
+        );
+    }
+
     #[tokio::test]
     async fn readiness_allows_intentionally_disabled_optional_journeys() {
         let authentication = devcenter_auth::Authentication::identity(
@@ -3394,18 +3689,58 @@ mod tests {
 
     #[tokio::test]
     async fn coding_workbench_routes_are_fail_closed_by_default() {
-        let response = test_router(devcenter_auth::Authentication::Unconfigured)
+        for path in [
+            "/api/project-sessions/session-1/tree",
+            "/api/project-sessions/session-1/terminal-profiles",
+            "/api/project-sessions/session-1/terminals",
+            "/api/project-terminals/terminal-1",
+            "/api/project-terminals/terminal-1/attach",
+        ] {
+            let response = test_router(devcenter_auth::Authentication::Unconfigured)
+                .oneshot(Request::builder().uri(path).body(Body::empty()).unwrap())
+                .await
+                .unwrap();
+            assert_eq!(response.status(), StatusCode::NOT_FOUND);
+            let body = response.into_body().collect().await.unwrap().to_bytes();
+            assert_eq!(body, r#"{"code":"agentide_workspace_disabled"}"#);
+        }
+    }
+
+    #[tokio::test]
+    async fn cookie_terminal_websocket_requires_the_exact_public_origin() {
+        let session = "identity_session_v1_review";
+        let application = router(Config {
+            tenant_id: "local".into(),
+            public_origin: "https://devcenter.example.invalid".into(),
+            authentication: devcenter_auth::Authentication::development_bearer(session).unwrap(),
+            identity_web_client_id: None,
+            identity_redirect_uri: None,
+            identity_providers: Vec::new(),
+            database_url: "sqlite::memory:".into(),
+            agent_platform_origin: None,
+            connectors_api_base: None,
+            connectors_docs_available: false,
+            workspace_origin: Some("http://127.0.0.1:3002".into()),
+            agentide_workspace_enabled: true,
+        })
+        .unwrap();
+        let response = application
             .oneshot(
                 Request::builder()
-                    .uri("/api/project-sessions/session-1/tree")
+                    .uri("/api/project-terminals/terminal-1/attach")
+                    .header(header::CONNECTION, "upgrade")
+                    .header(header::UPGRADE, "websocket")
+                    .header("sec-websocket-version", "13")
+                    .header("sec-websocket-key", "dGhlIHNhbXBsZSBub25jZQ==")
+                    .header(header::COOKIE, format!("{SESSION_COOKIE}={session}"))
                     .body(Body::empty())
                     .unwrap(),
             )
             .await
             .unwrap();
-        assert_eq!(response.status(), StatusCode::NOT_FOUND);
+        assert_eq!(response.status(), StatusCode::FORBIDDEN);
         let body = response.into_body().collect().await.unwrap().to_bytes();
-        assert_eq!(body, r#"{"code":"agentide_workspace_disabled"}"#);
+        assert_eq!(body, r#"{"code":"origin_refused"}"#);
     }
 
     #[tokio::test]
@@ -3421,28 +3756,7 @@ mod tests {
             "/docs",
             "/docs/",
         ] {
-            let response = test_router(devcenter_auth::Authentication::Unconfigured)
-                .oneshot(Request::builder().uri(path).body(Body::empty()).unwrap())
-                .await
-                .unwrap();
-            assert_eq!(response.status(), StatusCode::OK);
-            let policy = response
-                .headers()
-                .get(header::CONTENT_SECURITY_POLICY)
-                .expect("application CSP")
-                .to_str()
-                .unwrap();
-            assert!(!policy.contains("unsafe-inline"));
-            assert!(policy.contains("script-src 'self'"));
-            assert!(
-                !response
-                    .into_body()
-                    .collect()
-                    .await
-                    .unwrap()
-                    .to_bytes()
-                    .is_empty()
-            );
+            assert_embedded_application_route(path).await;
         }
         let script_path = devcenter_web_assets::WebAssets::iter()
             .find(|path| path.ends_with(".js"))
@@ -3480,6 +3794,14 @@ mod tests {
             "public, max-age=31536000, immutable"
         );
 
+        for (path, content_type) in [
+            ("/vendor/ghostty-web/loader.js", "text/javascript"),
+            ("/vendor/ghostty-web/ghostty-web.js", "text/javascript"),
+            ("/ghostty-vt.wasm", "application/wasm"),
+        ] {
+            assert_immutable_asset(path, content_type).await;
+        }
+
         let response = test_router(devcenter_auth::Authentication::Unconfigured)
             .oneshot(
                 Request::builder()
@@ -3500,6 +3822,11 @@ mod tests {
         assert!(contract["paths"]["/api/services"].is_object());
         assert!(contract["paths"]["/api/services/catalog"].is_object());
         assert!(contract["paths"]["/api/services/invoke"].is_object());
+        assert!(
+            contract["paths"]["/api/project-sessions/{session_id}/terminal-profiles"].is_object()
+        );
+        assert!(contract["paths"]["/api/project-sessions/{session_id}/terminals"].is_object());
+        assert!(contract["paths"]["/api/project-terminals/{terminal_id}/attach"].is_object());
         assert!(contract["paths"]["/api/connections"].is_object());
         assert!(contract["paths"]["/api/capabilities"].is_object());
         assert!(contract["paths"]["/api/capability-profiles"].is_object());

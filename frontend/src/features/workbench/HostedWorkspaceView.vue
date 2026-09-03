@@ -20,7 +20,7 @@ import {
   SquareTerminal,
   X,
 } from "@lucide/vue";
-import { computed, onMounted, ref, watch } from "vue";
+import { computed, onBeforeUnmount, onMounted, ref, watch } from "vue";
 import { useRoute, useRouter } from "vue-router";
 import {
   ApiError,
@@ -34,10 +34,13 @@ import {
   type FileConflict,
   type FileProjection,
   type Project,
+  type TerminalProfile,
+  type TerminalSession,
 } from "@/api/client";
 import { useWorkspaceStore } from "@/stores/workspace";
 import CanonicalDiffViewer from "./CanonicalDiffViewer.vue";
 import CodeEditor from "./CodeEditor.vue";
+import HostedTerminal from "./HostedTerminal.vue";
 
 type CenterPane = "editor" | "diff" | "agent" | "evidence";
 type RightPane = "context" | "activity" | "agents" | "grants" | "approvals";
@@ -53,7 +56,7 @@ interface OpenFile {
 
 interface ContextAttachment {
   id: string;
-  kind: "selection" | "diff_hunk";
+  kind: "selection" | "diff_hunk" | "terminal_selection";
   label: string;
   detail: string;
   reference: string;
@@ -118,6 +121,14 @@ const diff = ref<DiffProjection>();
 const diffLoading = ref(false);
 const diffError = ref("");
 const terminalOpen = ref(true);
+const terminalHeight = ref(320);
+const terminalProfiles = ref<TerminalProfile[]>([]);
+const terminals = ref<TerminalSession[]>([]);
+const terminalState = ref<"loading" | "ready" | "refused" | "error">("loading");
+const terminalError = ref("");
+const terminalMutation = ref("");
+const selectedTerminalProfileId = ref<string>();
+const detachedTerminalIds = ref<Set<string>>(new Set());
 const rightPane = ref<RightPane>("context");
 const conflict = ref<{ payload: FileConflict; localDraft: string; path: string }>();
 const attachments = ref<ContextAttachment[]>([]);
@@ -155,8 +166,37 @@ const fileEntries = computed(() => tree.value.filter((entry) => !isDirectory(ent
 const selectedAgentId = computed(() =>
   typeof route.query.agent === "string" ? route.query.agent : undefined,
 );
+const visibleTerminals = computed(() =>
+  terminals.value.filter((candidate) => !detachedTerminalIds.value.has(candidate.id)),
+);
+const activeTerminal = computed(() => {
+  const requested = typeof route.query.terminal === "string" ? route.query.terminal : undefined;
+  return (
+    visibleTerminals.value.find((candidate) => candidate.id === requested) ??
+    visibleTerminals.value[0]
+  );
+});
+const terminalGrant = computed(() => {
+  const subject = workspace.session?.subject;
+  const now = Date.now();
+  return agentIdeGrants.value.find(
+    (grant) =>
+      grant.state === "Active" &&
+      grant.grantee === subject &&
+      grant.allowed_intents.includes("interactive_terminal") &&
+      grant.path_prefixes.includes("") &&
+      grant.maximum_risk === "Medium" &&
+      (grant.expires_at == null || Date.parse(grant.expires_at) > now),
+  );
+});
 
-onMounted(load);
+onMounted(() => {
+  const storedHeight = Number(window.sessionStorage.getItem("devcenter:workbench-terminal-height"));
+  if (Number.isFinite(storedHeight) && storedHeight >= 180) {
+    terminalHeight.value = Math.min(window.innerHeight * 0.65, storedHeight);
+  }
+  void load();
+});
 watch([projectId, sessionId], load);
 watch(
   () => route.query.file,
@@ -168,10 +208,12 @@ watch([activePane, diffMode], ([pane]) => {
   if (pane === "diff") void loadDiff();
 });
 let treeTimer: number | undefined;
+let stopTerminalResize: (() => void) | undefined;
 watch(treeSearch, () => {
   if (treeTimer !== undefined) window.clearTimeout(treeTimer);
   treeTimer = window.setTimeout(() => void loadTree(), 250);
 });
+onBeforeUnmount(() => stopTerminalResize?.());
 
 async function load() {
   error.value = "";
@@ -203,6 +245,7 @@ async function load() {
     if (requestedFile) await openFile(requestedFile, false, activePane.value === "editor");
     if (activePane.value === "diff") await loadDiff();
     await loadCoordination();
+    await loadTerminals();
     state.value = "ready";
   } catch (caught) {
     state.value = "error";
@@ -309,6 +352,166 @@ async function loadCoordinationChildren(agentIdeSessionId: string) {
   agentIdeGrants.value = serviceRows<AgentIdeGrantSnapshot>(grants.output);
   agentIdePins.value = serviceRows<AgentIdeContextPinSnapshot>(pins.output);
   agentIdeCheckpoints.value = serviceRows<AgentIdeCheckpointSnapshot>(checkpoints.output);
+}
+
+async function loadTerminals() {
+  if (!sessionId.value) return;
+  terminalState.value = "loading";
+  terminalError.value = "";
+  try {
+    const [profiles, sessions] = await Promise.all([
+      api.terminalProfiles(sessionId.value),
+      api.terminals(sessionId.value),
+    ]);
+    terminalProfiles.value = profiles;
+    terminals.value = sessions;
+    if (
+      !selectedTerminalProfileId.value ||
+      !profiles.some((profile) => profile.id === selectedTerminalProfileId.value)
+    ) {
+      selectedTerminalProfileId.value = profiles[0]?.id;
+    }
+    terminalState.value = profiles.length ? "ready" : "refused";
+    if (activeTerminal.value && typeof route.query.terminal !== "string") {
+      await setRoute({ terminal: activeTerminal.value.id });
+    }
+  } catch (caught) {
+    terminalState.value =
+      caught instanceof ApiError && (caught.status === 403 || caught.status === 404)
+        ? "refused"
+        : "error";
+    terminalError.value = errorMessage(caught);
+  }
+}
+
+async function createInteractiveTerminalGrant(): Promise<string> {
+  if (terminalGrant.value) return terminalGrant.value.grant_id;
+  const current = agentIdeSession.value;
+  const grantee = workspace.session?.subject;
+  if (!current || !grantee || coordinationVersion.value == null) {
+    throw new Error(unknownCoordinationVersionMessage());
+  }
+  terminalMutation.value = "grant";
+  const response = await api.invokeGeneratedService(
+    "agentide.create_grant",
+    {
+      session_id: current.session_id,
+      request_id: globalThis.crypto.randomUUID(),
+      grantee,
+      allowed_intents: ["interactive_terminal"],
+      path_prefixes: [""],
+      maximum_risk: "Medium",
+      expires_at: null,
+      revision: 1,
+      expected_version: coordinationVersion.value,
+      idempotency_key: globalThis.crypto.randomUUID(),
+    },
+    true,
+  );
+  const result = serviceIntentResult(response.output);
+  const created = result.events.find((event) => event.name.endsWith("GrantCreated"));
+  if (!created || typeof created.fields.grant_id !== "string") {
+    throw new Error("agentide_terminal_grant_invalid");
+  }
+  setCoordinationVersion(current.session_id, result.through_version);
+  await loadCoordinationChildren(current.session_id);
+  return created.fields.grant_id;
+}
+
+async function openTerminal() {
+  const current = agentIdeSession.value;
+  const profileId = selectedTerminalProfileId.value;
+  if (!current || !profileId || terminalMutation.value) return;
+  terminalError.value = "";
+  terminalMutation.value = "create";
+  try {
+    const grantId = await createInteractiveTerminalGrant();
+    terminalMutation.value = "create";
+    const created = await api.createTerminal(sessionId.value, {
+      agentide_session_id: current.session_id,
+      authority_grant_id: grantId,
+      profile_id: profileId,
+      columns: 100,
+      rows: 28,
+      idempotency_key: globalThis.crypto.randomUUID(),
+    });
+    terminals.value = [...terminals.value.filter((item) => item.id !== created.id), created];
+    const detached = new Set(detachedTerminalIds.value);
+    detached.delete(created.id);
+    detachedTerminalIds.value = detached;
+    await setRoute({ terminal: created.id });
+  } catch (caught) {
+    terminalError.value = errorMessage(caught);
+  } finally {
+    terminalMutation.value = "";
+  }
+}
+
+async function killTerminal(terminalId: string) {
+  if (terminalMutation.value) return;
+  terminalMutation.value = `kill:${terminalId}`;
+  terminalError.value = "";
+  try {
+    const terminated = await api.terminateTerminal(terminalId);
+    terminals.value = terminals.value.map((item) => (item.id === terminalId ? terminated : item));
+  } catch (caught) {
+    terminalError.value = errorMessage(caught);
+  } finally {
+    terminalMutation.value = "";
+  }
+}
+
+async function detachTerminal(terminalId: string) {
+  detachedTerminalIds.value = new Set([...detachedTerminalIds.value, terminalId]);
+  const next = visibleTerminals.value[0]?.id;
+  await setRoute({ terminal: next });
+}
+
+function startTerminalResize(event: PointerEvent) {
+  event.preventDefault();
+  stopTerminalResize?.();
+  const startY = event.clientY;
+  const startHeight = terminalHeight.value;
+  const resize = (moveEvent: PointerEvent) => {
+    terminalHeight.value = Math.round(
+      Math.min(window.innerHeight * 0.65, Math.max(180, startHeight + startY - moveEvent.clientY)),
+    );
+    window.sessionStorage.setItem(
+      "devcenter:workbench-terminal-height",
+      String(terminalHeight.value),
+    );
+  };
+  const stop = () => {
+    window.removeEventListener("pointermove", resize);
+    window.removeEventListener("pointerup", stop);
+    stopTerminalResize = undefined;
+  };
+  stopTerminalResize = stop;
+  window.addEventListener("pointermove", resize);
+  window.addEventListener("pointerup", stop);
+}
+
+function adjustTerminalHeight(delta: number) {
+  terminalHeight.value = Math.round(
+    Math.min(window.innerHeight * 0.65, Math.max(180, terminalHeight.value + delta)),
+  );
+  window.sessionStorage.setItem(
+    "devcenter:workbench-terminal-height",
+    String(terminalHeight.value),
+  );
+}
+
+async function attachTerminalSelection(selection: { content: string; terminalId: string }) {
+  const attachmentId = globalThis.crypto.randomUUID();
+  attachments.value.push({
+    id: attachmentId,
+    kind: "terminal_selection",
+    label: `Terminal ${selection.terminalId.slice(0, 10)} selection`,
+    detail: selection.content,
+    reference: `terminal/${selection.terminalId}/selection/${attachmentId}`,
+    sha256: await sha256(selection.content),
+  });
+  rightPane.value = "context";
 }
 
 async function loadTree() {
@@ -469,7 +672,12 @@ async function shareAttachment(attachment: ContextAttachment) {
       {
         session_id: current.session_id,
         request_id: globalThis.crypto.randomUUID(),
-        kind: attachment.kind === "selection" ? "Editor" : "DiffHunk",
+        kind:
+          attachment.kind === "selection"
+            ? "Editor"
+            : attachment.kind === "diff_hunk"
+              ? "DiffHunk"
+              : "Terminal",
         reference: attachment.reference,
         start_line: attachment.startLine ?? null,
         end_line: attachment.endLine ?? null,
@@ -504,7 +712,7 @@ async function createCodingGrant(grantee: string) {
         request_id: globalThis.crypto.randomUUID(),
         grantee,
         allowed_intents: ["code_edit", "code_create", "code_delete", "code_rename"],
-        path_prefixes: ["."],
+        path_prefixes: [""],
         maximum_risk: "Medium",
         expires_at: null,
         revision: 1,
@@ -781,7 +989,13 @@ async function sha256(content: string): Promise<string> {
           </p>
         </div>
       </div>
-      <div class="workbench-grid" :class="{ 'terminal-collapsed': !terminalOpen }">
+      <div
+        class="workbench-grid"
+        :class="{ 'terminal-collapsed': !terminalOpen }"
+        :style="{
+          '--terminal-height': terminalOpen ? `${String(terminalHeight)}px` : '2.45rem',
+        }"
+      >
         <aside class="workbench-explorer" aria-label="Project explorer and context pins">
           <header>
             <strong>Explorer</strong
@@ -1209,6 +1423,20 @@ async function sha256(content: string): Promise<string> {
         </aside>
 
         <section class="workbench-terminal" :class="{ collapsed: !terminalOpen }">
+          <div
+            v-if="terminalOpen"
+            class="terminal-resize-handle"
+            role="separator"
+            aria-label="Resize terminal panel"
+            aria-orientation="horizontal"
+            :aria-valuenow="terminalHeight"
+            aria-valuemin="180"
+            aria-valuemax="1000"
+            tabindex="0"
+            @pointerdown="startTerminalResize"
+            @keydown.up.prevent="adjustTerminalHeight(20)"
+            @keydown.down.prevent="adjustTerminalHeight(-20)"
+          ></div>
           <header>
             <button type="button" @click="terminalOpen = !terminalOpen">
               <PanelBottomClose v-if="terminalOpen" :size="15" /><PanelBottomOpen
@@ -1217,24 +1445,149 @@ async function sha256(content: string): Promise<string> {
               />
               Terminal
             </button>
-            <span v-if="terminalOpen" class="status-pill refused">No admitted profile</span>
+            <span
+              v-if="terminalOpen"
+              class="status-pill"
+              :class="{ refused: terminalState === 'refused' || terminalState === 'error' }"
+            >
+              {{ activeTerminal?.state ?? terminalState }}
+            </span>
             <button
               v-if="terminalOpen"
               class="icon-button"
               type="button"
               aria-label="Terminal authority details"
+              @click="rightPane = 'grants'"
             >
               <PanelRight :size="14" />
             </button>
           </header>
-          <div v-if="terminalOpen" class="terminal-refused">
-            <SquareTerminal :size="22" />
-            <div>
-              <strong>Interactive terminal refused</strong>
-              <p>
-                No deployment-declared terminal profile and explicit human grant are available for
-                this session. DevCenter will never fall back to its host shell.
+          <div v-if="terminalOpen" class="terminal-panel">
+            <div v-if="terminalState === 'loading'" class="terminal-refused" role="status">
+              <LoaderCircle class="spinning" :size="20" />
+              <div>
+                <strong>Loading admitted terminal profiles…</strong>
+                <p>Workspace is deriving terminal availability for the current human actor.</p>
+              </div>
+            </div>
+            <div v-else-if="terminalState === 'refused'" class="terminal-refused">
+              <SquareTerminal :size="22" />
+              <div>
+                <strong>Interactive terminal refused</strong>
+                <p>
+                  {{
+                    terminalError ||
+                    "No deployment-declared terminal profile is available. DevCenter never falls back to its host shell."
+                  }}
+                </p>
+              </div>
+            </div>
+            <div v-else class="terminal-ready-panel">
+              <div class="terminal-profile-actions">
+                <label>
+                  <span>Profile</span>
+                  <select v-model="selectedTerminalProfileId">
+                    <option
+                      v-for="profile in terminalProfiles"
+                      :key="profile.id"
+                      :value="profile.id"
+                    >
+                      {{ profile.label }} · {{ profile.workspace_access.replace("_", " ") }} ·
+                      network {{ profile.network }}
+                    </option>
+                  </select>
+                </label>
+                <button
+                  class="button primary small"
+                  type="button"
+                  :disabled="
+                    terminalState !== 'ready' ||
+                    coordinationState !== 'ready' ||
+                    coordinationVersion == null ||
+                    Boolean(terminalMutation)
+                  "
+                  @click="openTerminal"
+                >
+                  <LoaderCircle
+                    v-if="terminalMutation === 'grant' || terminalMutation === 'create'"
+                    class="spinning"
+                    :size="13"
+                  />
+                  {{ terminalGrant ? "Open terminal" : "Grant & open terminal" }}
+                </button>
+                <small>
+                  An explicit human grant admits only this declared Substrate profile.
+                </small>
+              </div>
+              <p v-if="terminalError" class="terminal-detail" role="alert">
+                {{ terminalError }}
               </p>
+              <nav
+                v-if="visibleTerminals.length"
+                class="terminal-tabs"
+                aria-label="Terminal sessions"
+              >
+                <article
+                  v-for="terminal in visibleTerminals"
+                  :key="terminal.id"
+                  class="terminal-tab"
+                  :class="{ active: activeTerminal?.id === terminal.id }"
+                >
+                  <button type="button" @click="setRoute({ terminal: terminal.id })">
+                    <SquareTerminal :size="12" />
+                    <span>{{ terminal.profile.label }}</span>
+                    <small>{{ terminal.state }}</small>
+                  </button>
+                  <button
+                    type="button"
+                    :aria-label="`Detach ${terminal.profile.label}`"
+                    title="Detach terminal tab"
+                    @click="detachTerminal(terminal.id)"
+                  >
+                    <X :size="12" />
+                  </button>
+                </article>
+              </nav>
+              <template v-if="activeTerminal">
+                <div class="terminal-session-metadata">
+                  <span><strong>Actor</strong> {{ activeTerminal.actor }}</span>
+                  <span
+                    ><strong>Process</strong> {{ activeTerminal.process_id ?? "allocating" }}</span
+                  >
+                  <span><strong>Network</strong> {{ activeTerminal.profile.network }}</span>
+                  <span><strong>Runtime</strong> {{ activeTerminal.profile.runtime_ref }}</span>
+                </div>
+                <HostedTerminal
+                  v-if="activeTerminal.state === 'running' || activeTerminal.state === 'preparing'"
+                  :key="activeTerminal.id"
+                  :terminal="activeTerminal"
+                  @attach="attachTerminalSelection"
+                  @kill="killTerminal(activeTerminal.id)"
+                  @lifecycle="loadTerminals"
+                />
+                <div v-else class="terminal-refused">
+                  <SquareTerminal :size="20" />
+                  <div>
+                    <strong>Terminal {{ activeTerminal.state }}</strong>
+                    <p>
+                      {{
+                        activeTerminal.failure_code ||
+                        activeTerminal.exit?.signal ||
+                        (activeTerminal.exit?.code == null
+                          ? "No exit detail was reported."
+                          : `Process exited with ${String(activeTerminal.exit.code)}.`)
+                      }}
+                    </p>
+                  </div>
+                </div>
+              </template>
+              <div v-else class="terminal-refused">
+                <SquareTerminal :size="20" />
+                <div>
+                  <strong>No attached terminals</strong>
+                  <p>Open a confined terminal, or reattach one by refreshing the session list.</p>
+                </div>
+              </div>
             </div>
           </div>
         </section>

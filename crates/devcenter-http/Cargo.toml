@@ -21,6 +21,7 @@ devcenter-core.workspace = true
 devcenter-mcp.workspace = true
 devcenter-store.workspace = true
 devcenter-web-assets.workspace = true
+futures-util.workspace = true
 getrandom.workspace = true
 identity-client.workspace = true
 reqwest.workspace = true
@@ -28,6 +29,7 @@ serde.workspace = true
 serde_json.workspace = true
 sha2.workspace = true
 tokio.workspace = true
+tokio-tungstenite.workspace = true
 url.workspace = true
 zeroize.workspace = true
 

@@ -1,6 +1,8 @@
 import type { IncomingMessage, ServerResponse } from "node:http";
 import { Buffer } from "node:buffer";
+import type { Duplex } from "node:stream";
 import type { Plugin } from "vite";
+import { WebSocket, WebSocketServer } from "ws";
 
 interface ReviewAgent {
   id: string;
@@ -189,6 +191,58 @@ let reviewAgentIdeVersion = 1;
 const reviewAgentIdeSessionId = "agentide-session-review";
 const reviewAgentIdeGrants: Array<Record<string, unknown>> = [];
 const reviewAgentIdePins: Array<Record<string, unknown>> = [];
+const reviewTerminalProfile = {
+  id: "rust-stable-confined",
+  label: "Rust stable · confined",
+  runtime_ref: "substrate:image:rust-stable-review",
+  shell: "/bin/bash",
+  arguments: ["--noprofile", "--norc"],
+  working_directory: "/workspace",
+  environment: { TERM: "xterm-256color", COLORTERM: "truecolor" },
+  workspace_access: "read_write",
+  network: "none",
+  limits: {
+    timeout_ms: 3_600_000,
+    cpu_millis: 2_000,
+    memory_bytes: 536_870_912,
+    processes: 128,
+    output_bytes: 4_194_304,
+    input_bytes: 65_536,
+    frame_bytes: 65_536,
+    queued_frames: 256,
+    lease_ttl_ms: 3_600_000,
+  },
+} as const;
+const reviewTerminals: Array<{
+  id: string;
+  coding_session_id: string;
+  agentide_session_id: string;
+  authority_grant_id: string;
+  profile: typeof reviewTerminalProfile;
+  actor: string;
+  process_id: string | null;
+  state: "preparing" | "running" | "exited" | "terminated" | "refused" | "unknown";
+  exit: { code: number | null; signal: string | null } | null;
+  failure_code: string | null;
+  created_at_ms: number;
+  updated_at_ms: number;
+}> = [
+  {
+    id: "terminal-review-1",
+    coding_session_id: reviewCodingSession.id,
+    agentide_session_id: reviewAgentIdeSessionId,
+    authority_grant_id: "grant-review-terminal",
+    profile: reviewTerminalProfile,
+    actor: "review-engineer",
+    process_id: "substrate-process-review-1",
+    state: "running",
+    exit: null,
+    failure_code: null,
+    created_at_ms: 1_788_260_100_000,
+    updated_at_ms: 1_788_260_100_000,
+  },
+];
+const reviewTerminalSequences = new WeakMap<WebSocket, bigint>();
 const reviewBranches = [
   { name: "trunk", commit: reviewProject.pinned_commit, provider_default: true, protected: true },
   {
@@ -371,6 +425,35 @@ function sendJson(response: ServerResponse, status: number, value: unknown) {
   response.end(JSON.stringify(value));
 }
 
+function sendTerminalOutput(webSocket: WebSocket, value: string | Buffer) {
+  if (webSocket.readyState !== WebSocket.OPEN) return;
+  const sequence = (reviewTerminalSequences.get(webSocket) ?? 0n) + 1n;
+  reviewTerminalSequences.set(webSocket, sequence);
+  const payload = typeof value === "string" ? Buffer.from(value) : value;
+  const frame = Buffer.allocUnsafe(8 + payload.byteLength);
+  frame.writeBigUInt64BE(sequence, 0);
+  payload.copy(frame, 8);
+  webSocket.send(frame, { binary: true });
+}
+
+function reviewTerminalCommand(value: string): string {
+  const command = value.trim();
+  const prompt = "\u001b[32mreview-engineer@substrate\u001b[0m:\u001b[34m/workspace\u001b[0m$ ";
+  const output =
+    command === ""
+      ? ""
+      : command === "pwd"
+        ? "/workspace\r\n"
+        : command === "ls" || command === "ls -la"
+          ? "\u001b[34msrc\u001b[0m  Cargo.toml  README.md\r\n"
+          : command === "whoami"
+            ? "review-engineer\r\n"
+            : command === "top"
+              ? "\u001b[1mReview telemetry (not a real process list)\u001b[0m\r\nPID  PROCESS              STATE\r\n42   substrate-review     confined\r\n"
+              : `review emulator: “${command}” was not executed by substrate-daemon\r\n`;
+  return `\r\n${output}${prompt}`;
+}
+
 async function readJson(request: IncomingMessage): Promise<Record<string, unknown>> {
   const decoder = new TextDecoder();
   let body = "";
@@ -418,9 +501,58 @@ function sendTaskEvents(response: ServerResponse) {
 }
 
 export function reviewApi(): Plugin {
+  const terminalWebSockets = new WebSocketServer({ noServer: true });
   return {
     name: "devcenter-review-api",
     configureServer(server) {
+      server.httpServer?.on("upgrade", (request: IncomingMessage, socket: Duplex, head: Buffer) => {
+        const url = new URL(request.url ?? "/", "http://review.local");
+        const match = url.pathname.match(/^\/api\/project-terminals\/([^/]+)\/attach$/);
+        if (!match || !reviewTerminals.some((terminal) => terminal.id === match[1])) return;
+        terminalWebSockets.handleUpgrade(request, socket, head, (webSocket) => {
+          terminalWebSockets.emit("connection", webSocket, request);
+        });
+      });
+      terminalWebSockets.on("connection", (webSocket, request) => {
+        const url = new URL(request.url ?? "/", "http://review.local");
+        const requestedSequence = url.searchParams.get("from_sequence");
+        const initialSequence =
+          requestedSequence && /^\d+$/.test(requestedSequence) ? BigInt(requestedSequence) : 0n;
+        reviewTerminalSequences.set(webSocket, initialSequence);
+        webSocket.send(
+          JSON.stringify({
+            kind: "attached",
+            replay: {
+              complete: true,
+              oldest_sequence: Number(initialSequence),
+              newest_sequence: Number(initialSequence),
+            },
+          }),
+        );
+        if (!url.searchParams.has("from_sequence")) {
+          sendTerminalOutput(
+            webSocket,
+            "\u001b[2mConfined Substrate review process · network none\u001b[0m\r\n" +
+              "\u001b[32mreview-engineer@substrate\u001b[0m:\u001b[34m/workspace\u001b[0m$ ",
+          );
+        }
+        let inputBuffer = "";
+        webSocket.on("message", (data, isBinary) => {
+          if (!isBinary) return;
+          const input = Array.isArray(data)
+            ? Buffer.concat(data)
+            : data instanceof ArrayBuffer
+              ? Buffer.from(data)
+              : Buffer.from(data.buffer, data.byteOffset, data.byteLength);
+          sendTerminalOutput(webSocket, input);
+          inputBuffer += input.toString("utf8");
+          const lines = inputBuffer.split(/\r\n|\r|\n/);
+          inputBuffer = lines.pop() ?? "";
+          for (const command of lines) {
+            sendTerminalOutput(webSocket, reviewTerminalCommand(command));
+          }
+        });
+      });
       server.middlewares.use((request, response, next) => {
         void (async () => {
           const method = request.method ?? "GET";
@@ -596,6 +728,72 @@ export function reviewApi(): Plugin {
               deletions: 1,
               partial: false,
             });
+            return;
+          }
+          if (
+            path === `/api/project-sessions/${reviewCodingSession.id}/terminal-profiles` &&
+            method === "GET"
+          ) {
+            sendJson(response, 200, [reviewTerminalProfile]);
+            return;
+          }
+          if (
+            path === `/api/project-sessions/${reviewCodingSession.id}/terminals` &&
+            method === "GET"
+          ) {
+            sendJson(response, 200, reviewTerminals);
+            return;
+          }
+          if (
+            path === `/api/project-sessions/${reviewCodingSession.id}/terminals` &&
+            method === "POST"
+          ) {
+            const submitted = await readJson(request);
+            const now = Date.now();
+            const created = {
+              ...reviewTerminals[0],
+              id: `terminal-review-${String(reviewTerminals.length + 1)}`,
+              agentide_session_id:
+                typeof submitted.agentide_session_id === "string"
+                  ? submitted.agentide_session_id
+                  : "",
+              authority_grant_id:
+                typeof submitted.authority_grant_id === "string"
+                  ? submitted.authority_grant_id
+                  : "",
+              process_id: `substrate-process-review-${String(reviewTerminals.length + 1)}`,
+              state: "running" as const,
+              created_at_ms: now,
+              updated_at_ms: now,
+            };
+            reviewTerminals.push(created);
+            sendJson(response, 201, created);
+            return;
+          }
+          const reviewTerminalMatch = path.match(/^\/api\/project-terminals\/([^/]+)$/);
+          if (reviewTerminalMatch && method === "GET") {
+            const terminal = reviewTerminals.find(
+              (candidate) => candidate.id === reviewTerminalMatch[1],
+            );
+            sendJson(
+              response,
+              terminal ? 200 : 404,
+              terminal ?? { code: "workspace_terminal_not_found" },
+            );
+            return;
+          }
+          if (reviewTerminalMatch && method === "DELETE") {
+            const terminal = reviewTerminals.find(
+              (candidate) => candidate.id === reviewTerminalMatch[1],
+            );
+            if (!terminal) {
+              sendJson(response, 404, { code: "workspace_terminal_not_found" });
+              return;
+            }
+            terminal.state = "terminated";
+            terminal.exit = { code: null, signal: "SIGKILL" };
+            terminal.updated_at_ms = Date.now();
+            sendJson(response, 200, terminal);
             return;
           }
           if (
@@ -922,8 +1120,9 @@ export function reviewApi(): Plugin {
               submitted.confirmed === true
             ) {
               reviewAgentIdeVersion += 1;
+              const grantId = `grant-review-${String(reviewAgentIdeGrants.length + 1)}`;
               reviewAgentIdeGrants.push({
-                grant_id: `grant-review-${String(reviewAgentIdeGrants.length + 1)}`,
+                grant_id: grantId,
                 grantee: serviceInput.grantee,
                 allowed_intents: serviceInput.allowed_intents,
                 path_prefixes: serviceInput.path_prefixes,
@@ -935,7 +1134,12 @@ export function reviewApi(): Plugin {
               sendJson(response, 200, {
                 output: {
                   outcome: "created",
-                  events: [{ name: "agentide.coordination.GrantCreated", fields: {} }],
+                  events: [
+                    {
+                      name: "agentide.coordination.GrantCreated",
+                      fields: { grant_id: grantId },
+                    },
+                  ],
                   through_version: reviewAgentIdeVersion,
                   replayed: false,
                 },
