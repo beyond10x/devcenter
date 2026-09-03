@@ -1,5 +1,5 @@
 import { Buffer } from "node:buffer";
-import { expect, test } from "@playwright/test";
+import { expect, test, type Page } from "@playwright/test";
 
 const workspacePath =
   "/projects/project-review-devcenter/sessions/workspace-session-review?pane=editor";
@@ -108,6 +108,15 @@ test("runs the standalone hosted workbench and terminal without viewport overflo
   await expect(page.locator(".ghostty-host")).toBeVisible();
   const terminalCanvas = page.locator(".ghostty-host canvas");
   await expect(terminalCanvas).toBeVisible();
+  await expect
+    .poll(
+      async () => {
+        const palette = await terminalPalettePixels(page);
+        return palette.green > 0 && palette.blue > 0;
+      },
+      { timeout: 5_000 },
+    )
+    .toBe(true);
   const compactTerminalHostBounds = await terminalCanvas.boundingBox();
   expect(compactTerminalHostBounds).not.toBeNull();
   expect(
@@ -121,6 +130,12 @@ test("runs the standalone hosted workbench and terminal without viewport overflo
   await page.keyboard.press("Enter");
   await expect.poll(() => inputFrames.join(""), { timeout: 5_000 }).toContain("pwd");
   await expect.poll(() => outputFrames.join(""), { timeout: 5_000 }).toContain("/workspace");
+
+  await page.evaluate('document.documentElement.dataset.theme = "monokai"');
+  await expect
+    .poll(async () => canvasPixelCount(page, [30, 31, 28]), { timeout: 5_000 })
+    .toBeGreaterThan(0);
+  await expect(page.locator(".terminal-connection.running")).toBeVisible();
 
   const initialConnections = terminalConnections;
   await page.reload();
@@ -140,3 +155,29 @@ test("runs the standalone hosted workbench and terminal without viewport overflo
 
   expect(failures).toEqual([]);
 });
+
+async function terminalPalettePixels(page: Page) {
+  return {
+    green: await canvasPixelCount(page, [88, 211, 176]),
+    blue: await canvasPixelCount(page, [102, 217, 239]),
+  };
+}
+
+async function canvasPixelCount(page: Page, [red, green, blue]: [number, number, number]) {
+  return page.evaluate<number>(`(() => {
+    const canvas = document.querySelector(".ghostty-host canvas");
+    const context = canvas?.getContext("2d");
+    if (!context) return 0;
+    const pixels = context.getImageData(0, 0, context.canvas.width, context.canvas.height).data;
+    let matches = 0;
+    for (let index = 0; index < pixels.length; index += 4) {
+      if (
+        pixels[index] === ${String(red)} &&
+        pixels[index + 1] === ${String(green)} &&
+        pixels[index + 2] === ${String(blue)} &&
+        pixels[index + 3] === 255
+      ) matches += 1;
+    }
+    return matches;
+  })()`);
+}
