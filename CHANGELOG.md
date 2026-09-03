@@ -2,6 +2,17 @@
 
 ## Unreleased
 
+## 0.8.10 - 2026-09-03
+
+- Build the native hosted workbench on Agent Platform 0.6.6, AgentIDE 0.2.1, Workspace 0.2.10,
+  Connectors client 0.5.4, Harness 0.11.1, Service SDK 0.3.4, and Todo 0.2.6.
+- Validate every refreshed actor view and its canonical context and tool-inventory digests before a
+  coding turn while preserving Workspace as the file, diff, process, and PTY authority.
+- Consume AgentIDE's provenance-free renderer draft directly, recompute its complete-content digest,
+  then carry authenticated attachment provenance through editor, diff, terminal, and agent context.
+- Recreate the Ghostty renderer and replay retained Workspace output after a theme change, with
+  browser assertions over actual ANSI palette pixels, Monaco token colors, and the workbench font.
+
 ## 0.8.9 - 2026-09-03
 
 - Align the hosted workbench with Agent Platform 0.6.6, AgentIDE 0.2.1, Workspace 0.2.10,
@@ -15,15 +26,6 @@
 - Make the compact current-agent selector unmistakable without restoring the persistent roster:
   strengthen its label, agent name, availability cue, interaction target, and responsive alignment,
   while preserving deep-link and route-backed agent switching.
-- Align the hosted workbench with AgentIDE 0.2.1, Workspace 0.2.9, Agent Platform 0.6.6,
-  Harness 0.11.1, Service SDK 0.3.4, and Todo 0.2.6 as one sealed protocol and service graph.
-- Validate every refreshed actor view and its canonical context and tool-inventory digests before a
-  coding turn while preserving Workspace as the file, diff, process, and PTY authority.
-- Consume AgentIDE's provenance-free renderer draft directly, then carry authenticated,
-  revision-bound attachment provenance through the native editor, diff, terminal, and
-  agent-context surfaces without reintroducing a manual session bind step.
-- Recreate the Ghostty renderer and replay retained Workspace output after a theme change, with
-  browser assertions over actual ANSI palette pixels, Monaco token colors, and the workbench font.
 
 ## 0.8.7 - 2026-09-03
 

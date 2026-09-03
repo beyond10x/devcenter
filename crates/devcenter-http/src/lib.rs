@@ -3652,11 +3652,6 @@ async fn submit_coding_turn(
     if let Err(issue) = current_coordination_version(&state, &authenticated, &session).await {
         return issue.response();
     }
-    let Some(focused_selections) =
-        seal_coding_selections(request.focused_selections, &authenticated.principal.subject)
-    else {
-        return problem(StatusCode::UNPROCESSABLE_ENTITY, "coding_turn_invalid");
-    };
     let Some(client) = state.agent_platform.as_ref() else {
         return unavailable("agent_platform_not_configured");
     };

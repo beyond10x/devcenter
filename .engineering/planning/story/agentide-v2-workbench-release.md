@@ -40,17 +40,17 @@ scope:
   path: frontend/src/features/workbench/HostedWorkspaceView.vue
 - confidence: inferred
   path: openapi.json
-revision: 9
+revision: 11
 ---
 # Release the hosted workbench on AgentIDE v2
 
 ## Context
 
-AgentIDE 0.2.1, Workspace 0.2.9, and Agent Platform 0.6.6 are aligned as one candidate graph on Harness 0.11.1, Service SDK 0.3.4, and Todo 0.2.6. DevCenter consumes the AgentIDE renderer draft directly and seals authenticated, content-revision-bound selections before submitting each coding turn. Workspace remains the only file, diff, process, and PTY authority; AgentIDE coordination remains on the generated Service SDK and Eventlog seam.
+AgentIDE 0.2.1, Workspace 0.2.10, and Agent Platform 0.6.6 are aligned with DevCenter’s qualified Connectors 0.5.4 client boundary on Harness 0.11.1, Service SDK 0.3.4, and Todo 0.2.6. Workspace 0.2.10 binds AgentIDE coordination and terminal validation to the exact writable materialization reference. DevCenter consumes the AgentIDE renderer draft directly, recomputes its complete-content digest, and seals authenticated selections before submitting each coding turn. Workspace remains the only file, diff, process, and PTY authority; AgentIDE coordination remains on the generated Service SDK and Eventlog seam.
 
 ## Acceptance
 
-DevCenter 0.8.8 passes its complete repository and browser gates, publishes immutable runtime artifacts pinned to the released dependency graph, and the private dev deployment verifies a usable editor, diff, and confined terminal without a bind step.
+DevCenter 0.8.10 passes its complete repository and browser gates, publishes immutable runtime artifacts pinned to the qualified released dependency graph, and the private dev deployment verifies a usable editor with syntax colors, canonical diff, and confined terminal without a bind step.
 
 ## Scope
 
