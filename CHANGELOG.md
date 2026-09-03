@@ -2,6 +2,14 @@
 
 ## Unreleased
 
+## 0.8.11 - 2026-09-03
+
+- Preserve Ghostty ANSI and truecolor rendering across DevCenter theme changes by rebuilding only
+  the browser renderer and replaying the retained Workspace terminal stream.
+- Consume AgentIDE, Agent Platform, Workspace, Connectors client, and generated-service releases
+  through immutable tags; retain the upstream-selected composed Connectors, Service SDK, and
+  Eventlog source identities where their released factory manifests still require them.
+
 ## 0.8.10 - 2026-09-03
 
 - Align the BFF with current Identity 0.5.6, Connectors 0.5.6, Workspace 0.2.12, Agent Platform

@@ -8,7 +8,7 @@ importers:
   .:
     dependencies:
       "@b10x/service-console-vue":
-        specifier: git+https://github.com/beyond10x/service-sdk.git#a57d5a0f4b4cf7a98bf9bd38bd8cacbe94ae7e5b
+        specifier: git+https://github.com/beyond10x/service-sdk.git#0.3.4
         version: https://codeload.github.com/beyond10x/service-sdk/tar.gz/a57d5a0f4b4cf7a98bf9bd38bd8cacbe94ae7e5b(typescript@5.9.3)
       "@fontsource-variable/jetbrains-mono":
         specifier: 5.3.0

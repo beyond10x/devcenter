@@ -40,18 +40,33 @@ scope:
   path: frontend/src/features/workbench/HostedWorkspaceView.vue
 - confidence: inferred
   path: openapi.json
-revision: 9
+revision: 11
 ---
 # Release the hosted workbench on AgentIDE v2
 
 ## Context
 
-AgentIDE 0.2.1, Workspace 0.2.9, and Agent Platform 0.6.6 are aligned as one candidate graph on Harness 0.11.1, Service SDK 0.3.4, and Todo 0.2.6. DevCenter consumes the AgentIDE renderer draft directly and seals authenticated, content-revision-bound selections before submitting each coding turn. Workspace remains the only file, diff, process, and PTY authority; AgentIDE coordination remains on the generated Service SDK and Eventlog seam.
+DevCenter now consumes Agent Platform 0.6.7, AgentIDE 0.2.1, Workspace 0.2.12, and Connectors v0.5.6
+through fixed release tags and one canonical HTTPS Cargo source graph. Its composed generated-service
+binary consumes the AgentIDE 0.2.1 and Todo 0.2.6 tags. Service SDK 0.3.4 remains the generated
+service factory and Eventlog remains its persistence seam. Their direct source revisions, including
+the compatible Connectors runtime identity, are retained only because the released AgentIDE and Todo
+generated manifests select the same Service SDK source identity, Service SDK selects that Connectors
+factory identity, and Service SDK selects an untagged Eventlog source. Changing only DevCenter's
+spelling creates duplicate, incompatible Rust trait types.
+
+Workspace remains the sole file, diff, process, and PTY authority. DevCenter derives actor identity,
+recomputes complete-content digests, seals browser selection drafts, and recreates the Ghostty browser
+renderer when its theme changes while reconnecting to the same confined Workspace terminal.
 
 ## Acceptance
 
-DevCenter 0.8.8 passes its complete repository and browser gates, publishes immutable runtime artifacts pinned to the released dependency graph, and the private dev deployment verifies a usable editor, diff, and confined terminal without a bind step.
+DevCenter 0.8.11 passes the complete repository and browser gates, Cargo reports one source identity
+for each shared AgentIDE, Agent Platform, Workspace, and Connectors contract, and the coordinator can
+promote a workbench whose Monaco syntax colors and Ghostty ANSI palette remain visible after theme
+changes and replay.
 
 ## Scope
 
-Dependency locks, hosted workbench compatibility, release metadata, browser fixtures, and deployment evidence.
+Dependency manifests and locks, hosted selection sealing, Ghostty renderer lifecycle, browser color
+assertions, release metadata, and coordinator handoff evidence.

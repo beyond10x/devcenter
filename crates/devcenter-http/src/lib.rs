@@ -3652,7 +3652,7 @@ async fn submit_coding_turn(
     if let Err(issue) = current_coordination_version(&state, &authenticated, &session).await {
         return issue.response();
     }
-    let Some(focused_selections) =
+    let Ok(focused_selections) =
         seal_coding_selections(request.focused_selections, &authenticated.principal.subject)
     else {
         return problem(StatusCode::UNPROCESSABLE_ENTITY, "coding_turn_invalid");
@@ -3662,11 +3662,6 @@ async fn submit_coding_turn(
     };
     let Ok(agent_id) = AgentId::new(agent_id) else {
         return problem(StatusCode::UNPROCESSABLE_ENTITY, "agent_id_invalid");
-    };
-    let Ok(focused_selections) =
-        seal_coding_selections(request.focused_selections, &authenticated.principal.subject)
-    else {
-        return problem(StatusCode::UNPROCESSABLE_ENTITY, "coding_turn_invalid");
     };
     let input = ConversationInput::CodingSessionTurn {
         prompt: request.prompt,

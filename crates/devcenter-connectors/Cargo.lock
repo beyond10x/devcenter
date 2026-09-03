@@ -5,7 +5,7 @@ version = 4
 [[package]]
 name = "agentide-generated-service"
 version = "0.1.0"
-source = "git+https://github.com/beyond10x/agentide.git?rev=c25e73330fc130895d8f1538c9746858a265186b#c25e73330fc130895d8f1538c9746858a265186b"
+source = "git+https://github.com/beyond10x/agentide.git?tag=0.2.1#c25e73330fc130895d8f1538c9746858a265186b"
 dependencies = [
  "service-catalog",
  "service-connectors",
@@ -781,7 +781,7 @@ dependencies = [
 
 [[package]]
 name = "devcenter-connectors"
-version = "0.8.10"
+version = "0.8.11"
 dependencies = [
  "agentide-generated-service",
  "anyhow",
@@ -3839,7 +3839,7 @@ checksum = "1f3ccbac311fea05f86f61904b462b55fb3df8837a366dfc601a0161d0532f20"
 [[package]]
 name = "todo-generated-service"
 version = "0.1.0"
-source = "git+https://github.com/beyond10x/todo.git?rev=9c6664efbe221bb3bcc56f95a1b858face292591#9c6664efbe221bb3bcc56f95a1b858face292591"
+source = "git+https://github.com/beyond10x/todo.git?tag=0.2.6#9c6664efbe221bb3bcc56f95a1b858face292591"
 dependencies = [
  "service-catalog",
  "service-connectors",
