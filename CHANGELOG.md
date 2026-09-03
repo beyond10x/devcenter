@@ -2,6 +2,10 @@
 
 ## Unreleased
 
+- Replace the Codex add-time OAuth command with an explicit least-privilege server configuration
+  and scoped login instruction, preventing shared Identity discovery from requesting unrelated
+  Connector, Secrets, or Substrate authority.
+
 ## 0.8.10 - 2026-09-03
 
 - Align the BFF with current Identity 0.5.6, Connectors 0.5.6, Workspace 0.2.12, Agent Platform

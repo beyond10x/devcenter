@@ -1418,7 +1418,7 @@ test("persists themes and makes search and navigation shortcuts discoverable", a
   expect(accessibility.violations).toEqual([]);
 });
 
-test("shows one stable MCP endpoint and separate client setup commands", async ({
+test("shows one stable MCP endpoint and least-privilege client setup", async ({
   page,
 }, testInfo) => {
   test.skip(testInfo.project.name !== "chromium", "Desktop publication behavior");
@@ -1429,10 +1429,17 @@ test("shows one stable MCP endpoint and separate client setup commands", async (
   await expect(page.getByLabel("Capability profile ID")).toHaveText(/Release profile/);
   await expect(page.getByRole("heading", { name: "Release profile" })).toBeVisible();
   await expect(page.locator(".endpoint-row code")).toHaveText(/\/mcp\/pub-test-1$/);
+  const codexConfig = page.getByTestId("codex-mcp-config");
+  await expect(codexConfig).toContainText("[mcp_servers.devcenter]");
+  await expect(codexConfig).toContainText(/url = "http:\/\/127\.0\.0\.1:\d+\/mcp\/pub-test-1"/);
+  await expect(codexConfig).toContainText('scopes = ["mcp.tools.call"]');
+  await expect(codexConfig).toContainText(/oauth_resource = "http:\/\/127\.0\.0\.1:\d+\/mcp"/);
+  await expect(codexConfig).toContainText("[mcp_servers.devcenter.oauth]");
+  await expect(codexConfig).toContainText('client_id = "devcenter-cli"');
+  await expect(page.getByText(/codex mcp add devcenter/)).toHaveCount(0);
   await expect(
-    page.getByText(/codex mcp add devcenter.*--oauth-client-id devcenter-cli/),
+    page.getByText("codex mcp login devcenter --scopes mcp.tools.call", { exact: true }),
   ).toBeVisible();
-  await expect(page.getByText(/codex mcp login devcenter --scopes mcp\.tools\.call/)).toBeVisible();
   await expect(
     page.getByText(/claude mcp add --transport http --client-id devcenter-cli/),
   ).toBeVisible();
