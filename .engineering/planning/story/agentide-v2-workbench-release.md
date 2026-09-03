@@ -31,12 +31,16 @@ scope:
 - confidence: inferred
   path: frontend/pnpm-lock.yaml
 - confidence: inferred
+  path: frontend/review-e2e/hosted-workbench.spec.ts
+- confidence: inferred
   path: frontend/src/api/client.ts
+- confidence: inferred
+  path: frontend/src/features/workbench/HostedTerminal.vue
 - confidence: inferred
   path: frontend/src/features/workbench/HostedWorkspaceView.vue
 - confidence: inferred
   path: openapi.json
-revision: 8
+revision: 9
 ---
 # Release the hosted workbench on AgentIDE v2
 
