@@ -2,7 +2,7 @@
   "openapi": "3.1.0",
   "info": {
     "title": "Devcenter API",
-    "version": "0.8.2",
+    "version": "0.8.3",
     "description": "Authenticated browser/BFF surface for identity, connector custody, agents, and tasks."
   },
   "paths": {
@@ -1525,6 +1525,26 @@
         }
       }
     },
+    "/api/threads/{thread_id}/messages/{message_sequence}/events": {
+      "get": {
+        "operationId": "streamProjectMessageEvents",
+        "security": [{ "browserSession": [] }, { "identityBearer": [] }],
+        "parameters": [
+          { "$ref": "#/components/parameters/ThreadId" },
+          { "$ref": "#/components/parameters/MessageSequence" }
+        ],
+        "responses": {
+          "200": {
+            "description": "Ordered Agent Platform events for one owned project-chat turn",
+            "content": {
+              "text/event-stream": { "schema": { "type": "string" } }
+            }
+          },
+          "401": { "$ref": "#/components/responses/Problem" },
+          "404": { "$ref": "#/components/responses/Problem" }
+        }
+      }
+    },
     "/api/projects/{project_id}/workflows": {
       "get": {
         "operationId": "listProjectWorkflows",
@@ -1546,6 +1566,24 @@
       }
     },
     "/api/projects/{project_id}/workflow-runs": {
+      "get": {
+        "operationId": "listProjectWorkflowRuns",
+        "parameters": [{ "$ref": "#/components/parameters/ProjectId" }],
+        "security": [{ "browserSession": [] }, { "identityBearer": [] }],
+        "responses": {
+          "200": {
+            "description": "Current actor's durable workflow runs for this project",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "array",
+                  "items": { "$ref": "#/components/schemas/WorkflowRun" }
+                }
+              }
+            }
+          }
+        }
+      },
       "post": {
         "operationId": "startProjectWorkflow",
         "parameters": [{ "$ref": "#/components/parameters/ProjectId" }],
@@ -1703,6 +1741,12 @@
         "in": "path",
         "required": true,
         "schema": { "type": "string", "maxLength": 128 }
+      },
+      "MessageSequence": {
+        "name": "message_sequence",
+        "in": "path",
+        "required": true,
+        "schema": { "type": "integer", "minimum": 1 }
       }
     },
     "responses": {
@@ -2893,6 +2937,10 @@
             "enum": ["accepted", "running", "succeeded", "failed", "refused"]
           },
           "failure_code": { "type": ["string", "null"] },
+          "output": {
+            "type": ["string", "null"],
+            "description": "Final Markdown result when the workflow succeeded"
+          },
           "created_at_ms": { "type": "integer" }
         },
         "additionalProperties": false

@@ -13,9 +13,9 @@ members = [
 exclude = ["crates/devcenter-connectors"]
 
 [workspace.package]
-version = "0.8.2"
+version = "0.8.3"
 edition = "2024"
-rust-version = "1.97"
+rust-version = "1.98"
 license = "PolyForm-Free-Trial-1.0.0"
 repository = "https://github.com/beyond10x/devcenter"
 publish = false
@@ -32,8 +32,8 @@ agent-platform-client = { git = "ssh://git@github.com/beyond10x/agent-platform.g
 agent-platform-core = { git = "ssh://git@github.com/beyond10x/agent-platform.git", tag = "0.6.3" }
 connectors-client = { git = "ssh://git@github.com/beyond10x/connectors.git", tag = "v0.5.3" }
 connectors-protocol = { package = "protocol", git = "ssh://git@github.com/beyond10x/connectors.git", tag = "v0.5.3" }
-workspace-client = { git = "ssh://git@github.com/beyond10x/workspace.git", rev = "df8a3ec80a39ad86302e0b20c10b378d206c57c5" }
-workspace-core = { git = "ssh://git@github.com/beyond10x/workspace.git", rev = "df8a3ec80a39ad86302e0b20c10b378d206c57c5" }
+workspace-client = { git = "ssh://git@github.com/beyond10x/workspace.git", rev = "a4795f5c3ef0510a2541e58cd438a5823490e30d" }
+workspace-core = { git = "ssh://git@github.com/beyond10x/workspace.git", rev = "a4795f5c3ef0510a2541e58cd438a5823490e30d" }
 
 anyhow = "1"
 axum = { version = "0.8", features = ["ws"] }

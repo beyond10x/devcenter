@@ -293,12 +293,16 @@ fn project_routes() -> Router<AppState> {
             get(list_thread_messages).post(create_thread_message),
         )
         .route(
+            "/api/threads/{thread_id}/messages/{message_sequence}/events",
+            get(project_message_events),
+        )
+        .route(
             "/api/projects/{project_id}/workflows",
             get(list_project_workflows),
         )
         .route(
             "/api/projects/{project_id}/workflow-runs",
-            post(start_project_workflow),
+            get(list_project_workflow_runs).post(start_project_workflow),
         )
         .route(
             "/api/projects/{project_id}/sessions",
@@ -1323,6 +1327,40 @@ async fn create_thread_message(
     }
 }
 
+async fn project_message_events(
+    State(state): State<AppState>,
+    headers: HeaderMap,
+    Path((thread_id, message_sequence)): Path<(String, u64)>,
+) -> Response {
+    let authenticated = match authenticate(&state, &headers, false).await {
+        Ok(authenticated) => authenticated,
+        Err(response) => return response,
+    };
+    let Some(workspace) = state.workspace.as_ref() else {
+        return unavailable("workspace_not_configured");
+    };
+    let upstream = match workspace
+        .message_events(
+            authenticated.authorization.as_str(),
+            &thread_id,
+            message_sequence,
+        )
+        .await
+    {
+        Ok(upstream) => upstream,
+        Err(error) => return workspace_error(&error),
+    };
+    let mut response = Response::new(Body::from_stream(upstream.bytes_stream()));
+    response.headers_mut().insert(
+        header::CONTENT_TYPE,
+        HeaderValue::from_static("text/event-stream"),
+    );
+    response
+        .headers_mut()
+        .insert(header::CACHE_CONTROL, HeaderValue::from_static("no-store"));
+    response
+}
+
 async fn list_project_workflows(
     State(state): State<AppState>,
     headers: HeaderMap,
@@ -1362,6 +1400,27 @@ async fn start_project_workflow(
         .await
     {
         Ok(run) => confidential_json(run),
+        Err(error) => workspace_error(&error),
+    }
+}
+
+async fn list_project_workflow_runs(
+    State(state): State<AppState>,
+    headers: HeaderMap,
+    Path(project_id): Path<String>,
+) -> Response {
+    let authenticated = match authenticate(&state, &headers, false).await {
+        Ok(authenticated) => authenticated,
+        Err(response) => return response,
+    };
+    let Some(workspace) = state.workspace.as_ref() else {
+        return unavailable("workspace_not_configured");
+    };
+    match workspace
+        .workflow_runs(authenticated.authorization.as_str(), &project_id)
+        .await
+    {
+        Ok(runs) => confidential_json(runs),
         Err(error) => workspace_error(&error),
     }
 }

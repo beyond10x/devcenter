@@ -16,11 +16,13 @@ import {
   ShieldCheck,
   SquareTerminal,
 } from "@lucide/vue";
-import { computed, onMounted, ref, watch } from "vue";
+import { computed, onBeforeUnmount, onMounted, ref, watch } from "vue";
 import { useRoute, useRouter } from "vue-router";
+import RenderedMarkdown from "@/components/RenderedMarkdown.vue";
 import {
   api,
   errorMessage,
+  taskFailureMessage,
   type Branch,
   type CodingSession,
   type EngineeringArtifact,
@@ -29,6 +31,7 @@ import {
   type ProjectThread,
   type RepositoryCandidate,
   type RepositoryEntry,
+  type TaskEventEnvelope,
   type WorkflowDefinition,
   type WorkflowRun,
 } from "@/api/client";
@@ -52,6 +55,8 @@ const aepError = ref("");
 const threads = ref<ProjectThread[]>([]);
 const selectedThreadId = ref<string>();
 const messages = ref<ProjectMessage[]>([]);
+const streamingReply = ref("");
+const streamingError = ref("");
 const workflows = ref<WorkflowDefinition[]>([]);
 const runs = ref<WorkflowRun[]>([]);
 const activeTab = ref<Tab>("overview");
@@ -88,9 +93,15 @@ watch(
     }
   },
 );
-watch(selectedThreadId, () => void loadMessages());
+watch(selectedThreadId, () => {
+  closeMessageStream();
+  void loadMessages();
+});
+onBeforeUnmount(closeMessageStream);
 let repositoryRequest = 0;
+let workflowObservationGeneration = 0;
 let searchTimer: number | undefined;
+let projectMessageEvents: EventSource | undefined;
 watch(search, () => {
   if (projectId.value) return;
   if (searchTimer !== undefined) window.clearTimeout(searchTimer);
@@ -112,6 +123,7 @@ async function searchRepositories() {
 }
 
 async function load() {
+  const workflowGeneration = ++workflowObservationGeneration;
   loading.value = true;
   error.value = "";
   try {
@@ -120,22 +132,30 @@ async function load() {
       await searchRepositories();
     } else {
       const loadedProject = await api.project(projectId.value);
-      const [loadedBranches, loadedTree, loadedThreads, loadedWorkflows] = await Promise.all([
-        api.branches(projectId.value),
-        api.repositoryTree(projectId.value),
-        api.threads(projectId.value),
-        api.workflows(projectId.value),
-      ]);
+      const [loadedBranches, loadedTree, loadedThreads, loadedWorkflows, loadedRuns] =
+        await Promise.all([
+          api.branches(projectId.value),
+          api.repositoryTree(projectId.value),
+          api.threads(projectId.value),
+          api.workflows(projectId.value),
+          api.workflowRuns(projectId.value),
+        ]);
       project.value = loadedProject;
       branches.value = loadedBranches;
       repositoryTree.value = loadedTree;
       threads.value = loadedThreads;
       workflows.value = loadedWorkflows;
+      runs.value = loadedRuns;
       selectedThreadId.value = loadedThreads[0]?.id;
       if (selectedThreadId.value) await loadMessages();
       await loadEngineeringArtifacts(loadedProject.id);
       if (workspace.session?.agentide_workspace_enabled) {
         codingSessions.value = await api.codingSessions(loadedProject.id);
+      }
+      for (const run of loadedRuns) {
+        if (run.state === "accepted" || run.state === "running") {
+          void observeWorkflowRun(loadedProject.id, run.id, workflowGeneration);
+        }
       }
     }
   } catch (caught) {
@@ -238,7 +258,7 @@ async function sendMessage() {
     const message = await api.createMessage(thread.id, content);
     messages.value.push(message);
     draft.value = "";
-    void observeAgentReply(thread.id, message.sequence);
+    observeAgentReply(thread.id, message.sequence);
   } catch (caught) {
     error.value = errorMessage(caught);
   } finally {
@@ -246,13 +266,63 @@ async function sendMessage() {
   }
 }
 
-async function observeAgentReply(threadId: string, afterSequence: number) {
+function observeAgentReply(threadId: string, afterSequence: number) {
+  closeMessageStream();
+  const events = new EventSource(
+    `/api/threads/${encodeURIComponent(threadId)}/messages/${String(afterSequence)}/events`,
+  );
+  projectMessageEvents = events;
+  events.addEventListener("task", (rawEvent) => {
+    const event = rawEvent as MessageEvent<string>;
+    try {
+      const envelope = JSON.parse(event.data) as TaskEventEnvelope;
+      const update = envelope.event;
+      if (!update) return;
+      if (update.kind === "text_delta") streamingReply.value += update.text;
+      if (update.kind === "succeeded") {
+        streamingReply.value = update.output;
+        closeMessageStream(false);
+        void reconcileAgentReply(threadId, afterSequence);
+      }
+      if (update.kind === "failed") {
+        streamingError.value = taskFailureMessage(update.failure);
+        closeMessageStream(false);
+        void reconcileAgentReply(threadId, afterSequence);
+      }
+    } catch {
+      streamingError.value = "Devcenter received an invalid project-agent event.";
+      closeMessageStream(false);
+    }
+  });
+  events.onerror = () => {
+    if (events.readyState === EventSource.CLOSED) {
+      closeMessageStream(false);
+      void reconcileAgentReply(threadId, afterSequence);
+    }
+  };
+}
+
+function closeMessageStream(clear = true) {
+  projectMessageEvents?.close();
+  projectMessageEvents = undefined;
+  if (clear) {
+    streamingReply.value = "";
+    streamingError.value = "";
+  }
+}
+
+async function reconcileAgentReply(threadId: string, afterSequence: number) {
   try {
     for (let attempt = 0; attempt < 120; attempt += 1) {
-      await new Promise((resolve) => window.setTimeout(resolve, 1000));
+      await new Promise((resolve) => window.setTimeout(resolve, 500));
+      if (selectedThreadId.value !== threadId) return;
       const observed = await api.messages(threadId);
       messages.value = observed;
-      if (observed.some((message) => message.sequence > afterSequence)) return;
+      if (observed.some((message) => message.sequence > afterSequence)) {
+        streamingReply.value = "";
+        streamingError.value = "";
+        return;
+      }
     }
   } catch {
     // A later thread selection or refresh provides a natural retry boundary.
@@ -272,10 +342,26 @@ async function startWorkflow(definition: WorkflowDefinition) {
       snapshot.pinned_commit,
     );
     runs.value = [run, ...runs.value];
+    void observeWorkflowRun(snapshot.id, run.id, workflowObservationGeneration);
   } catch (caught) {
     error.value = errorMessage(caught);
   } finally {
     runningWorkflow.value = undefined;
+  }
+}
+
+async function observeWorkflowRun(projectId: string, runId: string, generation: number) {
+  try {
+    for (let attempt = 0; attempt < 300; attempt += 1) {
+      await new Promise((resolve) => window.setTimeout(resolve, 1000));
+      if (generation !== workflowObservationGeneration || project.value?.id !== projectId) return;
+      const observed = await api.workflowRuns(projectId);
+      runs.value = observed;
+      const run = observed.find((candidate) => candidate.id === runId);
+      if (!run || !["accepted", "running"].includes(run.state)) return;
+    }
+  } catch {
+    // A tab change, project reload, or explicit rerun provides a natural retry boundary.
   }
 }
 
@@ -491,7 +577,17 @@ function shortCommit(commit?: string | null) {
                 }}</strong
                 ><span>{{ shortCommit(message.commit) }}</span>
               </header>
-              <p>{{ message.content }}</p>
+              <RenderedMarkdown v-if="message.role === 'assistant'" :source="message.content" />
+              <p v-else>{{ message.content }}</p>
+            </article>
+            <article
+              v-if="streamingReply || streamingError"
+              class="project-message assistant streaming"
+              aria-live="polite"
+            >
+              <header><strong>Project agent</strong><span>live</span></header>
+              <RenderedMarkdown v-if="streamingReply" :source="streamingReply" />
+              <p v-if="streamingError" class="assistant-error">{{ streamingError }}</p>
             </article>
           </div>
           <form class="project-composer" @submit.prevent="sendMessage">
@@ -538,9 +634,16 @@ function shortCommit(commit?: string | null) {
           </button>
         </article>
         <article v-for="run in runs" :key="run.id" class="workflow-run">
-          <span class="status-pill" :class="run.state">{{ run.state }}</span
-          ><strong>{{ run.definition_id }}</strong
-          ><span>{{ run.branch }} · {{ shortCommit(run.commit) }}</span>
+          <header>
+            <span class="status-pill" :class="run.state">{{ run.state }}</span>
+            <strong>{{ run.definition_id }}</strong>
+            <span>{{ run.branch }} · {{ shortCommit(run.commit) }}</span>
+          </header>
+          <RenderedMarkdown v-if="run.output" :source="run.output" />
+          <p v-else-if="run.failure_code" class="assistant-error">{{ run.failure_code }}</p>
+          <p v-else-if="run.state === 'accepted' || run.state === 'running'">
+            The workflow is executing. Results update automatically.
+          </p>
         </article>
       </section>
 

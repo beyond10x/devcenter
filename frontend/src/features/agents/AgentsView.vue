@@ -14,6 +14,7 @@ import {
 } from "@lucide/vue";
 import { computed, ref, watch } from "vue";
 import { useRoute, useRouter } from "vue-router";
+import RenderedMarkdown from "@/components/RenderedMarkdown.vue";
 import NewAgentDialog from "./NewAgentDialog.vue";
 import { useWorkspaceStore, type AgentRun } from "@/stores/workspace";
 
@@ -220,7 +221,11 @@ function formatInput(input: unknown) {
               </div>
               <div class="chat-message assistant-message">
                 <span>{{ selected.name }} · {{ statusLabel(task.status) }}</span>
-                <p v-if="taskOutput(task)" class="assistant-output">{{ taskOutput(task) }}</p>
+                <RenderedMarkdown
+                  v-if="taskOutput(task)"
+                  class="assistant-output"
+                  :source="taskOutput(task) ?? ''"
+                />
                 <p v-else-if="taskError(task)" class="assistant-error">{{ taskError(task) }}</p>
                 <p v-else class="assistant-waiting">
                   <RotateCw

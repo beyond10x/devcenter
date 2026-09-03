@@ -3003,6 +3003,10 @@ a {
   color: var(--muted);
   background: #f1f3f2;
 }
+.project-message.streaming {
+  border-color: var(--accent);
+  box-shadow: inset 3px 0 0 var(--accent);
+}
 .project-message header {
   display: flex;
   justify-content: space-between;
@@ -3016,6 +3020,44 @@ a {
 .project-message p {
   margin: 0.4rem 0 0;
   white-space: pre-wrap;
+}
+.rendered-markdown {
+  min-width: 0;
+  margin-top: 0.4rem;
+  line-height: 1.55;
+}
+.rendered-markdown > :first-child {
+  margin-top: 0;
+}
+.rendered-markdown > :last-child {
+  margin-bottom: 0;
+}
+.rendered-markdown p,
+.rendered-markdown ul,
+.rendered-markdown ol,
+.rendered-markdown pre,
+.rendered-markdown blockquote {
+  margin: 0.65rem 0;
+}
+.rendered-markdown pre {
+  overflow-x: auto;
+  padding: 0.75rem;
+  background: var(--surface-inset);
+  border: 1px solid var(--line);
+  border-radius: 0.55rem;
+}
+.rendered-markdown code {
+  font-family: ui-monospace, "SFMono-Regular", Consolas, monospace;
+}
+.rendered-markdown :not(pre) > code {
+  padding: 0.08rem 0.3rem;
+  background: var(--surface-inset);
+  border-radius: 0.25rem;
+}
+.rendered-markdown blockquote {
+  padding-left: 0.8rem;
+  color: var(--muted);
+  border-left: 3px solid var(--line-strong);
 }
 .project-composer {
   display: grid;
@@ -3047,12 +3089,14 @@ a {
   flex: 1;
 }
 .workflow-run {
+  grid-column: 1 / -1;
+  padding: 0.75rem;
+}
+.workflow-run > header {
   display: grid;
   grid-template-columns: auto minmax(0, 1fr) auto;
   align-items: center;
   gap: 0.65rem;
-  grid-column: 1 / -1;
-  padding: 0.75rem;
 }
 
 @media (max-width: 900px) {

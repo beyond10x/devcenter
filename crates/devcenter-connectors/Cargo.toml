@@ -4,9 +4,9 @@ members = ["."]
 
 [package]
 name = "devcenter-connectors"
-version = "0.8.2"
+version = "0.8.3"
 edition = "2024"
-rust-version = "1.97"
+rust-version = "1.98"
 license = "PolyForm-Free-Trial-1.0.0"
 repository = "https://github.com/beyond10x/devcenter"
 publish = false

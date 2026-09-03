@@ -767,6 +767,22 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/threads/{thread_id}/messages/{message_sequence}/events": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get: operations["streamProjectMessageEvents"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/projects/{project_id}/workflows": {
         parameters: {
             query?: never;
@@ -790,7 +806,7 @@ export interface paths {
             path?: never;
             cookie?: never;
         };
-        get?: never;
+        get: operations["listProjectWorkflowRuns"];
         put?: never;
         post: operations["startProjectWorkflow"];
         delete?: never;
@@ -1424,6 +1440,8 @@ export interface components {
             /** @enum {string} */
             state: "accepted" | "running" | "succeeded" | "failed" | "refused";
             failure_code?: string | null;
+            /** @description Final Markdown result when the workflow succeeded */
+            output?: string | null;
             created_at_ms: number;
         };
         CreateAgent: {
@@ -1516,6 +1534,7 @@ export interface components {
         CodingSessionId: string;
         TerminalId: string;
         ThreadId: string;
+        MessageSequence: number;
     };
     requestBodies: never;
     headers: never;
@@ -3104,6 +3123,31 @@ export interface operations {
             };
         };
     };
+    streamProjectMessageEvents: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                thread_id: components["parameters"]["ThreadId"];
+                message_sequence: components["parameters"]["MessageSequence"];
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Ordered Agent Platform events for one owned project-chat turn */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "text/event-stream": string;
+                };
+            };
+            401: components["responses"]["Problem"];
+            404: components["responses"]["Problem"];
+        };
+    };
     listProjectWorkflows: {
         parameters: {
             query?: never;
@@ -3122,6 +3166,28 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["WorkflowDefinition"][];
+                };
+            };
+        };
+    };
+    listProjectWorkflowRuns: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                project_id: components["parameters"]["ProjectId"];
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Current actor's durable workflow runs for this project */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["WorkflowRun"][];
                 };
             };
         };

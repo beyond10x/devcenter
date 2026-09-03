@@ -103,6 +103,7 @@ export interface WorkflowRun {
   commit: string;
   state: "accepted" | "running" | "succeeded" | "failed" | "refused";
   failure_code?: string | null;
+  output?: string | null;
   created_at_ms: number;
 }
 export type CodingSessionState =
@@ -369,6 +370,8 @@ export const api = {
     }),
   workflows: (projectId: string) =>
     request<WorkflowDefinition[]>(`/api/projects/${encodeURIComponent(projectId)}/workflows`),
+  workflowRuns: (projectId: string) =>
+    request<WorkflowRun[]>(`/api/projects/${encodeURIComponent(projectId)}/workflow-runs`),
   startWorkflow: (projectId: string, definitionId: string, branch: string, commit: string) =>
     request<WorkflowRun>(`/api/projects/${encodeURIComponent(projectId)}/workflow-runs`, {
       method: "POST",
