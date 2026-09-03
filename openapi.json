@@ -1103,6 +1103,40 @@
         }
       }
     },
+    "/api/project-sessions/{session_id}/agents/{agent_id}/turns": {
+      "post": {
+        "operationId": "submitCodingSessionTurn",
+        "parameters": [
+          { "$ref": "#/components/parameters/CodingSessionId" },
+          { "$ref": "#/components/parameters/AgentId" }
+        ],
+        "security": [{ "browserSession": [] }, { "identityBearer": [] }],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": { "$ref": "#/components/schemas/SubmitCodingTurn" }
+            }
+          }
+        },
+        "responses": {
+          "202": {
+            "description": "Coding turn bound to the ready Workspace and AgentIDE sessions",
+            "content": {
+              "application/json": {
+                "schema": { "$ref": "#/components/schemas/Task" }
+              }
+            }
+          },
+          "401": { "$ref": "#/components/responses/Problem" },
+          "403": { "$ref": "#/components/responses/Problem" },
+          "404": { "$ref": "#/components/responses/Problem" },
+          "409": { "$ref": "#/components/responses/Problem" },
+          "422": { "$ref": "#/components/responses/Problem" },
+          "503": { "$ref": "#/components/responses/Unavailable" }
+        }
+      }
+    },
     "/api/project-sessions/{session_id}/tree": {
       "get": {
         "operationId": "getCodingTree",
@@ -2573,12 +2607,7 @@
         "type": "object",
         "required": ["selector", "mode"],
         "properties": {
-          "selector": {
-            "type": "object",
-            "required": ["kind"],
-            "properties": { "kind": { "const": "workspace" } },
-            "additionalProperties": false
-          },
+          "selector": { "$ref": "#/components/schemas/ChangeSelector" },
           "mode": { "type": "string", "enum": ["patch", "stat", "files_only"] }
         },
         "additionalProperties": false
@@ -2988,6 +3017,148 @@
         },
         "additionalProperties": false
       },
+      "ConversationMessage": {
+        "type": "object",
+        "required": ["role", "content"],
+        "properties": {
+          "role": { "type": "string", "enum": ["user", "assistant", "system"] },
+          "content": { "type": "string" }
+        },
+        "additionalProperties": false
+      },
+      "ContextSelection": {
+        "type": "object",
+        "required": [
+          "id",
+          "kind",
+          "reference",
+          "content",
+          "sha256",
+          "truncated"
+        ],
+        "properties": {
+          "id": { "type": "string" },
+          "kind": {
+            "type": "string",
+            "enum": ["editor", "diff_hunk", "terminal", "process", "evidence"]
+          },
+          "reference": { "type": "string" },
+          "start_line": { "type": ["integer", "null"], "minimum": 1 },
+          "end_line": { "type": ["integer", "null"], "minimum": 1 },
+          "content": { "type": "string", "maxLength": 32768 },
+          "sha256": { "type": "string", "pattern": "^[0-9a-f]{64}$" },
+          "truncated": { "type": "boolean", "const": false }
+        },
+        "additionalProperties": false
+      },
+      "OpenFileReference": {
+        "type": "object",
+        "required": ["path", "sha256", "dirty"],
+        "properties": {
+          "path": { "type": "string", "maxLength": 4096 },
+          "sha256": { "type": "string", "pattern": "^[0-9a-f]{64}$" },
+          "cursor": {
+            "oneOf": [
+              {
+                "type": "object",
+                "required": ["line", "column"],
+                "properties": {
+                  "line": { "type": "integer", "minimum": 1 },
+                  "column": { "type": "integer", "minimum": 1 }
+                },
+                "additionalProperties": false
+              },
+              { "type": "null" }
+            ]
+          },
+          "dirty": { "type": "boolean" }
+        },
+        "additionalProperties": false
+      },
+      "ChangeSelector": {
+        "oneOf": [
+          {
+            "type": "object",
+            "required": ["kind"],
+            "properties": { "kind": { "const": "workspace" } },
+            "additionalProperties": false
+          },
+          {
+            "type": "object",
+            "required": ["kind", "digest"],
+            "properties": {
+              "kind": { "const": "plan" },
+              "digest": { "type": "string" }
+            },
+            "additionalProperties": false
+          },
+          {
+            "type": "object",
+            "required": ["kind", "attempt_id"],
+            "properties": {
+              "kind": { "const": "agent_attempt" },
+              "attempt_id": { "type": "string" }
+            },
+            "additionalProperties": false
+          },
+          {
+            "type": "object",
+            "required": ["kind", "publication_id"],
+            "properties": {
+              "kind": { "const": "publication" },
+              "publication_id": { "type": "string" }
+            },
+            "additionalProperties": false
+          },
+          {
+            "type": "object",
+            "required": ["kind", "old", "new"],
+            "properties": {
+              "kind": { "const": "revision_pair" },
+              "old": { "type": "string" },
+              "new": { "type": "string" }
+            },
+            "additionalProperties": false
+          }
+        ]
+      },
+      "SubmitCodingTurn": {
+        "type": "object",
+        "required": [
+          "prompt",
+          "messages",
+          "agentide_session_id",
+          "focused_selections",
+          "open_files",
+          "idempotency_key"
+        ],
+        "properties": {
+          "prompt": { "type": "string", "minLength": 1, "maxLength": 131072 },
+          "messages": {
+            "type": "array",
+            "items": { "$ref": "#/components/schemas/ConversationMessage" }
+          },
+          "agentide_session_id": { "type": "string" },
+          "focused_selections": {
+            "type": "array",
+            "maxItems": 8,
+            "items": { "$ref": "#/components/schemas/ContextSelection" }
+          },
+          "open_files": {
+            "type": "array",
+            "maxItems": 128,
+            "items": { "$ref": "#/components/schemas/OpenFileReference" }
+          },
+          "active_diff": {
+            "oneOf": [
+              { "$ref": "#/components/schemas/ChangeSelector" },
+              { "type": "null" }
+            ]
+          },
+          "idempotency_key": { "type": "string" }
+        },
+        "additionalProperties": false
+      },
       "Task": {
         "type": "object",
         "required": [
@@ -3008,7 +3179,9 @@
           "failure_code": { "type": ["string", "null"] },
           "failure_message": { "type": ["string", "null"] },
           "accepted_at_ms": { "type": "integer", "minimum": 0 },
-          "completed_at_ms": { "type": ["integer", "null"], "minimum": 0 }
+          "completed_at_ms": { "type": ["integer", "null"], "minimum": 0 },
+          "workspace_session_id": { "type": ["string", "null"] },
+          "agentide_session_id": { "type": ["string", "null"] }
         },
         "additionalProperties": false
       },

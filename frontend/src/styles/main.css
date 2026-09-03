@@ -4923,6 +4923,170 @@ pre,
   background: var(--danger-soft);
   border-color: var(--danger-border);
 }
+.coding-agent-pane {
+  display: flex;
+  min-width: 0;
+  min-height: 0;
+  flex: 1;
+  flex-direction: column;
+  background: var(--surface-muted);
+}
+.coding-agent-header {
+  display: flex;
+  min-height: 3.4rem;
+  align-items: center;
+  justify-content: space-between;
+  gap: 1rem;
+  padding: 0.55rem 0.8rem;
+  background: var(--surface);
+  border-bottom: 1px solid var(--line);
+}
+.coding-agent-header strong,
+.coding-agent-header span {
+  display: block;
+}
+.coding-agent-header strong {
+  margin-top: 0.12rem;
+  font-size: 0.76rem;
+}
+.coding-agent-revisions {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: flex-end;
+  gap: 0.35rem;
+}
+.coding-agent-revisions span,
+.coding-agent-composer-context span {
+  padding: 0.18rem 0.35rem;
+  color: var(--muted);
+  background: var(--surface-muted);
+  border: 1px solid var(--line);
+  border-radius: 999px;
+  font:
+    0.5rem ui-monospace,
+    monospace;
+}
+.coding-agent-transcript {
+  min-height: 0;
+  flex: 1;
+  padding: 0.8rem;
+  overflow: auto;
+}
+.coding-agent-turn {
+  display: grid;
+  gap: 0.55rem;
+  max-width: 54rem;
+  margin: 0 auto 1rem;
+}
+.coding-agent-message {
+  max-width: min(88%, 44rem);
+  padding: 0.65rem 0.75rem;
+  background: var(--surface);
+  border: 1px solid var(--line);
+  border-radius: 0.55rem;
+}
+.coding-agent-message.human-message {
+  justify-self: end;
+  background: var(--accent-soft);
+  border-color: color-mix(in srgb, var(--accent) 28%, var(--line));
+}
+.coding-agent-message.assistant-message {
+  justify-self: start;
+}
+.coding-agent-message > span {
+  display: block;
+  margin-bottom: 0.32rem;
+  color: var(--muted);
+  font-size: 0.52rem;
+  text-transform: uppercase;
+}
+.coding-agent-message p,
+.coding-agent-message pre {
+  margin: 0;
+  color: var(--ink);
+  font: inherit;
+  font-size: 0.68rem;
+  line-height: 1.6;
+  white-space: pre-wrap;
+}
+.coding-agent-error,
+.coding-agent-approval {
+  max-width: 54rem;
+  margin: 0.6rem auto;
+  padding: 0.7rem;
+  color: var(--danger);
+  background: var(--danger-soft);
+  border: 1px solid var(--danger-border);
+  border-radius: 0.5rem;
+  font-size: 0.62rem;
+}
+.coding-agent-approval {
+  display: flex;
+  align-items: flex-end;
+  justify-content: space-between;
+  gap: 0.75rem;
+  color: var(--ink);
+  background: var(--warning-soft);
+  border-color: var(--warning-border);
+}
+.coding-agent-approval strong,
+.coding-agent-approval code {
+  display: block;
+}
+.coding-agent-approval code {
+  max-height: 8rem;
+  margin-top: 0.35rem;
+  overflow: auto;
+  color: var(--muted);
+  font-size: 0.55rem;
+  white-space: pre-wrap;
+}
+.coding-agent-composer {
+  padding: 0.65rem 0.8rem;
+  background: var(--surface);
+  border-top: 1px solid var(--line);
+}
+.coding-agent-composer textarea {
+  display: block;
+  width: 100%;
+  min-height: 4.5rem;
+  resize: vertical;
+  padding: 0.6rem 0.7rem;
+  color: var(--ink);
+  background: var(--surface-muted);
+  border: 1px solid var(--line);
+  border-radius: 0.5rem;
+  outline: 0;
+  font: inherit;
+  font-size: 0.7rem;
+  line-height: 1.5;
+}
+.coding-agent-composer textarea:focus {
+  border-color: var(--accent);
+  box-shadow: 0 0 0 2px var(--accent-soft);
+}
+.coding-agent-composer-context,
+.coding-agent-composer footer {
+  display: flex;
+  align-items: center;
+  gap: 0.35rem;
+  margin-top: 0.5rem;
+}
+.coding-agent-composer-context {
+  flex-wrap: wrap;
+}
+.coding-agent-composer-context .warning-copy {
+  color: var(--warning);
+  border-color: var(--warning-border);
+}
+.coding-agent-composer footer {
+  justify-content: space-between;
+}
+.coding-agent-composer footer p {
+  margin: 0;
+  color: var(--muted);
+  font-size: 0.56rem;
+}
 .workbench-empty,
 .workbench-unavailable-pane {
   display: grid;

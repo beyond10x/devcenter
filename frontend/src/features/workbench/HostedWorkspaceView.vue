@@ -15,6 +15,7 @@ import {
   RefreshCw,
   Save,
   Search,
+  Send,
   ShieldCheck,
   SplitSquareHorizontal,
   SquareTerminal,
@@ -141,6 +142,7 @@ const coordinationState = ref<"loading" | "ready" | "unbound" | "refused" | "err
 const coordinationError = ref("");
 const coordinationVersion = ref<number>();
 const coordinationMutation = ref("");
+const agentPrompt = ref("");
 
 const projectId = computed(() => String(route.params.projectId ?? ""));
 const sessionId = computed(() => String(route.params.sessionId ?? ""));
@@ -164,7 +166,24 @@ const splitFile = computed(() =>
 const dirtyCount = computed(() => openFiles.value.filter((file) => file.dirty).length);
 const fileEntries = computed(() => tree.value.filter((entry) => !isDirectory(entry)));
 const selectedAgentId = computed(() =>
-  typeof route.query.agent === "string" ? route.query.agent : undefined,
+  typeof route.query.agent === "string" ? route.query.agent : workspace.selectedAgentId,
+);
+const selectedAgent = computed(() =>
+  workspace.agents.find((candidate) => candidate.id === selectedAgentId.value),
+);
+const agentRun = computed(() =>
+  selectedAgentId.value ? workspace.runFor(selectedAgentId.value) : undefined,
+);
+const sessionTasks = computed(() => {
+  if (!selectedAgentId.value) return [];
+  return workspace
+    .historyFor(selectedAgentId.value)
+    .filter((task) => task.workspace_session_id === sessionId.value);
+});
+const agentTurnPending = computed(() =>
+  ["submitting", "accepted", "running", "awaiting_approval", "reconnecting"].includes(
+    agentRun.value?.status ?? "idle",
+  ),
 );
 const visibleTerminals = computed(() =>
   terminals.value.filter((candidate) => !detachedTerminalIds.value.has(candidate.id)),
@@ -207,6 +226,13 @@ watch(
 watch([activePane, diffMode], ([pane]) => {
   if (pane === "diff") void loadDiff();
 });
+watch(
+  selectedAgentId,
+  (agentId) => {
+    if (agentId) workspace.selectAgent(agentId);
+  },
+  { immediate: true },
+);
 let treeTimer: number | undefined;
 let stopTerminalResize: (() => void) | undefined;
 watch(treeSearch, () => {
@@ -657,6 +683,52 @@ async function attachHunk(hunk: DiffHunk, path: string) {
     endLine: hunk.new.start + Math.max(0, hunk.new.lines - 1),
   });
   rightPane.value = "context";
+}
+
+async function submitAgentTurn() {
+  const agentId = selectedAgentId.value;
+  const current = agentIdeSession.value;
+  const prompt = agentPrompt.value.trim();
+  if (!agentId || !current || !prompt || coordinationState.value !== "ready") return;
+  const priorMessages = sessionTasks.value
+    .filter((task) => task.status === "succeeded" && task.output)
+    .slice(-10)
+    .flatMap((task) => [
+      { role: "user" as const, content: task.prompt },
+      { role: "assistant" as const, content: task.output ?? "" },
+    ]);
+  const task = await workspace.submitCodingTurn(sessionId.value, agentId, {
+    prompt,
+    messages: priorMessages,
+    agentide_session_id: current.session_id,
+    focused_selections: attachments.value.map((attachment) => ({
+      id: attachment.id,
+      kind:
+        attachment.kind === "selection"
+          ? ("editor" as const)
+          : attachment.kind === "diff_hunk"
+            ? ("diff_hunk" as const)
+            : ("terminal" as const),
+      reference: attachment.reference,
+      start_line: attachment.startLine ?? null,
+      end_line: attachment.endLine ?? null,
+      content: attachment.detail,
+      sha256: attachment.sha256,
+      truncated: false,
+    })),
+    open_files: openFiles.value.map((file) => ({
+      path: file.projection.revision.path,
+      sha256: file.projection.revision.sha256,
+      cursor: null,
+      dirty: file.dirty,
+    })),
+    active_diff: activePane.value === "diff" ? { kind: "workspace" } : null,
+    idempotency_key: globalThis.crypto.randomUUID(),
+  });
+  if (task) {
+    agentPrompt.value = "";
+    attachments.value = [];
+  }
 }
 
 async function shareAttachment(attachment: ContextAttachment) {
@@ -1226,19 +1298,124 @@ async function sha256(content: string): Promise<string> {
             />
           </template>
 
+          <section v-else-if="activePane === 'agent'" class="coding-agent-pane">
+            <header class="coding-agent-header">
+              <div>
+                <span class="eyebrow">Agent Platform · coding session turn</span>
+                <strong>{{ selectedAgent?.name ?? "Choose an agent" }}</strong>
+              </div>
+              <div class="coding-agent-revisions" aria-label="Current agent context revisions">
+                <span>context {{ agentRun?.contextRevision?.slice(0, 12) ?? "pending" }}</span>
+                <span>tools {{ agentRun?.inventoryRevision?.slice(0, 12) ?? "pending" }}</span>
+              </div>
+            </header>
+
+            <div class="coding-agent-transcript" aria-live="polite">
+              <div v-if="!sessionTasks.length" class="workbench-empty compact">
+                <Bot :size="24" />
+                <strong>No turns in this workspace yet</strong>
+                <p>
+                  The agent will refresh its server-derived ActorView immediately before every model
+                  turn.
+                </p>
+              </div>
+              <article v-for="task in sessionTasks" :key="task.id" class="coding-agent-turn">
+                <div class="coding-agent-message human-message">
+                  <span>You</span>
+                  <p>{{ task.prompt }}</p>
+                </div>
+                <div class="coding-agent-message assistant-message">
+                  <span>{{ selectedAgent?.name ?? "Agent" }} · {{ task.status }}</span>
+                  <pre>{{
+                    task.output ||
+                    (task.id === agentRun?.taskId ? agentRun.output : "") ||
+                    "Waiting for output…"
+                  }}</pre>
+                  <p v-if="task.failure_message" class="editor-error">
+                    {{ task.failure_message }}
+                  </p>
+                </div>
+              </article>
+              <p v-if="agentRun?.error" class="coding-agent-error" role="alert">
+                {{ agentRun.error }}
+              </p>
+              <section
+                v-for="approval in agentRun?.approvals ?? []"
+                :key="approval.id"
+                class="coding-agent-approval"
+              >
+                <div>
+                  <span class="eyebrow">Exact operation approval</span>
+                  <strong>{{ approval.operation_ref }}</strong>
+                  <code>{{ JSON.stringify(approval.input, null, 2) }}</code>
+                </div>
+                <div class="approval-actions">
+                  <button
+                    class="button quiet small"
+                    type="button"
+                    :disabled="agentRun?.resolvingApprovalId === approval.id"
+                    @click="workspace.resolveTaskApproval(selectedAgentId!, approval.id, 'deny')"
+                  >
+                    Deny
+                  </button>
+                  <button
+                    class="button primary small"
+                    type="button"
+                    :disabled="agentRun?.resolvingApprovalId === approval.id"
+                    @click="workspace.resolveTaskApproval(selectedAgentId!, approval.id, 'approve')"
+                  >
+                    Approve exact call
+                  </button>
+                </div>
+              </section>
+            </div>
+
+            <form class="coding-agent-composer" @submit.prevent="submitAgentTurn">
+              <textarea
+                v-model="agentPrompt"
+                rows="3"
+                maxlength="131072"
+                placeholder="Ask the agent to inspect, edit, or verify this workspace…"
+                aria-label="Coding agent prompt"
+                @keydown.meta.enter.prevent="submitAgentTurn"
+                @keydown.ctrl.enter.prevent="submitAgentTurn"
+              ></textarea>
+              <div class="coding-agent-composer-context">
+                <span>{{ attachments.length }} explicit attachment(s)</span>
+                <span>{{ openFiles.length }} open file digest(s)</span>
+                <span v-if="dirtyCount" class="warning-copy">
+                  {{ dirtyCount }} unsaved buffer(s) excluded
+                </span>
+                <span v-if="agentRun?.publishedTools?.length">
+                  {{ agentRun.publishedTools.join(", ") }}
+                </span>
+              </div>
+              <footer>
+                <p>Saved Workspace content and explicit selections only. Ctrl/⌘ + Enter sends.</p>
+                <button
+                  class="button primary"
+                  type="submit"
+                  :disabled="
+                    !agentPrompt.trim() ||
+                    !selectedAgentId ||
+                    !agentIdeSession ||
+                    coordinationState !== 'ready' ||
+                    agentTurnPending
+                  "
+                >
+                  <LoaderCircle v-if="agentTurnPending" class="spinning" :size="14" />
+                  <Send v-else :size="14" />
+                  {{ agentTurnPending ? "Agent working…" : "Send turn" }}
+                </button>
+              </footer>
+            </form>
+          </section>
+
           <div v-else class="workbench-unavailable-pane">
-            <CircleAlert :size="24" /><strong>{{
-              activePane === "agent"
-                ? "Agent Platform transcript unavailable"
-                : "Evidence projection unavailable"
-            }}</strong>
+            <CircleAlert :size="24" /><strong>Evidence projection unavailable</strong>
             <p>
-              {{
-                coordinationState === "ready"
-                  ? "The AgentIDE coordination stream is bound, but this deployment has not exposed this projection yet."
-                  : "The Workspace session is live, but no AgentIDE coordination session is bound."
-              }}
-              No browser-local substitute is shown.
+              Evidence remains durable in the shared session journal, but this deployment has not
+              exposed a dedicated evidence projection yet. No browser-local substitute is shown.
             </p>
           </div>
         </section>

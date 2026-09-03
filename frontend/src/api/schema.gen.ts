@@ -568,6 +568,22 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/project-sessions/{session_id}/agents/{agent_id}/turns": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post: operations["submitCodingSessionTurn"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/project-sessions/{session_id}/tree": {
         parameters: {
             query?: never;
@@ -1279,10 +1295,7 @@ export interface components {
             latest: components["schemas"]["FileProjection"];
         };
         ResolveDiff: {
-            selector: {
-                /** @constant */
-                kind: "workspace";
-            };
+            selector: components["schemas"]["ChangeSelector"];
             /** @enum {string} */
             mode: "patch" | "stat" | "files_only";
         };
@@ -1464,6 +1477,62 @@ export interface components {
             prompt: string;
             idempotency_key: string;
         };
+        ConversationMessage: {
+            /** @enum {string} */
+            role: "user" | "assistant" | "system";
+            content: string;
+        };
+        ContextSelection: {
+            id: string;
+            /** @enum {string} */
+            kind: "editor" | "diff_hunk" | "terminal" | "process" | "evidence";
+            reference: string;
+            start_line?: number | null;
+            end_line?: number | null;
+            content: string;
+            sha256: string;
+            /** @constant */
+            truncated: false;
+        };
+        OpenFileReference: {
+            path: string;
+            sha256: string;
+            cursor?: {
+                line: number;
+                column: number;
+            } | null;
+            dirty: boolean;
+        };
+        ChangeSelector: {
+            /** @constant */
+            kind: "workspace";
+        } | {
+            /** @constant */
+            kind: "plan";
+            digest: string;
+        } | {
+            /** @constant */
+            kind: "agent_attempt";
+            attempt_id: string;
+        } | {
+            /** @constant */
+            kind: "publication";
+            publication_id: string;
+        } | {
+            /** @constant */
+            kind: "revision_pair";
+            old: string;
+            new: string;
+        };
+        SubmitCodingTurn: {
+            prompt: string;
+            messages: components["schemas"]["ConversationMessage"][];
+            agentide_session_id: string;
+            focused_selections: components["schemas"]["ContextSelection"][];
+            open_files: components["schemas"]["OpenFileReference"][];
+            active_diff?: components["schemas"]["ChangeSelector"] | null;
+            idempotency_key: string;
+        };
         Task: {
             id: string;
             agent_id: string;
@@ -1475,6 +1544,8 @@ export interface components {
             failure_message?: string | null;
             accepted_at_ms: number;
             completed_at_ms?: number | null;
+            workspace_session_id?: string | null;
+            agentide_session_id?: string | null;
         };
         ConnectorOwnerContext: {
             tenant_id: string;
@@ -2664,6 +2735,39 @@ export interface operations {
             };
             403: components["responses"]["Problem"];
             404: components["responses"]["Problem"];
+            503: components["responses"]["Unavailable"];
+        };
+    };
+    submitCodingSessionTurn: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                session_id: components["parameters"]["CodingSessionId"];
+                agent_id: components["parameters"]["AgentId"];
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["SubmitCodingTurn"];
+            };
+        };
+        responses: {
+            /** @description Coding turn bound to the ready Workspace and AgentIDE sessions */
+            202: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Task"];
+                };
+            };
+            401: components["responses"]["Problem"];
+            403: components["responses"]["Problem"];
+            404: components["responses"]["Problem"];
+            409: components["responses"]["Problem"];
+            422: components["responses"]["Problem"];
             503: components["responses"]["Unavailable"];
         };
     };

@@ -82,6 +82,7 @@ DEV_CENTER_IDENTITY_PROVIDERS='[{"id":"provider-a","display_name":"Provider A"}]
 DEV_CENTER_DATABASE_URL=postgresql://... \
 DEV_CENTER_AGENT_PLATFORM_ORIGIN=https://agents.example.test \
 DEV_CENTER_CONNECTORS_API_BASE=https://connectors.example.test/api/connectors/v1 \
+DEV_CENTER_WORKSPACE_ORIGIN=https://workspace.example.test \
 DEV_CENTER_AGENTIDE_WORKSPACE_ENABLED=false
 ```
 
@@ -123,6 +124,25 @@ URL. Binary input and sequenced PTY output remain byte-exact, lifecycle and repl
 explicit, browser tab close only detaches, and the separate Kill action terminates the Substrate
 process. The terminal row is keyboard- and pointer-resizable, while scrollback enters AgentIDE
 context only when a human explicitly attaches a selection.
+
+When the chart enables the sibling Identity, Connectors, Workspace, and Agent Platform components,
+it supplies their private service origins to Agent Platform through explicit `AGENT_PLATFORM_*`
+inputs. Enabling Agent Platform persistence also supplies its state path inside the mounted volume,
+so task journals and suspended approval checkpoints are restart-safe. Workspace continues to own
+the base and writable materialization references; neither Devcenter nor Agent Platform receives a
+second file store.
+
+For an isolated renderer/transport test, Workspace's loopback `workspace-terminal-lab` can replace
+only the review terminal emulator:
+
+```console
+DEVCENTER_REVIEW_TERMINAL_UPSTREAM=ws://127.0.0.1:8095 pnpm --dir frontend review
+```
+
+The terminal profile and process row are then labelled `real daemon lab`, and terminal WebSockets
+are bridged only to a loopback `ws:` or `wss:` origin. Project files, agents, grants, and other
+review data remain explicit samples. With the variable absent, review mode continues to use its
+non-executing protocol emulator.
 
 `DEV_CENTER_IDENTITY_PROVIDERS` contains only opaque Identity-owned IDs and display labels. With
 zero entries, Identity keeps its existing selection behavior; with one, `/auth/sso/start` remains a

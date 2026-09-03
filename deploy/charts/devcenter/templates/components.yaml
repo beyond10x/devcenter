@@ -64,7 +64,7 @@ spec:
           args: {{ toYaml . | nindent 12 }}
           {{- end }}
           ports: [{name: http, containerPort: {{ $component.port }}, protocol: TCP}]
-          {{- if or $component.env $component.envValueFrom (eq $name "secrets") (eq $name "workspace") (eq $name "aep-service") }}
+          {{- if or $component.env $component.envValueFrom (eq $name "secrets") (eq $name "workspace") (eq $name "agent-platform") (eq $name "aep-service") }}
           env:
             {{- range $key, $value := $component.env }}
             - name: {{ $key }}
@@ -110,6 +110,28 @@ spec:
             {{- if and (index $.Values.components "aep-service").enabled (hasKey ($component.env | default dict) "WORKSPACE_AEP_REALM") (hasKey ($component.env | default dict) "WORKSPACE_AEP_WORKSPACE") }}
             - name: WORKSPACE_AEP_SERVICE_ORIGIN
               value: {{ printf "http://%s-aep-service.%s.svc.cluster.local:%v" (include "devcenter.fullname" $) $.Release.Namespace (index $.Values.components "aep-service").port | quote }}
+            {{- end }}
+            {{- end }}
+            {{- if eq $name "agent-platform" }}
+            {{- if and (index $.Values.components "identity").enabled (not (hasKey ($component.env | default dict) "AGENT_PLATFORM_IDENTITY_ORIGIN")) }}
+            - name: AGENT_PLATFORM_IDENTITY_ORIGIN
+              value: {{ printf "http://%s-identity.%s.svc.cluster.local:%v" (include "devcenter.fullname" $) $.Release.Namespace (index $.Values.components "identity").port | quote }}
+            {{- end }}
+            {{- if not (hasKey ($component.env | default dict) "AGENT_PLATFORM_IDENTITY_AUDIENCE") }}
+            - name: AGENT_PLATFORM_IDENTITY_AUDIENCE
+              value: "urn:b10x:agent-platform"
+            {{- end }}
+            {{- if and (index $.Values.components "connectors").enabled (not (hasKey ($component.env | default dict) "AGENT_PLATFORM_CONNECTORS_API_BASE")) }}
+            - name: AGENT_PLATFORM_CONNECTORS_API_BASE
+              value: {{ printf "http://%s-connectors.%s.svc.cluster.local:%v/api/connectors/v1" (include "devcenter.fullname" $) $.Release.Namespace (index $.Values.components "connectors").port | quote }}
+            {{- end }}
+            {{- if and (index $.Values.components "workspace").enabled (not (hasKey ($component.env | default dict) "AGENT_PLATFORM_WORKSPACE_ORIGIN")) }}
+            - name: AGENT_PLATFORM_WORKSPACE_ORIGIN
+              value: {{ printf "http://%s-workspace.%s.svc.cluster.local:%v" (include "devcenter.fullname" $) $.Release.Namespace (index $.Values.components "workspace").port | quote }}
+            {{- end }}
+            {{- if and $component.persistence.enabled (not (hasKey ($component.env | default dict) "AGENT_PLATFORM_STATE_PATH")) }}
+            - name: AGENT_PLATFORM_STATE_PATH
+              value: {{ printf "%s/state.json" (trimSuffix "/" $component.persistence.mountPath) | quote }}
             {{- end }}
             {{- end }}
             {{- if eq $name "aep-service" }}

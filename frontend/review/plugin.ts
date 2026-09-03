@@ -4,6 +4,8 @@ import type { Duplex } from "node:stream";
 import type { Plugin } from "vite";
 import { WebSocket, WebSocketServer } from "ws";
 
+const reviewTerminalUpstream = process.env.DEVCENTER_REVIEW_TERMINAL_UPSTREAM?.trim() || undefined;
+
 interface ReviewAgent {
   id: string;
   tenant_id: string;
@@ -42,6 +44,21 @@ interface ReviewCapabilityProfile {
   created_by: string;
   created_at_ms: number;
   updated_at_ms: number;
+}
+
+interface ReviewTask {
+  id: string;
+  agent_id: string;
+  status: string;
+  attempt_id: string;
+  prompt: string;
+  output: string | null;
+  failure_code: string | null;
+  failure_message: string | null;
+  accepted_at_ms: number;
+  completed_at_ms: number | null;
+  workspace_session_id?: string;
+  agentide_session_id?: string;
 }
 
 let connected = false;
@@ -191,25 +208,28 @@ let reviewAgentIdeVersion = 1;
 const reviewAgentIdeSessionId = "agentide-session-review";
 const reviewAgentIdeGrants: Array<Record<string, unknown>> = [];
 const reviewAgentIdePins: Array<Record<string, unknown>> = [];
+const reviewTasks: ReviewTask[] = [];
 const reviewTerminalProfile = {
   id: "rust-stable-confined",
-  label: "Rust stable · confined",
-  runtime_ref: "substrate:image:rust-stable-review",
-  shell: "/bin/bash",
-  arguments: ["--noprofile", "--norc"],
+  label: reviewTerminalUpstream ? "Rust stable · real daemon lab" : "Rust stable · confined",
+  runtime_ref: reviewTerminalUpstream
+    ? "substrate:local-daemon-lab"
+    : "substrate:image:rust-stable-review",
+  shell: "/bin/sh",
+  arguments: ["-i"],
   working_directory: "/workspace",
   environment: { TERM: "xterm-256color", COLORTERM: "truecolor" },
   workspace_access: "read_write",
   network: "none",
   limits: {
     timeout_ms: 3_600_000,
-    cpu_millis: 2_000,
+    cpu_millis: 3_600_000,
     memory_bytes: 536_870_912,
     processes: 128,
-    output_bytes: 4_194_304,
-    input_bytes: 65_536,
+    output_bytes: 1_048_576,
+    input_bytes: 16_777_216,
     frame_bytes: 65_536,
-    queued_frames: 256,
+    queued_frames: 16,
     lease_ttl_ms: 3_600_000,
   },
 } as const;
@@ -234,7 +254,9 @@ const reviewTerminals: Array<{
     authority_grant_id: "grant-review-terminal",
     profile: reviewTerminalProfile,
     actor: "review-engineer",
-    process_id: "substrate-process-review-1",
+    process_id: reviewTerminalUpstream
+      ? "real-substrate-daemon-via-workspace-lab"
+      : "substrate-process-review-1",
     state: "running",
     exit: null,
     failure_code: null,
@@ -454,6 +476,31 @@ function reviewTerminalCommand(value: string): string {
   return `\r\n${output}${prompt}`;
 }
 
+function terminalUpstreamUrl(requestUrl: string): URL {
+  if (!reviewTerminalUpstream) throw new Error("terminal_lab_not_configured");
+  const base = new URL(reviewTerminalUpstream);
+  if (
+    !["ws:", "wss:"].includes(base.protocol) ||
+    !["127.0.0.1", "localhost", "[::1]"].includes(base.hostname)
+  ) {
+    throw new Error("terminal_lab_origin_refused");
+  }
+  return new URL(requestUrl, base);
+}
+
+function bridgeReviewTerminal(browser: WebSocket, upstream: WebSocket) {
+  browser.on("message", (data, isBinary) => {
+    if (upstream.readyState === WebSocket.OPEN) upstream.send(data, { binary: isBinary });
+  });
+  upstream.on("message", (data, isBinary) => {
+    if (browser.readyState === WebSocket.OPEN) browser.send(data, { binary: isBinary });
+  });
+  browser.on("close", () => upstream.close());
+  upstream.on("close", () => browser.close());
+  browser.on("error", () => upstream.close());
+  upstream.on("error", () => browser.close());
+}
+
 async function readJson(request: IncomingMessage): Promise<Record<string, unknown>> {
   const decoder = new TextDecoder();
   let body = "";
@@ -477,6 +524,14 @@ function sendTaskEvents(response: ServerResponse) {
   const events = [
     { event: { kind: "accepted" } },
     { event: { kind: "running" } },
+    { event: { kind: "context_changed", revision: "context-review-2" } },
+    {
+      event: {
+        kind: "inventory_changed",
+        revision: "inventory-review-2",
+        published_tools: ["code_read", "code_changes", "code_edit", "code_create"],
+      },
+    },
     { event: { kind: "text_delta", text: "Reviewing the requested outcome…\n" } },
     { event: { kind: "text_delta", text: "• Identity session verified\n" } },
     { event: { kind: "text_delta", text: "• Connector authority checked\n" } },
@@ -502,6 +557,7 @@ function sendTaskEvents(response: ServerResponse) {
 
 export function reviewApi(): Plugin {
   const terminalWebSockets = new WebSocketServer({ noServer: true });
+  const terminalUpstreams = new WeakMap<WebSocket, WebSocket>();
   return {
     name: "devcenter-review-api",
     configureServer(server) {
@@ -509,11 +565,43 @@ export function reviewApi(): Plugin {
         const url = new URL(request.url ?? "/", "http://review.local");
         const match = url.pathname.match(/^\/api\/project-terminals\/([^/]+)\/attach$/);
         if (!match || !reviewTerminals.some((terminal) => terminal.id === match[1])) return;
+        if (reviewTerminalUpstream) {
+          let upstream: WebSocket;
+          try {
+            upstream = new WebSocket(terminalUpstreamUrl(request.url ?? "/"));
+          } catch {
+            socket.destroy();
+            return;
+          }
+          const timeout = setTimeout(() => {
+            upstream.terminate();
+            socket.destroy();
+          }, 10_000);
+          const failed = () => {
+            clearTimeout(timeout);
+            socket.destroy();
+          };
+          upstream.once("error", failed);
+          upstream.once("open", () => {
+            clearTimeout(timeout);
+            upstream.off("error", failed);
+            terminalWebSockets.handleUpgrade(request, socket, head, (webSocket) => {
+              terminalUpstreams.set(webSocket, upstream);
+              terminalWebSockets.emit("connection", webSocket, request);
+            });
+          });
+          return;
+        }
         terminalWebSockets.handleUpgrade(request, socket, head, (webSocket) => {
           terminalWebSockets.emit("connection", webSocket, request);
         });
       });
       terminalWebSockets.on("connection", (webSocket, request) => {
+        const upstream = terminalUpstreams.get(webSocket);
+        if (upstream) {
+          bridgeReviewTerminal(webSocket, upstream);
+          return;
+        }
         const url = new URL(request.url ?? "/", "http://review.local");
         const requestedSequence = url.searchParams.get("from_sequence");
         const initialSequence =
@@ -748,6 +836,10 @@ export function reviewApi(): Plugin {
             path === `/api/project-sessions/${reviewCodingSession.id}/terminals` &&
             method === "POST"
           ) {
+            if (reviewTerminalUpstream) {
+              sendJson(response, 200, reviewTerminals[0]);
+              return;
+            }
             const submitted = await readJson(request);
             const now = Date.now();
             const created = {
@@ -1252,19 +1344,61 @@ export function reviewApi(): Plugin {
             return;
           }
           if (/^\/api\/agents\/[^/]+\/tasks$/.test(path) && method === "GET") {
-            sendJson(response, 200, []);
+            const agentId = path.split("/")[3];
+            sendJson(
+              response,
+              200,
+              reviewTasks.filter((task) => task.agent_id === agentId),
+            );
             return;
           }
           if (/^\/api\/agents\/[^/]+\/tasks$/.test(path) && method === "POST") {
             const submitted = await readJson(request);
-            sendJson(response, 202, {
+            const task: ReviewTask = {
               id: `task-review-${String(Date.now())}`,
               agent_id: path.split("/")[3],
               status: "accepted",
               attempt_id: "attempt-review",
               prompt: typeof submitted.prompt === "string" ? submitted.prompt : "",
+              output: null,
+              failure_code: null,
+              failure_message: null,
               accepted_at_ms: Date.now(),
-            });
+              completed_at_ms: null,
+            };
+            reviewTasks.push(task);
+            sendJson(response, 202, task);
+            return;
+          }
+          const codingTurnMatch = path.match(
+            /^\/api\/project-sessions\/([^/]+)\/agents\/([^/]+)\/turns$/,
+          );
+          if (codingTurnMatch && method === "POST") {
+            const submitted = await readJson(request);
+            if (
+              codingTurnMatch[1] !== reviewCodingSession.id ||
+              submitted.agentide_session_id !== reviewAgentIdeSessionId ||
+              typeof submitted.prompt !== "string"
+            ) {
+              sendJson(response, 422, { code: "coding_turn_invalid" });
+              return;
+            }
+            const task: ReviewTask = {
+              id: `task-review-coding-${String(Date.now())}`,
+              agent_id: codingTurnMatch[2],
+              status: "accepted",
+              attempt_id: "attempt-review-coding",
+              prompt: submitted.prompt,
+              output: null,
+              failure_code: null,
+              failure_message: null,
+              accepted_at_ms: Date.now(),
+              completed_at_ms: null,
+              workspace_session_id: reviewCodingSession.id,
+              agentide_session_id: reviewAgentIdeSessionId,
+            };
+            reviewTasks.push(task);
+            sendJson(response, 202, task);
             return;
           }
           if (/^\/api\/tasks\/[^/]+\/events$/.test(path) && method === "GET") {

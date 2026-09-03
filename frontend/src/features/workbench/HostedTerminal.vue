@@ -1,10 +1,14 @@
 <script setup lang="ts">
-import { Copy, Link, LoaderCircle, Search, Unplug, XCircle } from "@lucide/vue";
+import { Copy, Link, LoaderCircle, RefreshCw, Search, Unplug, XCircle } from "@lucide/vue";
 import { onBeforeUnmount, onMounted, ref } from "vue";
 import { api, type TerminalSession } from "@/api/client";
 
 interface Disposable {
   dispose(): void;
+}
+
+interface GhosttyCell {
+  codepoint: number;
 }
 
 interface GhosttyTerminal {
@@ -14,12 +18,13 @@ interface GhosttyTerminal {
   loadAddon(addon: GhosttyFitAddon): void;
   write(bytes: Uint8Array): void;
   focus(): void;
+  reset(): void;
   dispose(): void;
   onData(listener: (data: string) => void): Disposable;
   onResize(listener: (size: { cols: number; rows: number }) => void): Disposable;
   getSelection(): string;
   getScrollbackLength(): number;
-  getScrollbackLine(line: number): string | null;
+  getScrollbackLine(line: number): GhosttyCell[] | null;
   scrollToLine(line: number): void;
   paste(content: string): void;
 }
@@ -120,25 +125,30 @@ function connect() {
   );
   candidate.binaryType = "arraybuffer";
   socket = candidate;
-  candidate.onopen = () => sendResize(renderer?.cols ?? 80, renderer?.rows ?? 24);
-  candidate.onmessage = receive;
+  candidate.onopen = () => {
+    if (socket === candidate) sendResize(renderer?.cols ?? 80, renderer?.rows ?? 24);
+  };
+  candidate.onmessage = (event: MessageEvent<unknown>) => {
+    if (socket === candidate) receive(event);
+  };
   candidate.onerror = () => {
-    detail.value = "The same-origin terminal transport is unavailable.";
+    if (socket === candidate) detail.value = "The same-origin terminal transport is unavailable.";
   };
   candidate.onclose = () => {
-    if (socket === candidate) socket = undefined;
+    if (socket !== candidate) return;
+    socket = undefined;
     if (!alive || connectionState.value === "exited" || connectionState.value === "refused") return;
     connectionState.value = "detached";
     scheduleReconnect();
   };
 }
 
-function receive(event: MessageEvent<string | ArrayBuffer>) {
+function receive(event: MessageEvent<unknown>) {
   if (typeof event.data === "string") {
     receiveLifecycle(event.data);
     return;
   }
-  if (event.data.byteLength < 8 || !renderer) {
+  if (!(event.data instanceof ArrayBuffer) || event.data.byteLength < 8 || !renderer) {
     connectionState.value = "refused";
     detail.value = "terminal_output_frame_invalid";
     socket?.close();
@@ -166,11 +176,23 @@ function receiveLifecycle(payload: string) {
     return;
   }
   if (lifecycle.kind === "attached") {
-    const replay = lifecycle.replay as { complete?: unknown } | undefined;
+    const replay = lifecycle.replay as
+      { complete?: unknown; newest_sequence?: unknown } | undefined;
+    const newest = replay?.newest_sequence;
+    const sequenceRestarted =
+      hasSequence &&
+      (newest === null ||
+        (typeof newest === "number" &&
+          Number.isSafeInteger(newest) &&
+          BigInt(newest) < lastSequence));
+    const partial = replay?.complete === false || sequenceRestarted;
     reconnectAttempt = 0;
-    connectionState.value = replay?.complete === false ? "partial" : "running";
-    detail.value =
-      replay?.complete === false ? "Earlier output is outside the 4 MiB replay window." : "";
+    connectionState.value = partial ? "partial" : "running";
+    detail.value = sequenceRestarted
+      ? "The terminal output sequence restarted. Reload the output Workspace still retains."
+      : replay?.complete === false
+        ? "Earlier output is outside the 4 MiB replay window."
+        : "";
     renderer?.focus();
     return;
   }
@@ -209,6 +231,23 @@ function scheduleReconnect() {
   }, delay);
 }
 
+function replayRetainedOutput() {
+  if (reconnectTimer !== undefined) {
+    window.clearTimeout(reconnectTimer);
+    reconnectTimer = undefined;
+  }
+  const previous = socket;
+  socket = undefined;
+  previous?.close();
+  renderer?.reset();
+  hasSequence = false;
+  lastSequence = 0n;
+  reconnectAttempt = 0;
+  connectionState.value = "connecting";
+  detail.value = "Reloading the oldest terminal output still retained by Workspace.";
+  connect();
+}
+
 function sendResize(columns: number, rows: number) {
   if (socket?.readyState !== WebSocket.OPEN) return;
   socket.send(JSON.stringify({ kind: "resize", columns, rows }));
@@ -234,7 +273,13 @@ function findNext() {
   if (!needle || !renderer) return;
   const length = renderer.getScrollbackLength();
   for (let line = length - 1; line >= 0; line -= 1) {
-    if (renderer.getScrollbackLine(line)?.toLocaleLowerCase().includes(needle)) {
+    const cells = renderer.getScrollbackLine(line);
+    const content = cells
+      ?.map((cell) =>
+        cell.codepoint === 0 || cell.codepoint < 32 ? " " : String.fromCodePoint(cell.codepoint),
+      )
+      .join("");
+    if (content?.toLocaleLowerCase().includes(needle)) {
       renderer.scrollToLine(line);
       return;
     }
@@ -275,6 +320,14 @@ function dispose() {
       <button type="button" title="Paste from clipboard" @click="pasteClipboard">Paste</button>
       <button type="button" title="Attach selection to session context" @click="attachSelection">
         <Link :size="12" /> Attach
+      </button>
+      <button
+        v-if="connectionState === 'partial'"
+        type="button"
+        title="Clear the terminal and reload all output still retained by Workspace"
+        @click="replayRetainedOutput"
+      >
+        <RefreshCw :size="12" /> Reload retained output
       </button>
       <button
         class="terminal-kill"

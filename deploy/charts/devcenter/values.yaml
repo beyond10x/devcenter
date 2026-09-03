@@ -149,11 +149,15 @@ components:
     serviceAccountName: ""
     podSecurityContext: {}
     args: []
+    # Identity, Connectors, and Workspace origins are composed automatically when their sibling
+    # components are enabled. Explicit AGENT_PLATFORM_* entries here override those internal URLs.
     env: {}
     envFrom: []
     configFiles: {}
     volumeMounts: []
     volumes: []
+    # When enabled, the chart supplies AGENT_PLATFORM_STATE_PATH inside this mount so approval
+    # checkpoints and task continuation survive worker restarts.
     persistence: {enabled: false, storageClass: "", size: 1Gi, mountPath: /var/lib/agent-platform}
     readinessProbe: {httpGet: {path: /livez, port: http}}
     livenessProbe: {httpGet: {path: /livez, port: http}}

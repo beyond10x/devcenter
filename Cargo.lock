@@ -16,7 +16,7 @@ dependencies = [
 [[package]]
 name = "agent-platform-client"
 version = "0.6.3"
-source = "git+ssh://git@github.com/beyond10x/agent-platform.git?tag=0.6.3#6d5426d63e092c2fb1747df4e4dcdfec7e586bf6"
+source = "git+ssh://git@github.com/beyond10x/agent-platform.git?rev=bdacb8f177cb049d33abd6886c720f47fd567a12#bdacb8f177cb049d33abd6886c720f47fd567a12"
 dependencies = [
  "agent-platform-core",
  "reqwest 0.13.4",
@@ -29,8 +29,9 @@ dependencies = [
 [[package]]
 name = "agent-platform-core"
 version = "0.6.3"
-source = "git+ssh://git@github.com/beyond10x/agent-platform.git?tag=0.6.3#6d5426d63e092c2fb1747df4e4dcdfec7e586bf6"
+source = "git+ssh://git@github.com/beyond10x/agent-platform.git?rev=bdacb8f177cb049d33abd6886c720f47fd567a12#bdacb8f177cb049d33abd6886c720f47fd567a12"
 dependencies = [
+ "agentide-contracts",
  "schemars 0.8.22",
  "serde",
  "serde_json",
@@ -788,6 +789,7 @@ version = "0.8.3"
 dependencies = [
  "agent-platform-client",
  "agent-platform-core",
+ "agentide-contracts",
  "axum",
  "base64",
  "connectors-client",
@@ -798,6 +800,7 @@ dependencies = [
  "devcenter-web-assets",
  "futures-util",
  "getrandom 0.3.4",
+ "hex",
  "http-body-util",
  "identity-client 0.5.2",
  "protocol",
