@@ -48,6 +48,10 @@ mod tests {
         let loader = get("vendor/ghostty-web/loader.js").expect("lazy terminal renderer loader");
         assert!(loader.bytes.len() > 40);
         assert_eq!(loader.content_type, "text/javascript");
+        let browser_external = get("vendor/ghostty-web/__vite-browser-external-2447137e.js")
+            .expect("browser-safe filesystem fallback");
+        assert!(browser_external.bytes.len() > 40);
+        assert_eq!(browser_external.content_type, "text/javascript");
         let wasm = get("ghostty-vt.wasm").expect("vendored terminal renderer WASM");
         assert!(wasm.bytes.len() > 400_000);
         assert_eq!(wasm.content_type, "application/wasm");

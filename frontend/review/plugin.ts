@@ -203,12 +203,66 @@ fn main() -> ExitCode {
     ExitCode::SUCCESS
 }
 `;
-let reviewAgentIdeBound = false;
 let reviewAgentIdeVersion = 1;
-const reviewAgentIdeSessionId = "agentide-session-review";
-const reviewAgentIdeGrants: Array<Record<string, unknown>> = [];
+const reviewAgentIdeSessionId = reviewCodingSession.id;
+const initialReviewTerminalGrant: Record<string, unknown> = {
+  grant_id: "grant-review-terminal",
+  grantee: "review-engineer",
+  allowed_intents: ["interactive_terminal"],
+  path_prefixes: [""],
+  maximum_risk: "Medium",
+  expires_at: null,
+  revision: 1,
+  state: "Active",
+};
+const reviewAgentIdeGrants: Array<Record<string, unknown>> = reviewTerminalUpstream
+  ? [initialReviewTerminalGrant]
+  : [];
 const reviewAgentIdePins: Array<Record<string, unknown>> = [];
+const reviewAgentIdeCheckpoints: Array<Record<string, unknown>> = [];
 const reviewTasks: ReviewTask[] = [];
+
+function reviewCoordinationSummary() {
+  return {
+    state: "ready" as const,
+    through_version: reviewAgentIdeVersion,
+    failure_code: null,
+    retryable: false,
+  };
+}
+
+function reviewCoordinationView() {
+  return {
+    summary: reviewCoordinationSummary(),
+    session: {
+      session_id: reviewAgentIdeSessionId,
+      workspace_session_id: reviewCodingSession.id,
+      project_id: reviewProject.id,
+      source_revision: reviewProject.pinned_commit,
+      manifest_digest: reviewCodingSession.manifest_sha256,
+      objective: "Review the hosted coding workspace",
+      state: "Active" as const,
+    },
+    grants: reviewAgentIdeGrants,
+    pins: reviewAgentIdePins,
+    checkpoints: reviewAgentIdeCheckpoints,
+  };
+}
+
+function ensureReviewTerminalGrant() {
+  const active = reviewAgentIdeGrants.find(
+    (candidate) =>
+      candidate.grantee === "review-engineer" &&
+      candidate.state === "Active" &&
+      Array.isArray(candidate.allowed_intents) &&
+      candidate.allowed_intents.includes("interactive_terminal"),
+  );
+  if (typeof active?.grant_id === "string") return active.grant_id;
+  const grantId = `grant-review-terminal-${String(reviewAgentIdeGrants.length + 1)}`;
+  reviewAgentIdeGrants.push({ ...initialReviewTerminalGrant, grant_id: grantId });
+  reviewAgentIdeVersion += 1;
+  return grantId;
+}
 const reviewTerminalProfile = {
   id: "rust-stable-confined",
   label: reviewTerminalUpstream ? "Rust stable · real daemon lab" : "Rust stable · confined",
@@ -233,7 +287,7 @@ const reviewTerminalProfile = {
     lease_ttl_ms: 3_600_000,
   },
 } as const;
-const reviewTerminals: Array<{
+interface ReviewTerminal {
   id: string;
   coding_session_id: string;
   agentide_session_id: string;
@@ -246,24 +300,25 @@ const reviewTerminals: Array<{
   failure_code: string | null;
   created_at_ms: number;
   updated_at_ms: number;
-}> = [
-  {
-    id: "terminal-review-1",
-    coding_session_id: reviewCodingSession.id,
-    agentide_session_id: reviewAgentIdeSessionId,
-    authority_grant_id: "grant-review-terminal",
-    profile: reviewTerminalProfile,
-    actor: "review-engineer",
-    process_id: reviewTerminalUpstream
-      ? "real-substrate-daemon-via-workspace-lab"
-      : "substrate-process-review-1",
-    state: "running",
-    exit: null,
-    failure_code: null,
-    created_at_ms: 1_788_260_100_000,
-    updated_at_ms: 1_788_260_100_000,
-  },
-];
+}
+
+const initialReviewTerminal: ReviewTerminal = {
+  id: "terminal-review-1",
+  coding_session_id: reviewCodingSession.id,
+  agentide_session_id: reviewAgentIdeSessionId,
+  authority_grant_id: "grant-review-terminal",
+  profile: reviewTerminalProfile,
+  actor: "review-engineer",
+  process_id: reviewTerminalUpstream
+    ? "real-substrate-daemon-via-workspace-lab"
+    : "substrate-process-review-1",
+  state: "running",
+  exit: null,
+  failure_code: null,
+  created_at_ms: 1_788_260_100_000,
+  updated_at_ms: 1_788_260_100_000,
+};
+const reviewTerminals: ReviewTerminal[] = reviewTerminalUpstream ? [initialReviewTerminal] : [];
 const reviewTerminalSequences = new WeakMap<WebSocket, bigint>();
 const reviewBranches = [
   { name: "trunk", commit: reviewProject.pinned_commit, provider_default: true, protected: true },
@@ -717,6 +772,110 @@ export function reviewApi(): Plugin {
             sendJson(response, 200, reviewCodingSession);
             return;
           }
+          if (
+            path === `/api/project-sessions/${reviewCodingSession.id}/resume` &&
+            method === "POST"
+          ) {
+            sendJson(response, 200, {
+              ...reviewCodingSession,
+              coordination: reviewCoordinationSummary(),
+            });
+            return;
+          }
+          if (
+            path === `/api/project-sessions/${reviewCodingSession.id}/coordination` &&
+            method === "GET"
+          ) {
+            sendJson(response, 200, reviewCoordinationView());
+            return;
+          }
+          if (
+            path === `/api/project-sessions/${reviewCodingSession.id}/coordination/pins` &&
+            method === "POST"
+          ) {
+            const submitted = await readJson(request);
+            reviewAgentIdeVersion += 1;
+            reviewAgentIdePins.push({
+              pin_id: `pin-review-${String(reviewAgentIdePins.length + 1)}`,
+              kind: submitted.kind,
+              reference: submitted.reference,
+              start_line: submitted.start_line,
+              end_line: submitted.end_line,
+              sha256: submitted.sha256,
+              state: "Active",
+            });
+            sendJson(response, 200, reviewCoordinationView());
+            return;
+          }
+          const coordinationPinMatch = path.match(
+            /^\/api\/project-sessions\/([^/]+)\/coordination\/pins\/([^/]+)$/,
+          );
+          if (coordinationPinMatch?.[1] === reviewCodingSession.id && method === "DELETE") {
+            const pin = reviewAgentIdePins.find(
+              (candidate) => candidate.pin_id === coordinationPinMatch[2],
+            );
+            if (!pin) {
+              sendJson(response, 404, { code: "agentide_context_pin_not_found" });
+              return;
+            }
+            pin.state = "Removed";
+            reviewAgentIdeVersion += 1;
+            sendJson(response, 200, reviewCoordinationView());
+            return;
+          }
+          if (
+            path === `/api/project-sessions/${reviewCodingSession.id}/coordination/grants` &&
+            method === "POST"
+          ) {
+            const submitted = await readJson(request);
+            const grantId = `grant-review-${String(reviewAgentIdeGrants.length + 1)}`;
+            reviewAgentIdeVersion += 1;
+            reviewAgentIdeGrants.push({
+              grant_id: grantId,
+              grantee: submitted.grantee,
+              allowed_intents: ["code_edit", "code_create", "code_delete", "code_rename"],
+              path_prefixes: ["."],
+              maximum_risk: "Medium",
+              expires_at: null,
+              revision: 1,
+              state: "Active",
+            });
+            sendJson(response, 200, reviewCoordinationView());
+            return;
+          }
+          const coordinationGrantMatch = path.match(
+            /^\/api\/project-sessions\/([^/]+)\/coordination\/grants\/([^/]+)$/,
+          );
+          if (coordinationGrantMatch?.[1] === reviewCodingSession.id && method === "DELETE") {
+            const grant = reviewAgentIdeGrants.find(
+              (candidate) => candidate.grant_id === coordinationGrantMatch[2],
+            );
+            if (!grant) {
+              sendJson(response, 404, { code: "agentide_grant_not_found" });
+              return;
+            }
+            grant.state = "Revoked";
+            reviewAgentIdeVersion += 1;
+            sendJson(response, 200, reviewCoordinationView());
+            return;
+          }
+          const coordinationCheckpointMatch = path.match(
+            /^\/api\/project-sessions\/([^/]+)\/coordination\/checkpoints\/([^/]+)$/,
+          );
+          if (coordinationCheckpointMatch?.[1] === reviewCodingSession.id && method === "POST") {
+            const checkpoint = reviewAgentIdeCheckpoints.find(
+              (candidate) => candidate.checkpoint_id === coordinationCheckpointMatch[2],
+            );
+            if (!checkpoint) {
+              sendJson(response, 404, { code: "agentide_checkpoint_not_found" });
+              return;
+            }
+            const submitted = await readJson(request);
+            checkpoint.state = submitted.decision === "approve" ? "Approved" : "Denied";
+            reviewAgentIdeVersion += 1;
+            sendJson(response, 200, reviewCoordinationView());
+            return;
+          }
           if (path === `/api/project-sessions/${reviewCodingSession.id}/tree` && method === "GET") {
             sendJson(response, 200, {
               format: "workspace.tree/1",
@@ -841,18 +1000,19 @@ export function reviewApi(): Plugin {
               return;
             }
             const submitted = await readJson(request);
+            if (
+              submitted.profile_id !== reviewTerminalProfile.id ||
+              typeof submitted.idempotency_key !== "string"
+            ) {
+              sendJson(response, 422, { code: "workspace_terminal_request_invalid" });
+              return;
+            }
             const now = Date.now();
             const created = {
-              ...reviewTerminals[0],
+              ...initialReviewTerminal,
               id: `terminal-review-${String(reviewTerminals.length + 1)}`,
-              agentide_session_id:
-                typeof submitted.agentide_session_id === "string"
-                  ? submitted.agentide_session_id
-                  : "",
-              authority_grant_id:
-                typeof submitted.authority_grant_id === "string"
-                  ? submitted.authority_grant_id
-                  : "",
+              agentide_session_id: reviewAgentIdeSessionId,
+              authority_grant_id: ensureReviewTerminalGrant(),
               process_id: `substrate-process-review-${String(reviewTerminals.length + 1)}`,
               state: "running" as const,
               created_at_ms: now,
@@ -1149,18 +1309,8 @@ export function reviewApi(): Plugin {
             if (submitted.operation_ref === "agentide.list_sessions") {
               sendJson(response, 200, {
                 output: {
-                  items: reviewAgentIdeBound
-                    ? [
-                        {
-                          session_id: reviewAgentIdeSessionId,
-                          workspace_session_id: reviewCodingSession.id,
-                          project_id: reviewProject.id,
-                          source_revision: reviewProject.pinned_commit,
-                          manifest_digest: reviewCodingSession.manifest_sha256,
-                          objective: "Review the hosted coding workspace",
-                        },
-                      ]
-                    : [],
+                  items: [reviewCoordinationView().session],
+                  through_version: reviewAgentIdeVersion,
                   next_cursor: null,
                   partial: false,
                 },
@@ -1180,20 +1330,24 @@ export function reviewApi(): Plugin {
                     ? reviewAgentIdePins
                     : [];
               sendJson(response, 200, {
-                output: { items, next_cursor: null, partial: false },
+                output: {
+                  items,
+                  through_version: reviewAgentIdeVersion,
+                  next_cursor: null,
+                  partial: false,
+                },
                 connector_audit_ref: `audit:review:${submitted.operation_ref}`,
               });
               return;
             }
             if (
-              submitted.operation_ref === "agentide.start_session" &&
+              (submitted.operation_ref === "agentide.start_session" ||
+                submitted.operation_ref === "agentide.ensure_hosted_session") &&
               submitted.confirmed === true
             ) {
-              reviewAgentIdeBound = true;
-              reviewAgentIdeVersion = 1;
               sendJson(response, 200, {
                 output: {
-                  outcome: "started",
+                  outcome: "ensured",
                   events: [
                     {
                       name: "agentide.session.SessionStarted",
@@ -1377,7 +1531,6 @@ export function reviewApi(): Plugin {
             const submitted = await readJson(request);
             if (
               codingTurnMatch[1] !== reviewCodingSession.id ||
-              submitted.agentide_session_id !== reviewAgentIdeSessionId ||
               typeof submitted.prompt !== "string"
             ) {
               sendJson(response, 422, { code: "coding_turn_invalid" });
