@@ -5,7 +5,7 @@ version = 4
 [[package]]
 name = "agentide-generated-service"
 version = "0.1.0"
-source = "git+https://github.com/beyond10x/agentide.git?rev=00d63ee1a04c3d2ad954a76273b66cb717673c88#00d63ee1a04c3d2ad954a76273b66cb717673c88"
+source = "git+https://github.com/beyond10x/agentide.git?rev=42f02846e76d50e4906d4c3b2e3292bfa7b05d79#42f02846e76d50e4906d4c3b2e3292bfa7b05d79"
 dependencies = [
  "service-catalog",
  "service-connectors",
@@ -341,28 +341,13 @@ checksum = "fc652a48c352aef3ea3aed32080501cf3ef6ed5da78602a020c991775b0aff04"
 
 [[package]]
 name = "catalog"
-version = "0.5.2"
-source = "git+https://github.com/beyond10x/connectors.git?rev=9badb8a46b5fd60a82cac4c909dbb584929172e4#9badb8a46b5fd60a82cac4c909dbb584929172e4"
-dependencies = [
- "catalog-reader 0.5.2",
- "serde",
- "serde_json",
-]
-
-[[package]]
-name = "catalog"
 version = "0.5.3"
 source = "git+https://github.com/beyond10x/connectors.git?rev=03a9f3de1ea2001f057face1ce469a66088bc31b#03a9f3de1ea2001f057face1ce469a66088bc31b"
 dependencies = [
- "catalog-reader 0.5.3",
+ "catalog-reader",
  "serde",
  "serde_json",
 ]
-
-[[package]]
-name = "catalog-reader"
-version = "0.5.2"
-source = "git+https://github.com/beyond10x/connectors.git?rev=9badb8a46b5fd60a82cac4c909dbb584929172e4#9badb8a46b5fd60a82cac4c909dbb584929172e4"
 
 [[package]]
 name = "catalog-reader"
@@ -493,19 +478,11 @@ version = "0.5.3"
 source = "git+https://github.com/beyond10x/connectors.git?rev=03a9f3de1ea2001f057face1ce469a66088bc31b#03a9f3de1ea2001f057face1ce469a66088bc31b"
 dependencies = [
  "base64 0.22.1",
- "connector-secrets 0.5.3",
+ "connector-secrets",
  "rustix",
  "thiserror",
  "tokio",
  "zeroize",
-]
-
-[[package]]
-name = "connector-address"
-version = "0.5.2"
-source = "git+https://github.com/beyond10x/connectors.git?rev=9badb8a46b5fd60a82cac4c909dbb584929172e4#9badb8a46b5fd60a82cac4c909dbb584929172e4"
-dependencies = [
- "thiserror",
 ]
 
 [[package]]
@@ -531,45 +508,16 @@ dependencies = [
 
 [[package]]
 name = "connector-resolve"
-version = "0.5.2"
-source = "git+https://github.com/beyond10x/connectors.git?rev=9badb8a46b5fd60a82cac4c909dbb584929172e4#9badb8a46b5fd60a82cac4c909dbb584929172e4"
-dependencies = [
- "catalog 0.5.2",
- "catalog-reader 0.5.2",
- "connector-address 0.5.2",
- "connector-secrets 0.5.2",
- "serde",
- "serde_json",
- "thiserror",
- "zeroize",
-]
-
-[[package]]
-name = "connector-resolve"
 version = "0.5.3"
 source = "git+https://github.com/beyond10x/connectors.git?rev=03a9f3de1ea2001f057face1ce469a66088bc31b#03a9f3de1ea2001f057face1ce469a66088bc31b"
 dependencies = [
- "catalog 0.5.3",
- "catalog-reader 0.5.3",
- "connector-address 0.5.3",
- "connector-secrets 0.5.3",
+ "catalog",
+ "catalog-reader",
+ "connector-address",
+ "connector-secrets",
  "serde",
  "serde_json",
  "thiserror",
- "zeroize",
-]
-
-[[package]]
-name = "connector-secrets"
-version = "0.5.2"
-source = "git+https://github.com/beyond10x/connectors.git?rev=9badb8a46b5fd60a82cac4c909dbb584929172e4#9badb8a46b5fd60a82cac4c909dbb584929172e4"
-dependencies = [
- "async-trait",
- "connector-address 0.5.2",
- "fs2",
- "rustix",
- "thiserror",
- "windows-sys 0.61.2",
  "zeroize",
 ]
 
@@ -579,7 +527,7 @@ version = "0.5.3"
 source = "git+https://github.com/beyond10x/connectors.git?rev=03a9f3de1ea2001f057face1ce469a66088bc31b#03a9f3de1ea2001f057face1ce469a66088bc31b"
 dependencies = [
  "async-trait",
- "connector-address 0.5.3",
+ "connector-address",
  "fs2",
  "reqwest 0.12.28",
  "rustix",
@@ -587,14 +535,6 @@ dependencies = [
  "thiserror",
  "windows-sys 0.61.2",
  "zeroize",
-]
-
-[[package]]
-name = "connector-state"
-version = "0.5.2"
-source = "git+https://github.com/beyond10x/connectors.git?rev=9badb8a46b5fd60a82cac4c909dbb584929172e4#9badb8a46b5fd60a82cac4c909dbb584929172e4"
-dependencies = [
- "thiserror",
 ]
 
 [[package]]
@@ -610,12 +550,12 @@ name = "connectors-config"
 version = "0.5.3"
 source = "git+https://github.com/beyond10x/connectors.git?rev=03a9f3de1ea2001f057face1ce469a66088bc31b#03a9f3de1ea2001f057face1ce469a66088bc31b"
 dependencies = [
- "connector-address 0.5.3",
- "domain 0.5.3",
- "protocol 0.5.3",
+ "connector-address",
+ "domain",
+ "protocol",
  "rustix",
  "serde",
- "service 0.5.3",
+ "service",
  "thiserror",
  "toml",
  "url",
@@ -628,10 +568,10 @@ source = "git+https://github.com/beyond10x/connectors.git?rev=03a9f3de1ea2001f05
 dependencies = [
  "async-trait",
  "axum",
- "connector-secrets 0.5.3",
- "connector-state 0.5.3",
+ "connector-secrets",
+ "connector-state",
  "connectors-config",
- "domain 0.5.3",
+ "domain",
  "futures-util",
  "hex",
  "hosted-secrets",
@@ -646,11 +586,11 @@ dependencies = [
  "integration-monitoring",
  "integration-platform",
  "integration-slack",
- "protocol 0.5.3",
+ "protocol",
  "rustix",
  "serde_json",
  "server",
- "service 0.5.3",
+ "service",
  "sha2 0.10.9",
  "state-sqlite",
  "subscription-custody",
@@ -850,7 +790,7 @@ dependencies = [
  "eventlog-postgres",
  "serde",
  "serde_yaml",
- "service 0.5.3",
+ "service",
  "service-catalog",
  "service-connectors",
  "todo-generated-service",
@@ -892,25 +832,11 @@ dependencies = [
 
 [[package]]
 name = "domain"
-version = "0.5.2"
-source = "git+https://github.com/beyond10x/connectors.git?rev=9badb8a46b5fd60a82cac4c909dbb584929172e4#9badb8a46b5fd60a82cac4c909dbb584929172e4"
-dependencies = [
- "async-trait",
- "connector-state 0.5.2",
- "schemars",
- "serde",
- "serde_json",
- "sha2 0.10.9",
- "thiserror",
-]
-
-[[package]]
-name = "domain"
 version = "0.5.3"
 source = "git+https://github.com/beyond10x/connectors.git?rev=03a9f3de1ea2001f057face1ce469a66088bc31b#03a9f3de1ea2001f057face1ce469a66088bc31b"
 dependencies = [
  "async-trait",
- "connector-state 0.5.3",
+ "connector-state",
  "schemars",
  "serde",
  "serde_json",
@@ -923,7 +849,7 @@ name = "driver-audio"
 version = "0.5.3"
 source = "git+https://github.com/beyond10x/connectors.git?rev=03a9f3de1ea2001f057face1ce469a66088bc31b#03a9f3de1ea2001f057face1ce469a66088bc31b"
 dependencies = [
- "domain 0.5.3",
+ "domain",
 ]
 
 [[package]]
@@ -932,12 +858,12 @@ version = "0.5.3"
 source = "git+https://github.com/beyond10x/connectors.git?rev=03a9f3de1ea2001f057face1ce469a66088bc31b#03a9f3de1ea2001f057face1ce469a66088bc31b"
 dependencies = [
  "base64 0.22.1",
- "domain 0.5.3",
- "protocol 0.5.3",
+ "domain",
+ "protocol",
  "reqwest 0.12.28",
  "serde",
  "serde_json",
- "service 0.5.3",
+ "service",
  "sha2 0.10.9",
  "thiserror",
  "tungstenite",
@@ -948,12 +874,12 @@ name = "driver-speech"
 version = "0.5.3"
 source = "git+https://github.com/beyond10x/connectors.git?rev=03a9f3de1ea2001f057face1ce469a66088bc31b#03a9f3de1ea2001f057face1ce469a66088bc31b"
 dependencies = [
- "domain 0.5.3",
+ "domain",
  "driver-audio",
- "protocol 0.5.3",
+ "protocol",
  "serde",
  "serde_json",
- "service 0.5.3",
+ "service",
  "sha2 0.10.9",
  "thiserror",
 ]
@@ -1397,7 +1323,7 @@ dependencies = [
  "async-trait",
  "base64 0.22.1",
  "clap",
- "connector-secrets 0.5.3",
+ "connector-secrets",
  "connectors-config",
  "hosted-vault",
  "reqwest 0.12.28",
@@ -1414,7 +1340,7 @@ name = "hosted-state"
 version = "0.5.3"
 source = "git+https://github.com/beyond10x/connectors.git?rev=03a9f3de1ea2001f057face1ce469a66088bc31b#03a9f3de1ea2001f057face1ce469a66088bc31b"
 dependencies = [
- "connector-state 0.5.3",
+ "connector-state",
  "postgres",
  "thiserror",
 ]
@@ -1425,8 +1351,8 @@ version = "0.5.3"
 source = "git+https://github.com/beyond10x/connectors.git?rev=03a9f3de1ea2001f057face1ce469a66088bc31b#03a9f3de1ea2001f057face1ce469a66088bc31b"
 dependencies = [
  "async-trait",
- "connector-secrets 0.5.3",
- "connector-state 0.5.3",
+ "connector-secrets",
+ "connector-state",
  "connectors-config",
  "futures-util",
  "hex",
@@ -1732,20 +1658,20 @@ version = "0.5.3"
 source = "git+https://github.com/beyond10x/connectors.git?rev=03a9f3de1ea2001f057face1ce469a66088bc31b#03a9f3de1ea2001f057face1ce469a66088bc31b"
 dependencies = [
  "async-trait",
- "catalog 0.5.3",
- "connector-address 0.5.3",
- "connector-resolve 0.5.3",
- "connector-secrets 0.5.3",
- "connector-state 0.5.3",
+ "catalog",
+ "connector-address",
+ "connector-resolve",
+ "connector-secrets",
+ "connector-state",
  "connectors-config",
- "domain 0.5.3",
+ "domain",
  "getrandom 0.3.4",
  "hex",
- "protocol 0.5.3",
+ "protocol",
  "rustix",
  "serde",
  "serde_json",
- "service 0.5.3",
+ "service",
  "sha2 0.10.9",
  "thiserror",
  "tokio",
@@ -1759,20 +1685,20 @@ version = "0.5.3"
 source = "git+https://github.com/beyond10x/connectors.git?rev=03a9f3de1ea2001f057face1ce469a66088bc31b#03a9f3de1ea2001f057face1ce469a66088bc31b"
 dependencies = [
  "async-trait",
- "catalog 0.5.3",
+ "catalog",
  "connector-oauth",
- "connector-resolve 0.5.3",
- "connector-secrets 0.5.3",
- "connector-state 0.5.3",
+ "connector-resolve",
+ "connector-secrets",
+ "connector-state",
  "connectors-config",
  "getrandom 0.3.4",
  "hex",
  "jsonschema 0.33.0",
- "protocol 0.5.3",
+ "protocol",
  "rustix",
  "serde",
  "serde_json",
- "service 0.5.3",
+ "service",
  "sha2 0.10.9",
  "thiserror",
  "tokio",
@@ -1787,20 +1713,20 @@ source = "git+https://github.com/beyond10x/connectors.git?rev=03a9f3de1ea2001f05
 dependencies = [
  "async-trait",
  "base64 0.22.1",
- "catalog 0.5.3",
+ "catalog",
  "connector-oauth",
- "connector-resolve 0.5.3",
- "connector-secrets 0.5.3",
- "connector-state 0.5.3",
+ "connector-resolve",
+ "connector-secrets",
+ "connector-state",
  "connectors-config",
  "getrandom 0.3.4",
  "hex",
  "jsonschema 0.33.0",
- "protocol 0.5.3",
+ "protocol",
  "reqwest 0.12.28",
  "serde",
  "serde_json",
- "service 0.5.3",
+ "service",
  "sha2 0.10.9",
  "thiserror",
  "tokio",
@@ -1814,20 +1740,20 @@ version = "0.5.3"
 source = "git+https://github.com/beyond10x/connectors.git?rev=03a9f3de1ea2001f057face1ce469a66088bc31b#03a9f3de1ea2001f057face1ce469a66088bc31b"
 dependencies = [
  "async-trait",
- "connector-resolve 0.5.3",
+ "connector-resolve",
  "connectors-config",
- "domain 0.5.3",
+ "domain",
  "futures-util",
  "hex",
  "http",
  "k8s-openapi",
  "kube",
  "monitoring-model",
- "protocol 0.5.3",
+ "protocol",
  "reqwest 0.12.28",
  "serde",
  "serde_json",
- "service 0.5.3",
+ "service",
  "sha2 0.10.9",
  "thiserror",
  "tokio",
@@ -1843,20 +1769,20 @@ dependencies = [
  "async-trait",
  "b10x-mcp-client",
  "b10x-mcp-types",
- "connector-address 0.5.3",
- "connector-resolve 0.5.3",
- "connector-secrets 0.5.3",
- "domain 0.5.3",
+ "connector-address",
+ "connector-resolve",
+ "connector-secrets",
+ "domain",
  "futures-util",
  "getrandom 0.3.4",
  "hex",
  "http",
  "jsonschema 0.49.9",
- "protocol 0.5.3",
+ "protocol",
  "rmcp",
  "serde",
  "serde_json",
- "service 0.5.3",
+ "service",
  "sha2 0.10.9",
  "sse-stream",
  "thiserror",
@@ -1870,21 +1796,21 @@ version = "0.5.3"
 source = "git+https://github.com/beyond10x/connectors.git?rev=03a9f3de1ea2001f057face1ce469a66088bc31b#03a9f3de1ea2001f057face1ce469a66088bc31b"
 dependencies = [
  "async-trait",
- "catalog 0.5.3",
+ "catalog",
  "connect-session-transport",
- "connector-resolve 0.5.3",
- "connector-secrets 0.5.3",
- "connector-state 0.5.3",
+ "connector-resolve",
+ "connector-secrets",
+ "connector-state",
  "connectors-config",
- "domain 0.5.3",
+ "domain",
  "getrandom 0.3.4",
  "hex",
  "monitoring-model",
- "protocol 0.5.3",
+ "protocol",
  "rustix",
  "serde",
  "serde_json",
- "service 0.5.3",
+ "service",
  "sha2 0.10.9",
  "thiserror",
  "tokio",
@@ -1897,23 +1823,23 @@ source = "git+https://github.com/beyond10x/connectors.git?rev=03a9f3de1ea2001f05
 dependencies = [
  "async-trait",
  "base64 0.22.1",
- "catalog 0.5.3",
- "connector-resolve 0.5.3",
- "connector-state 0.5.3",
+ "catalog",
+ "connector-resolve",
+ "connector-state",
  "connectors-config",
- "domain 0.5.3",
+ "domain",
  "driver-cdp",
  "driver-speech",
  "ed25519-dalek",
  "getrandom 0.3.4",
  "hex",
  "jsonschema 0.49.9",
- "protocol 0.5.3",
+ "protocol",
  "reqwest 0.12.28",
  "rustix",
  "serde",
  "serde_json",
- "service 0.5.3",
+ "service",
  "sha2 0.10.9",
  "thiserror",
  "tokio",
@@ -1927,22 +1853,22 @@ source = "git+https://github.com/beyond10x/connectors.git?rev=03a9f3de1ea2001f05
 dependencies = [
  "async-trait",
  "base64 0.22.1",
- "catalog 0.5.3",
+ "catalog",
  "connect-session-transport",
  "connector-oauth",
- "connector-resolve 0.5.3",
- "connector-secrets 0.5.3",
- "connector-state 0.5.3",
+ "connector-resolve",
+ "connector-secrets",
+ "connector-state",
  "connectors-config",
  "getrandom 0.3.4",
  "hex",
  "jsonschema 0.33.0",
- "protocol 0.5.3",
+ "protocol",
  "reqwest 0.12.28",
  "rustix",
  "serde",
  "serde_json",
- "service 0.5.3",
+ "service",
  "sha2 0.10.9",
  "thiserror",
  "tokio",
@@ -2356,9 +2282,9 @@ name = "monitoring-model"
 version = "0.5.3"
 source = "git+https://github.com/beyond10x/connectors.git?rev=03a9f3de1ea2001f057face1ce469a66088bc31b#03a9f3de1ea2001f057face1ce469a66088bc31b"
 dependencies = [
- "catalog 0.5.3",
- "connector-resolve 0.5.3",
- "protocol 0.5.3",
+ "catalog",
+ "connector-resolve",
+ "protocol",
  "serde_json",
 ]
 
@@ -2757,23 +2683,10 @@ dependencies = [
 
 [[package]]
 name = "protocol"
-version = "0.5.2"
-source = "git+https://github.com/beyond10x/connectors.git?rev=9badb8a46b5fd60a82cac4c909dbb584929172e4#9badb8a46b5fd60a82cac4c909dbb584929172e4"
-dependencies = [
- "domain 0.5.2",
- "schemars",
- "serde",
- "serde_json",
- "thiserror",
- "url",
-]
-
-[[package]]
-name = "protocol"
 version = "0.5.3"
 source = "git+https://github.com/beyond10x/connectors.git?rev=03a9f3de1ea2001f057face1ce469a66088bc31b#03a9f3de1ea2001f057face1ce469a66088bc31b"
 dependencies = [
- "domain 0.5.3",
+ "domain",
  "schemars",
  "serde",
  "serde_json",
@@ -3486,20 +3399,20 @@ source = "git+https://github.com/beyond10x/connectors.git?rev=03a9f3de1ea2001f05
 dependencies = [
  "async-trait",
  "axum",
- "catalog 0.5.3",
- "connector-state 0.5.3",
- "domain 0.5.3",
+ "catalog",
+ "connector-state",
+ "domain",
  "fs2",
  "futures-util",
  "getrandom 0.3.4",
  "hex",
- "protocol 0.5.3",
+ "protocol",
  "reqwest 0.12.28",
  "rustix",
  "schemars",
  "serde",
  "serde_json",
- "service 0.5.3",
+ "service",
  "sha2 0.10.9",
  "subscription-custody",
  "thiserror",
@@ -3511,37 +3424,17 @@ dependencies = [
 
 [[package]]
 name = "service"
-version = "0.5.2"
-source = "git+https://github.com/beyond10x/connectors.git?rev=9badb8a46b5fd60a82cac4c909dbb584929172e4#9badb8a46b5fd60a82cac4c909dbb584929172e4"
-dependencies = [
- "async-trait",
- "base64 0.22.1",
- "connector-resolve 0.5.2",
- "connector-secrets 0.5.2",
- "connector-state 0.5.2",
- "domain 0.5.2",
- "ed25519-dalek",
- "protocol 0.5.2",
- "serde",
- "serde_json",
- "sha2 0.10.9",
- "thiserror",
- "zeroize",
-]
-
-[[package]]
-name = "service"
 version = "0.5.3"
 source = "git+https://github.com/beyond10x/connectors.git?rev=03a9f3de1ea2001f057face1ce469a66088bc31b#03a9f3de1ea2001f057face1ce469a66088bc31b"
 dependencies = [
  "async-trait",
  "base64 0.22.1",
- "connector-resolve 0.5.3",
- "connector-secrets 0.5.3",
- "connector-state 0.5.3",
- "domain 0.5.3",
+ "connector-resolve",
+ "connector-secrets",
+ "connector-state",
+ "domain",
  "ed25519-dalek",
- "protocol 0.5.3",
+ "protocol",
  "serde",
  "serde_json",
  "sha2 0.10.9",
@@ -3551,31 +3444,31 @@ dependencies = [
 
 [[package]]
 name = "service-catalog"
-version = "0.3.1"
-source = "git+https://github.com/beyond10x/service-sdk.git?rev=141c06ee3733e154f6d350276675a8bf08008233#141c06ee3733e154f6d350276675a8bf08008233"
+version = "0.3.2"
+source = "git+https://github.com/beyond10x/service-sdk.git?rev=944d3f1575aab8e3e8801f810777298b8cf9a010#944d3f1575aab8e3e8801f810777298b8cf9a010"
 dependencies = [
  "async-trait",
  "hex",
- "protocol 0.5.2",
+ "protocol",
  "serde",
  "serde_json",
- "service 0.5.2",
+ "service",
  "sha2 0.11.0",
  "thiserror",
 ]
 
 [[package]]
 name = "service-connectors"
-version = "0.3.1"
-source = "git+https://github.com/beyond10x/service-sdk.git?rev=141c06ee3733e154f6d350276675a8bf08008233#141c06ee3733e154f6d350276675a8bf08008233"
+version = "0.3.2"
+source = "git+https://github.com/beyond10x/service-sdk.git?rev=944d3f1575aab8e3e8801f810777298b8cf9a010#944d3f1575aab8e3e8801f810777298b8cf9a010"
 dependencies = [
  "async-trait",
  "eventlog-core",
  "hex",
- "protocol 0.5.2",
+ "protocol",
  "serde",
  "serde_json",
- "service 0.5.2",
+ "service",
  "service-engine",
  "service-eventlog",
  "service-runtime",
@@ -3585,8 +3478,8 @@ dependencies = [
 
 [[package]]
 name = "service-engine"
-version = "0.3.1"
-source = "git+https://github.com/beyond10x/service-sdk.git?rev=141c06ee3733e154f6d350276675a8bf08008233#141c06ee3733e154f6d350276675a8bf08008233"
+version = "0.3.2"
+source = "git+https://github.com/beyond10x/service-sdk.git?rev=944d3f1575aab8e3e8801f810777298b8cf9a010#944d3f1575aab8e3e8801f810777298b8cf9a010"
 dependencies = [
  "serde",
  "serde_json",
@@ -3597,8 +3490,8 @@ dependencies = [
 
 [[package]]
 name = "service-eventlog"
-version = "0.3.1"
-source = "git+https://github.com/beyond10x/service-sdk.git?rev=141c06ee3733e154f6d350276675a8bf08008233#141c06ee3733e154f6d350276675a8bf08008233"
+version = "0.3.2"
+source = "git+https://github.com/beyond10x/service-sdk.git?rev=944d3f1575aab8e3e8801f810777298b8cf9a010#944d3f1575aab8e3e8801f810777298b8cf9a010"
 dependencies = [
  "eventlog-core",
  "hex",
@@ -3614,8 +3507,8 @@ dependencies = [
 
 [[package]]
 name = "service-runtime"
-version = "0.3.1"
-source = "git+https://github.com/beyond10x/service-sdk.git?rev=141c06ee3733e154f6d350276675a8bf08008233#141c06ee3733e154f6d350276675a8bf08008233"
+version = "0.3.2"
+source = "git+https://github.com/beyond10x/service-sdk.git?rev=944d3f1575aab8e3e8801f810777298b8cf9a010#944d3f1575aab8e3e8801f810777298b8cf9a010"
 dependencies = [
  "serde",
  "serde_json",
@@ -3759,7 +3652,7 @@ name = "state-sqlite"
 version = "0.5.3"
 source = "git+https://github.com/beyond10x/connectors.git?rev=03a9f3de1ea2001f057face1ce469a66088bc31b#03a9f3de1ea2001f057face1ce469a66088bc31b"
 dependencies = [
- "connector-state 0.5.3",
+ "connector-state",
  "rusqlite",
 ]
 
@@ -3807,7 +3700,7 @@ version = "0.5.3"
 source = "git+https://github.com/beyond10x/connectors.git?rev=03a9f3de1ea2001f057face1ce469a66088bc31b#03a9f3de1ea2001f057face1ce469a66088bc31b"
 dependencies = [
  "connector-oauth",
- "connector-secrets 0.5.3",
+ "connector-secrets",
  "hex",
  "reqwest 0.12.28",
  "serde",
@@ -3946,7 +3839,7 @@ checksum = "1f3ccbac311fea05f86f61904b462b55fb3df8837a366dfc601a0161d0532f20"
 [[package]]
 name = "todo-generated-service"
 version = "0.1.0"
-source = "git+https://github.com/beyond10x/todo.git?rev=9de2f4843bd19e311541de641a97271676a31274#9de2f4843bd19e311541de641a97271676a31274"
+source = "git+https://github.com/beyond10x/todo.git?rev=3f010e00f1392a926108882fce151fea43cd23fa#3f010e00f1392a926108882fce151fea43cd23fa"
 dependencies = [
  "service-catalog",
  "service-connectors",

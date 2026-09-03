@@ -7,6 +7,8 @@
 - Consume Connectors 0.5.3 in both the BFF contracts and composed hosted runtime so GitLab
   repository file reads admit safe nested paths and Workspace materialization can populate a
   repository beyond root-level files.
+- Align the composed AgentIDE and Todo generated services with Service SDK 0.3.2 so every hosted
+  factory implements the same exact Connectors 0.5.3 service contract.
 
 ## 0.8.1 - 2026-09-03
 
