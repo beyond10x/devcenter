@@ -3578,19 +3578,6 @@ struct SubmitCodingTurn {
     idempotency_key: String,
 }
 
-#[derive(Clone, Deserialize)]
-#[serde(deny_unknown_fields)]
-struct CodingTurnSelection {
-    id: String,
-    kind: SelectionKind,
-    reference: String,
-    start_line: Option<u64>,
-    end_line: Option<u64>,
-    content: String,
-    sha256: String,
-    truncated: bool,
-}
-
 fn coding_turn_is_bounded(input: &SubmitCodingTurn) -> bool {
     if input.prompt.trim().is_empty()
         || input.focused_selections.len() > MAX_CODING_SELECTIONS
@@ -3623,18 +3610,16 @@ fn coding_turn_is_bounded(input: &SubmitCodingTurn) -> bool {
 }
 
 fn seal_coding_selections(
-    drafts: Vec<ContextSelectionDraft>,
+    selections: Vec<ContextSelectionDraft>,
     subject: &str,
-) -> Option<Vec<ContextSelection>> {
-    let actor = ActorContext::new(ActorKind::Human, subject).ok()?;
-    let observed_at = chrono::Utc::now().to_rfc3339_opts(chrono::SecondsFormat::Millis, true);
-    drafts
+) -> Result<Vec<ContextSelection>, String> {
+    let actor = ActorContext::new(ActorKind::Human, subject)?;
+    let observed_at = chrono::Utc::now().to_rfc3339();
+    selections
         .into_iter()
-        .map(|draft| {
-            let source_revision = draft.sha256.clone();
-            draft
-                .seal(actor.clone(), source_revision, observed_at.clone())
-                .ok()
+        .map(|selection| {
+            let source_revision = hex::encode(Sha256::digest(selection.content.as_bytes()));
+            selection.seal(actor.clone(), source_revision, observed_at.clone())
         })
         .collect()
 }

@@ -3336,7 +3336,10 @@
           "truncated"
         ],
         "properties": {
-          "format": { "const": "agentide.context-selection-draft/1" },
+          "format": {
+            "type": "string",
+            "const": "agentide.context-selection-draft/1"
+          },
           "id": { "type": "string" },
           "kind": {
             "type": "string",
