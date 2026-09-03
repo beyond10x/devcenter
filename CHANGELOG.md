@@ -6,7 +6,8 @@
   identity from Workspace, owns AgentIDE revision-safe grants and context mutations, and preserves
   file/diff access plus existing terminal reattachment when coordination is degraded.
 - Start the terminal panel collapsed, expose confined profile details without a misleading bind
-  step, show prompt attachments directly, and keep side-by-side diff changes line-aligned.
+  step, keep its dock visible within the review viewport, show prompt attachments directly, and
+  keep side-by-side diff changes line-aligned.
 
 ## 0.8.6 - 2026-09-03
 
