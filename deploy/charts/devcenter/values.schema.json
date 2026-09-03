@@ -15,7 +15,28 @@
         "podLabels": { "type": "object" }
       }
     },
-    "devcenter": { "type": "object" },
+    "devcenter": {
+      "type": "object",
+      "properties": {
+        "identity": {
+          "type": "object",
+          "properties": {
+            "providers": {
+              "type": "array",
+              "items": {
+                "type": "object",
+                "additionalProperties": false,
+                "required": ["id", "display_name"],
+                "properties": {
+                  "id": { "type": "string", "minLength": 1 },
+                  "display_name": { "type": "string", "minLength": 1 }
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "ingress": {
       "type": "object",
       "additionalProperties": false,

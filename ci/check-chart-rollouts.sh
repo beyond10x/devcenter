@@ -10,7 +10,8 @@ invalid_docs_error=$(mktemp)
 invalid_identity_cli_error=$(mktemp)
 invalid_connector_client_error=$(mktemp)
 invalid_kubernetes_access_error=$(mktemp)
-trap 'rm -f "$rendered" "$missing_database_error" "$invalid_docs_error" "$invalid_identity_cli_error" "$invalid_connector_client_error" "$invalid_kubernetes_access_error"' EXIT
+invalid_identity_provider_error=$(mktemp)
+trap 'rm -f "$rendered" "$missing_database_error" "$invalid_docs_error" "$invalid_identity_cli_error" "$invalid_connector_client_error" "$invalid_kubernetes_access_error" "$invalid_identity_provider_error"' EXIT
 
 grants_checksum() {
   helm template devcenter "$chart" \
@@ -125,6 +126,18 @@ grep -q 'chown 65532:65532 /var/run/substrate-tls/tls.crt /var/run/substrate-tls
 grep -q 'chown 65532:65532 /var/lib/substrate /var/run/substrate /var/run/substrate-tls' "$rendered"
 grep -q 'name: tls-source' "$rendered"
 grep -q 'DEV_CENTER_CONNECTORS_DOCS_AVAILABLE: "false"' "$rendered"
+
+if helm template devcenter "$chart" \
+  --namespace devcenter \
+  --values "$values" \
+  --set 'devcenter.identity.providers[0].id=default' \
+  --set 'devcenter.identity.providers[0].displayName=GitLab' \
+  >/dev/null 2>"$invalid_identity_provider_error"
+then
+  echo "chart unexpectedly accepted an invalid Identity provider wire field" >&2
+  exit 1
+fi
+grep -q 'displayName' "$invalid_identity_provider_error"
 
 helm template devcenter "$chart" \
   --namespace devcenter \

@@ -20,7 +20,8 @@ devcenter:
     audience: urn:b10x:devcenter
     webClientId: devcenter-web
     redirectUri: ""
-    # Opaque Identity-owned provider IDs. Empty preserves Identity's existing provider flow.
+    # Opaque Identity-owned provider IDs. Entries use {id, display_name}; empty preserves
+    # Identity's existing provider flow.
     providers: []
   database:
     # Required by the chart. Hosted deployments inject a PostgreSQL URL; local non-chart execution defaults to SQLite.
