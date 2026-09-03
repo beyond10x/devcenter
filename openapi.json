@@ -2,7 +2,7 @@
   "openapi": "3.1.0",
   "info": {
     "title": "Devcenter API",
-    "version": "0.8.8",
+    "version": "0.8.9",
     "description": "Authenticated browser/BFF surface for identity, connector custody, agents, and tasks."
   },
   "paths": {
@@ -3324,9 +3324,10 @@
         },
         "additionalProperties": false
       },
-      "ContextSelection": {
+      "ContextSelectionDraft": {
         "type": "object",
         "required": [
+          "format",
           "id",
           "kind",
           "reference",
@@ -3335,6 +3336,7 @@
           "truncated"
         ],
         "properties": {
+          "format": { "const": "agentide.context-selection-draft/1" },
           "id": { "type": "string" },
           "kind": {
             "type": "string",
@@ -3438,7 +3440,7 @@
           "focused_selections": {
             "type": "array",
             "maxItems": 8,
-            "items": { "$ref": "#/components/schemas/ContextSelection" }
+            "items": { "$ref": "#/components/schemas/ContextSelectionDraft" }
           },
           "open_files": {
             "type": "array",

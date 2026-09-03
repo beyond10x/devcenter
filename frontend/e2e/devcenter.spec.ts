@@ -529,6 +529,7 @@ async function mockAuthenticatedWorkspace(
       expect(codingTurnMatch[1]).toBe(codingSession.id);
       expect(submitted).not.toHaveProperty("agentide_session_id");
       expect(submitted.focused_selections[0]).toMatchObject({
+        format: "agentide.context-selection-draft/1",
         kind: "diff_hunk",
         truncated: false,
       });

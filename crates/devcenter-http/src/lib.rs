@@ -21,7 +21,10 @@ use agent_platform_core::{
     CapabilityProfileId, ConnectorApprovalPosture, ConnectorConnectionSummary,
     ConnectorEffectClass, ConnectorOperationDescription, ConversationInput, ConversationMessage,
 };
-use agentide_contracts::{ChangeSelector, ContextSelection, OpenFileReference};
+use agentide_contracts::{
+    ActorContext, ActorKind, ChangeSelector, ContextSelection, ContextSelectionDraft,
+    OpenFileReference,
+};
 use axum::body::Body;
 use axum::extract::ws::{Message as BrowserMessage, WebSocket, WebSocketUpgrade};
 use axum::extract::{Path, Query, State};
@@ -3568,7 +3571,7 @@ struct SubmitCodingTurn {
     #[serde(default)]
     messages: Vec<ConversationMessage>,
     #[serde(default)]
-    focused_selections: Vec<ContextSelection>,
+    focused_selections: Vec<ContextSelectionDraft>,
     #[serde(default)]
     open_files: Vec<OpenFileReference>,
     active_diff: Option<ChangeSelector>,
@@ -3585,10 +3588,10 @@ fn coding_turn_is_bounded(input: &SubmitCodingTurn) -> bool {
     let mut total = 0usize;
     for selection in &input.focused_selections {
         total = total.saturating_add(selection.content.len());
-        if selection.truncated
+        if selection.validate().is_err()
+            || selection.truncated
             || selection.content.len() > MAX_CODING_SELECTION_BYTES
             || total > MAX_CODING_SELECTION_TOTAL_BYTES
-            || selection.sha256 != hex::encode(Sha256::digest(selection.content.as_bytes()))
         {
             return false;
         }
@@ -3604,6 +3607,23 @@ fn coding_turn_is_bounded(input: &SubmitCodingTurn) -> bool {
             && file.sha256.len() == 64
             && file.sha256.bytes().all(|byte| byte.is_ascii_hexdigit())
     })
+}
+
+fn seal_coding_selections(
+    drafts: Vec<ContextSelectionDraft>,
+    subject: &str,
+) -> Option<Vec<ContextSelection>> {
+    let actor = ActorContext::new(ActorKind::Human, subject).ok()?;
+    let observed_at = chrono::Utc::now().to_rfc3339_opts(chrono::SecondsFormat::Millis, true);
+    drafts
+        .into_iter()
+        .map(|draft| {
+            let source_revision = draft.sha256.clone();
+            draft
+                .seal(actor.clone(), source_revision, observed_at.clone())
+                .ok()
+        })
+        .collect()
 }
 
 async fn submit_coding_turn(
@@ -3634,6 +3654,11 @@ async fn submit_coding_turn(
     if let Err(issue) = current_coordination_version(&state, &authenticated, &session).await {
         return issue.response();
     }
+    let Some(focused_selections) =
+        seal_coding_selections(request.focused_selections, &authenticated.principal.subject)
+    else {
+        return problem(StatusCode::UNPROCESSABLE_ENTITY, "coding_turn_invalid");
+    };
     let Some(client) = state.agent_platform.as_ref() else {
         return unavailable("agent_platform_not_configured");
     };
@@ -3645,7 +3670,7 @@ async fn submit_coding_turn(
         messages: request.messages,
         workspace_session_id: session.id.clone(),
         agentide_session_id: session.id,
-        focused_selections: request.focused_selections,
+        focused_selections,
         open_files: request.open_files,
         active_diff: request.active_diff,
     };
@@ -5204,6 +5229,7 @@ mod tests {
             "prompt": "Review the saved change",
             "messages": [],
             "focused_selections": [{
+                "format": "agentide.context-selection-draft/1",
                 "id": "selection-1",
                 "kind": "editor",
                 "reference": "src/main.rs",
@@ -5224,6 +5250,12 @@ mod tests {
         });
         let request: SubmitCodingTurn = serde_json::from_value(valid.clone()).unwrap();
         assert!(coding_turn_is_bounded(&request));
+        let sealed = seal_coding_selections(request.focused_selections, "user:reviewer").unwrap();
+        assert_eq!(sealed[0].format, "agentide.context-selection/1");
+        assert_eq!(sealed[0].provenance.actor.kind, ActorKind::Human);
+        assert_eq!(sealed[0].provenance.actor.subject, "user:reviewer");
+        assert_eq!(sealed[0].provenance.source, "workspace.editor");
+        assert_eq!(sealed[0].provenance.source_revision, digest);
 
         let mut tampered = valid.clone();
         tampered["focused_selections"][0]["sha256"] = Value::String("b".repeat(64));

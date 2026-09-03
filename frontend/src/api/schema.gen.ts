@@ -1650,7 +1650,9 @@ export interface components {
             role: "user" | "assistant" | "system";
             content: string;
         };
-        ContextSelection: {
+        ContextSelectionDraft: {
+            /** @constant */
+            format: "agentide.context-selection-draft/1";
             id: string;
             /** @enum {string} */
             kind: "editor" | "diff_hunk" | "terminal" | "process" | "evidence";
@@ -1695,7 +1697,7 @@ export interface components {
         SubmitCodingTurn: {
             prompt: string;
             messages: components["schemas"]["ConversationMessage"][];
-            focused_selections: components["schemas"]["ContextSelection"][];
+            focused_selections: components["schemas"]["ContextSelectionDraft"][];
             open_files: components["schemas"]["OpenFileReference"][];
             active_diff?: components["schemas"]["ChangeSelector"] | null;
             idempotency_key: string;

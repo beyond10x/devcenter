@@ -2,12 +2,12 @@
 format: aep.planning-md/1
 id: release-plan:devcenter-0-8-8
 kind: release-plan
-status: active
+status: implemented
 title: Release DevCenter 0.8.8
 summary: Publish the approved current-agent selector as patch release 0.8.8.
 relations:
 - delivers: story:current-agent-selector
-revision: 2
+revision: 3
 ---
 # Release plan: DevCenter 0.8.8
 

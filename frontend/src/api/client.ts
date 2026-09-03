@@ -212,6 +212,7 @@ export interface ConversationMessage {
   content: string;
 }
 export interface CodingTurnSelection {
+  format: "agentide.context-selection-draft/1";
   id: string;
   kind: "editor" | "diff_hunk" | "terminal" | "process" | "evidence";
   reference: string;

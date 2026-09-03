@@ -552,6 +552,7 @@ async function submitAgentTurn() {
     prompt,
     messages: priorMessages,
     focused_selections: attachments.value.map((attachment) => ({
+      format: "agentide.context-selection-draft/1" as const,
       id: attachment.id,
       kind:
         attachment.kind === "selection"

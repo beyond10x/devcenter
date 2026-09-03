@@ -2,6 +2,14 @@
 
 ## Unreleased
 
+## 0.8.9 - 2026-09-03
+
+- Align the hosted workbench with Agent Platform 0.6.6, AgentIDE 0.2.1, Workspace 0.2.10,
+  Connectors client 0.5.4, Service SDK 0.3.4, and Todo 0.2.6 as one compatible released graph;
+  keep the composed Connectors runtime at the exact 0.5.3 revision required by Service SDK 0.3.4.
+- Keep Workflow composition disabled until Workflow publishes its supported client, audience,
+  operations, and scopes instead of coupling DevCenter to domain internals.
+
 ## 0.8.8 - 2026-09-03
 
 - Make the compact current-agent selector unmistakable without restoring the persistent roster:
