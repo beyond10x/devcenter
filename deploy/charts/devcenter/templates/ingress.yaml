@@ -53,6 +53,10 @@ spec:
             pathType: Exact
             backend:
               service: {name: {{ include "devcenter.fullname" . }}-identity, port: {name: http}}
+          - path: /.well-known/oauth-authorization-server
+            pathType: Exact
+            backend:
+              service: {name: {{ include "devcenter.fullname" . }}-identity, port: {name: http}}
           - path: /v1/access-token
             pathType: Exact
             backend:

@@ -125,87 +125,50 @@ function formatInput(input: unknown) {
       </button>
     </header>
 
-    <div class="workspace-grid">
-      <aside class="roster-card">
-        <header class="card-heading">
-          <div>
-            <h2>Agents</h2>
-            <span>{{ workspace.agents.length }} available</span>
-          </div>
-          <button
-            class="icon-button"
-            type="button"
-            aria-label="Refresh agents"
-            :disabled="workspace.agentsState === 'loading'"
-            @click="workspace.loadAgents"
-          >
-            <RefreshCw :size="17" :class="{ spinning: workspace.agentsState === 'loading' }" />
-          </button>
-        </header>
-
-        <div
-          v-if="workspace.agentsState === 'loading' && !workspace.agents.length"
-          class="roster-loading"
-          aria-label="Loading agents"
-        >
-          <span v-for="item in 3" :key="item"></span>
-        </div>
-        <div v-else-if="workspace.agentsState === 'error'" class="inline-state error-state">
-          <CircleAlert :size="20" /><strong>Agents unavailable</strong>
-          <p>{{ workspace.agentsError }}</p>
-          <button class="button small" type="button" @click="workspace.loadAgents">
-            Try again
-          </button>
-        </div>
-        <div v-else-if="!workspace.agents.length" class="inline-state empty-state">
-          <span class="empty-icon"><Bot :size="25" /></span><strong>No agents yet</strong>
-          <p>Create the first governed worker for this workspace.</p>
-          <button class="button primary small" type="button" @click="showCreate = true">
-            <Plus :size="15" /> Create agent
-          </button>
-        </div>
-        <div v-else class="agent-list" role="listbox" aria-label="Agents">
-          <button
-            v-for="agent in workspace.agents"
-            :key="agent.id"
-            class="agent-option"
-            :class="{ selected: agent.id === workspace.selectedAgentId }"
-            type="button"
-            role="option"
-            :aria-selected="agent.id === workspace.selectedAgentId"
-            @click="choose(agent.id)"
-          >
-            <span class="agent-avatar"><Bot :size="18" /></span>
-            <span class="agent-option-copy"
-              ><strong>{{ agent.name }}</strong
-              ><small>Revision {{ agent.active_revision ?? "inactive" }}</small></span
-            >
-            <Check v-if="agent.id === workspace.selectedAgentId" :size="16" />
-          </button>
-        </div>
-        <footer v-if="workspace.agents.length" class="roster-footer">
-          <button type="button" @click="showCreate = true">
-            <Plus :size="15" /> Add another agent
-          </button>
-        </footer>
-      </aside>
-
+    <div class="workspace-grid agent-chat-workspace">
       <main v-if="selected" class="task-workspace">
         <header class="agent-workspace-header">
           <div class="agent-identity">
             <span class="large-agent-avatar"><Bot :size="24" /></span>
             <div>
-              <p>Selected agent</p>
+              <p>Conversation with</p>
               <h2>{{ selected.name }}</h2>
             </div>
           </div>
-          <div class="agent-facts">
-            <span
-              ><Sparkles :size="15" /> Revision {{ selected.active_revision ?? "inactive" }}</span
+          <div class="agent-header-actions">
+            <label class="sr-only" :for="`agent-picker-${selected.id}`">Choose agent</label>
+            <select
+              :id="`agent-picker-${selected.id}`"
+              class="agent-picker"
+              :value="selected.id"
+              @change="choose(($event.target as HTMLSelectElement).value)"
             >
-            <span><Clock3 :size="15" /> Created {{ formatDate(selected.created_at_ms) }}</span>
+              <option v-for="agent in workspace.agents" :key="agent.id" :value="agent.id">
+                {{ agent.name }}
+              </option>
+            </select>
+            <div class="agent-facts">
+              <span
+                ><Sparkles :size="15" /> Revision {{ selected.active_revision ?? "inactive" }}</span
+              >
+              <span><Clock3 :size="15" /> Created {{ formatDate(selected.created_at_ms) }}</span>
+            </div>
+            <button
+              class="icon-button"
+              type="button"
+              aria-label="Refresh agents"
+              :disabled="workspace.agentsState === 'loading'"
+              @click="workspace.loadAgents"
+            >
+              <RefreshCw :size="17" :class="{ spinning: workspace.agentsState === 'loading' }" />
+            </button>
           </div>
         </header>
+
+        <p v-if="workspace.agentsState === 'error'" class="agent-load-error" role="alert">
+          <CircleAlert :size="16" /> {{ workspace.agentsError }}
+          <button type="button" @click="workspace.loadAgents">Try again</button>
+        </p>
 
         <section class="agent-chat-panel" aria-live="polite">
           <div v-if="!history.length" class="agent-chat-empty">
@@ -328,13 +291,39 @@ function formatInput(input: unknown) {
       </main>
 
       <main v-else class="task-workspace workspace-placeholder">
-        <span class="empty-icon large"><Bot :size="30" /></span>
-        <h2>Create an agent to begin</h2>
+        <RefreshCw v-if="workspace.agentsState === 'loading'" :size="30" class="spinning" />
+        <CircleAlert v-else-if="workspace.agentsState === 'error'" :size="30" class="error-icon" />
+        <span v-else class="empty-icon large"><Bot :size="30" /></span>
+        <h2>
+          {{
+            workspace.agentsState === "loading"
+              ? "Loading agents…"
+              : workspace.agentsState === "error"
+                ? "Agents unavailable"
+                : "Create an agent to begin"
+          }}
+        </h2>
         <p>
-          Agents hold versioned instructions and model routes. Tasks bind each run to the active
-          revision.
+          {{
+            workspace.agentsState === "error"
+              ? workspace.agentsError
+              : "Agents hold versioned instructions and model routes. Tasks bind each run to the active revision."
+          }}
         </p>
-        <button class="button primary" type="button" @click="showCreate = true">
+        <button
+          v-if="workspace.agentsState === 'error'"
+          class="button primary"
+          type="button"
+          @click="workspace.loadAgents"
+        >
+          <RefreshCw :size="17" /> Try again
+        </button>
+        <button
+          v-else-if="workspace.agentsState !== 'loading'"
+          class="button primary"
+          type="button"
+          @click="showCreate = true"
+        >
           <Plus :size="17" /> New agent
         </button>
       </main>

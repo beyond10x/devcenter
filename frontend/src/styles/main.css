@@ -827,7 +827,8 @@ a {
   min-width: min(28rem, 48%);
   gap: 0.55rem;
 }
-.publish-bar input {
+.publish-bar input,
+.publish-bar select {
   min-width: 0;
   flex: 1;
 }
@@ -1065,7 +1066,8 @@ a {
   font-size: 1.2rem;
 }
 .view-header-actions,
-.profile-name-editor {
+.profile-name-editor,
+.profile-header-actions {
   display: flex;
   align-items: center;
   gap: 0.55rem;
@@ -1348,6 +1350,9 @@ a {
   margin-top: 1.4rem;
   grid-template-columns: 12.5rem minmax(0, 1fr);
 }
+.agent-chat-workspace {
+  grid-template-columns: minmax(0, 1fr);
+}
 .roster-card,
 .task-workspace,
 .connection-card,
@@ -1547,6 +1552,16 @@ a {
   font-size: 1.02rem;
   letter-spacing: -0.03em;
 }
+.agent-header-actions {
+  display: flex;
+  align-items: center;
+  gap: 0.6rem;
+}
+.agent-picker {
+  min-width: 10rem;
+  max-width: 16rem;
+  font-size: 0.65rem;
+}
 .agent-facts {
   display: flex;
   align-items: center;
@@ -1653,6 +1668,26 @@ a {
   overflow: auto;
   background: linear-gradient(180deg, var(--surface-muted), var(--surface));
   border-bottom: 1px solid var(--line);
+}
+.agent-load-error {
+  display: flex;
+  align-items: center;
+  gap: 0.45rem;
+  padding: 0.55rem 1rem;
+  margin: 0;
+  color: var(--danger);
+  background: var(--danger-soft);
+  border-bottom: 1px solid var(--danger-border);
+  font-size: 0.65rem;
+}
+.agent-load-error button {
+  padding: 0;
+  margin-left: auto;
+  color: inherit;
+  background: transparent;
+  border: 0;
+  font-size: inherit;
+  font-weight: 700;
 }
 .agent-chat-empty {
   display: grid;
@@ -2530,6 +2565,13 @@ a {
   .composer-footer {
     align-items: start;
     flex-direction: column;
+  }
+  .agent-header-actions {
+    width: 100%;
+    justify-content: space-between;
+  }
+  .agent-picker {
+    max-width: min(20rem, 70vw);
   }
   .composer-footer .button {
     width: 100%;

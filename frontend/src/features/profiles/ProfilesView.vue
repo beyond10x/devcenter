@@ -5,6 +5,7 @@ import {
   CircleAlert,
   CircleOff,
   Plus,
+  RadioTower,
   RefreshCw,
   ShieldAlert,
   ShieldCheck,
@@ -308,7 +309,16 @@ watch(
               }}
             </small>
           </div>
-          <span class="status-pill active">revision {{ selected.revision }}</span>
+          <div class="profile-header-actions">
+            <button
+              class="button quiet small"
+              type="button"
+              @click="router.push({ path: '/publications', query: { profile: selected.id } })"
+            >
+              <RadioTower :size="15" /> Publish via MCP
+            </button>
+            <span class="status-pill active">revision {{ selected.revision }}</span>
+          </div>
         </header>
         <div class="permission-toolbar">
           <div class="permission-toolbar-row">
