@@ -18,6 +18,7 @@
     "build": "pnpm typecheck && vite build",
     "test": "vitest run",
     "test:e2e": "playwright test",
+    "test:e2e:review": "playwright test --config playwright.review.config.ts",
     "check": "pnpm format:check && pnpm lint && pnpm check:generated && pnpm typecheck && pnpm test && pnpm build"
   },
   "dependencies": {

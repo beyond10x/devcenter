@@ -4202,6 +4202,9 @@ pre,
   flex-direction: column;
   background: var(--surface);
 }
+.review-banner + .hosted-workbench {
+  min-height: calc(100vh - 6.1rem);
+}
 .workbench-gate-state {
   display: grid;
   min-height: calc(100vh - 4rem);
