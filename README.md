@@ -135,7 +135,7 @@ second file store.
 For an isolated renderer/transport test, Workspace's loopback `workspace-terminal-lab` can replace
 only the review terminal emulator:
 
-```console
+```bash
 DEVCENTER_REVIEW_TERMINAL_UPSTREAM=ws://127.0.0.1:8095 pnpm --dir frontend review
 ```
 
