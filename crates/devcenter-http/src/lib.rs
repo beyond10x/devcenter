@@ -5350,6 +5350,10 @@ mod tests {
         for (path, content_type) in [
             ("/vendor/ghostty-web/loader.js", "text/javascript"),
             ("/vendor/ghostty-web/ghostty-web.js", "text/javascript"),
+            (
+                "/vendor/ghostty-web/__vite-browser-external-2447137e.js",
+                "text/javascript",
+            ),
             ("/ghostty-vt.wasm", "application/wasm"),
         ] {
             assert_immutable_asset(path, content_type).await;
