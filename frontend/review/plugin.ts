@@ -44,6 +44,21 @@ interface ReviewCapabilityProfile {
   updated_at_ms: number;
 }
 
+interface ReviewTask {
+  id: string;
+  agent_id: string;
+  status: string;
+  attempt_id: string;
+  prompt: string;
+  output: string | null;
+  failure_code: string | null;
+  failure_message: string | null;
+  accepted_at_ms: number;
+  completed_at_ms: number | null;
+  workspace_session_id?: string;
+  agentide_session_id?: string;
+}
+
 let connected = false;
 let nextAgent = 3;
 let nextPublication = 2;
@@ -191,6 +206,7 @@ let reviewAgentIdeVersion = 1;
 const reviewAgentIdeSessionId = "agentide-session-review";
 const reviewAgentIdeGrants: Array<Record<string, unknown>> = [];
 const reviewAgentIdePins: Array<Record<string, unknown>> = [];
+const reviewTasks: ReviewTask[] = [];
 const reviewTerminalProfile = {
   id: "rust-stable-confined",
   label: "Rust stable · confined",
@@ -477,6 +493,14 @@ function sendTaskEvents(response: ServerResponse) {
   const events = [
     { event: { kind: "accepted" } },
     { event: { kind: "running" } },
+    { event: { kind: "context_changed", revision: "context-review-2" } },
+    {
+      event: {
+        kind: "inventory_changed",
+        revision: "inventory-review-2",
+        published_tools: ["code_read", "code_changes", "code_edit", "code_create"],
+      },
+    },
     { event: { kind: "text_delta", text: "Reviewing the requested outcome…\n" } },
     { event: { kind: "text_delta", text: "• Identity session verified\n" } },
     { event: { kind: "text_delta", text: "• Connector authority checked\n" } },
@@ -1252,19 +1276,61 @@ export function reviewApi(): Plugin {
             return;
           }
           if (/^\/api\/agents\/[^/]+\/tasks$/.test(path) && method === "GET") {
-            sendJson(response, 200, []);
+            const agentId = path.split("/")[3];
+            sendJson(
+              response,
+              200,
+              reviewTasks.filter((task) => task.agent_id === agentId),
+            );
             return;
           }
           if (/^\/api\/agents\/[^/]+\/tasks$/.test(path) && method === "POST") {
             const submitted = await readJson(request);
-            sendJson(response, 202, {
+            const task: ReviewTask = {
               id: `task-review-${String(Date.now())}`,
               agent_id: path.split("/")[3],
               status: "accepted",
               attempt_id: "attempt-review",
               prompt: typeof submitted.prompt === "string" ? submitted.prompt : "",
+              output: null,
+              failure_code: null,
+              failure_message: null,
               accepted_at_ms: Date.now(),
-            });
+              completed_at_ms: null,
+            };
+            reviewTasks.push(task);
+            sendJson(response, 202, task);
+            return;
+          }
+          const codingTurnMatch = path.match(
+            /^\/api\/project-sessions\/([^/]+)\/agents\/([^/]+)\/turns$/,
+          );
+          if (codingTurnMatch && method === "POST") {
+            const submitted = await readJson(request);
+            if (
+              codingTurnMatch[1] !== reviewCodingSession.id ||
+              submitted.agentide_session_id !== reviewAgentIdeSessionId ||
+              typeof submitted.prompt !== "string"
+            ) {
+              sendJson(response, 422, { code: "coding_turn_invalid" });
+              return;
+            }
+            const task: ReviewTask = {
+              id: `task-review-coding-${String(Date.now())}`,
+              agent_id: codingTurnMatch[2],
+              status: "accepted",
+              attempt_id: "attempt-review-coding",
+              prompt: submitted.prompt,
+              output: null,
+              failure_code: null,
+              failure_message: null,
+              accepted_at_ms: Date.now(),
+              completed_at_ms: null,
+              workspace_session_id: reviewCodingSession.id,
+              agentide_session_id: reviewAgentIdeSessionId,
+            };
+            reviewTasks.push(task);
+            sendJson(response, 202, task);
             return;
           }
           if (/^\/api\/tasks\/[^/]+\/events$/.test(path) && method === "GET") {

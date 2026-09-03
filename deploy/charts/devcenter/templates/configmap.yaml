@@ -1,5 +1,12 @@
 {{- $_ := required "global.tenantId is required" .Values.global.tenantId -}}
 {{- $_ := required "global.publicOrigin is required" .Values.global.publicOrigin -}}
+{{- if .Values.devcenter.features.agentideWorkspace.enabled -}}
+{{- if not (index .Values.components "identity").enabled }}{{ fail "the AgentIDE workspace requires components.identity.enabled" }}{{ end -}}
+{{- if not (index .Values.components "connectors").enabled }}{{ fail "the AgentIDE workspace requires components.connectors.enabled" }}{{ end -}}
+{{- if not (index .Values.components "agent-platform").enabled }}{{ fail "the AgentIDE workspace requires components.agent-platform.enabled" }}{{ end -}}
+{{- if not (index .Values.components "workspace").enabled }}{{ fail "the AgentIDE workspace requires components.workspace.enabled" }}{{ end -}}
+{{- if not .Values.substrate.enabled }}{{ fail "the AgentIDE workspace requires substrate.enabled" }}{{ end -}}
+{{- end -}}
 apiVersion: v1
 kind: ConfigMap
 metadata:

@@ -11,7 +11,8 @@ invalid_identity_cli_error=$(mktemp)
 invalid_connector_client_error=$(mktemp)
 invalid_kubernetes_access_error=$(mktemp)
 invalid_identity_provider_error=$(mktemp)
-trap 'rm -f "$rendered" "$missing_database_error" "$invalid_docs_error" "$invalid_identity_cli_error" "$invalid_connector_client_error" "$invalid_kubernetes_access_error" "$invalid_identity_provider_error"' EXIT
+invalid_agentide_workspace_error=$(mktemp)
+trap 'rm -f "$rendered" "$missing_database_error" "$invalid_docs_error" "$invalid_identity_cli_error" "$invalid_connector_client_error" "$invalid_kubernetes_access_error" "$invalid_identity_provider_error" "$invalid_agentide_workspace_error"' EXIT
 
 grants_checksum() {
   helm template devcenter "$chart" \
@@ -113,6 +114,11 @@ awk '
 
 grep -q 'name: SUBSTRATE_TLS_LISTEN' "$rendered"
 grep -q 'name: WORKSPACE_SUBSTRATE_ORIGIN' "$rendered"
+grep -q 'name: AGENT_PLATFORM_IDENTITY_ORIGIN' "$rendered"
+grep -q 'name: AGENT_PLATFORM_CONNECTORS_API_BASE' "$rendered"
+grep -q 'name: AGENT_PLATFORM_WORKSPACE_ORIGIN' "$rendered"
+grep -q 'name: AGENT_PLATFORM_STATE_PATH' "$rendered"
+grep -q 'value: "/var/lib/agent-platform/state.json"' "$rendered"
 grep -q 'path: /api/connectors/v1/readyz' "$rendered"
 grep -q 'path: /api/connectors/v1/livez' "$rendered"
 grep -q 'name: volume-permissions' "$rendered"
@@ -126,6 +132,18 @@ grep -q 'chown 65532:65532 /var/run/substrate-tls/tls.crt /var/run/substrate-tls
 grep -q 'chown 65532:65532 /var/lib/substrate /var/run/substrate /var/run/substrate-tls' "$rendered"
 grep -q 'name: tls-source' "$rendered"
 grep -q 'DEV_CENTER_CONNECTORS_DOCS_AVAILABLE: "false"' "$rendered"
+grep -q 'DEV_CENTER_AGENTIDE_WORKSPACE_ENABLED: "true"' "$rendered"
+
+if helm template devcenter "$chart" \
+  --namespace devcenter \
+  --values "$values" \
+  --set components.agent-platform.enabled=false \
+  >/dev/null 2>"$invalid_agentide_workspace_error"
+then
+  echo "chart unexpectedly enabled the AgentIDE workspace without Agent Platform" >&2
+  exit 1
+fi
+grep -q "the AgentIDE workspace requires components.agent-platform.enabled" "$invalid_agentide_workspace_error"
 
 if helm template devcenter "$chart" \
   --namespace devcenter \

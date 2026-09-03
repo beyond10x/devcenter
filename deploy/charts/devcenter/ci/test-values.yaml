@@ -2,6 +2,9 @@ global:
   tenantId: tenant-example
   publicOrigin: https://devcenter.example.invalid
 devcenter:
+  features:
+    agentideWorkspace:
+      enabled: true
   image:
     repository: registry.example.invalid/devcenter
     digest: sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa
@@ -49,6 +52,9 @@ components:
       repository: registry.example.invalid/agent-platform
       digest: sha256:dddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddd
     args: [serve, --listen, 0.0.0.0:8090]
+    persistence:
+      enabled: true
+      storageClass: standard
   aep-service:
     enabled: true
     image:

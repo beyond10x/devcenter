@@ -158,6 +158,35 @@ export type ChangeSelector =
   | { kind: "agent_attempt"; attempt_id: string }
   | { kind: "publication"; publication_id: string }
   | { kind: "revision_pair"; old: string; new: string };
+export interface ConversationMessage {
+  role: "user" | "assistant" | "system";
+  content: string;
+}
+export interface CodingTurnSelection {
+  id: string;
+  kind: "editor" | "diff_hunk" | "terminal" | "process" | "evidence";
+  reference: string;
+  start_line?: number | null;
+  end_line?: number | null;
+  content: string;
+  sha256: string;
+  truncated: boolean;
+}
+export interface CodingOpenFileReference {
+  path: string;
+  sha256: string;
+  cursor?: { line: number; column: number } | null;
+  dirty: boolean;
+}
+export interface SubmitCodingTurn {
+  prompt: string;
+  messages: ConversationMessage[];
+  agentide_session_id: string;
+  focused_selections: CodingTurnSelection[];
+  open_files: CodingOpenFileReference[];
+  active_diff?: ChangeSelector | null;
+  idempotency_key: string;
+}
 export type DiffMode = "patch" | "stat" | "files_only";
 export interface DiffLine {
   kind: string;
@@ -565,6 +594,11 @@ export const api = {
       method: "POST",
       body: JSON.stringify({ prompt, idempotency_key: crypto.randomUUID() }),
     }),
+  submitCodingTurn: (sessionId: string, agentId: string, input: SubmitCodingTurn) =>
+    request<Task>(
+      `/api/project-sessions/${encodeURIComponent(sessionId)}/agents/${encodeURIComponent(agentId)}/turns`,
+      { method: "POST", body: JSON.stringify(input) },
+    ),
   taskApprovals: (taskId: string) =>
     request<TaskApproval[]>(`/api/tasks/${encodeURIComponent(taskId)}/approvals`),
   resolveTaskApproval: (taskId: string, approvalId: string, decision: TaskApprovalDecision) =>
@@ -598,6 +632,9 @@ const FRIENDLY_ERRORS: Record<string, string> = {
   agentide_workspace_disabled: "The hosted coding workbench is disabled in this environment.",
   workspace_file_conflict:
     "This file changed after it was loaded. Review the conflict before editing further.",
+  coding_turn_invalid:
+    "The coding turn exceeded its attachment boundary or contained stale attachment metadata.",
+  coding_session_not_ready: "The workspace is not ready for an agent turn.",
   identity_publication_revocation_unavailable:
     "Identity cannot yet revoke every authorization for this publication safely.",
   identity_client_revocation_unavailable:
@@ -621,6 +658,8 @@ export interface TaskEventEnvelope {
     | { kind: "accepted" }
     | { kind: "running" }
     | { kind: "text_delta"; text: string }
+    | { kind: "context_changed"; revision: string }
+    | { kind: "inventory_changed"; revision: string; published_tools: string[] }
     | {
         kind: "approval_requested";
         approval_id: string;

@@ -9,6 +9,15 @@
   repository beyond root-level files.
 - Align the composed AgentIDE and Todo generated services with Service SDK 0.3.2 so every hosted
   factory implements the same exact Connectors 0.5.3 service contract.
+- Add the native workspace Agent pane and BFF route for typed Agent Platform coding-session turns.
+  Each turn carries only the bound Workspace/AgentIDE references, saved open-file digests, prior
+  transcript, and deliberately attached selections; context and tool inventories are refreshed by
+  Workspace and reported through the durable task event stream.
+- Compose Agent Platform with the chart's private Identity, Connectors, and Workspace services, and
+  bind restart-safe task state to its persistent volume. Enabling the hosted workbench now fails
+  chart rendering unless its complete runtime composition, including Substrate, is enabled.
+- Move the source, CI, and container build toolchain to Rust 1.98, which is required by the hosted
+  AgentIDE and Workspace contracts.
 
 ## 0.8.1 - 2026-09-03
 
