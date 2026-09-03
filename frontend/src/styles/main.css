@@ -4,6 +4,9 @@
   font-family: "Manrope Variable", Manrope, ui-sans-serif, system-ui, sans-serif;
   font-synthesis: none;
   text-rendering: optimizeLegibility;
+  --font-mono:
+    "JetBrains Mono Variable", "JetBrains Mono", ui-monospace, SFMono-Regular, Menlo, Consolas,
+    monospace;
   --ink: #14201e;
   --muted: #58635f;
   --faint: #8c9693;
@@ -4884,7 +4887,8 @@ pre,
   min-height: 5rem;
   flex: 1;
   overflow: hidden;
-  background: #111318;
+  background: var(--code-surface);
+  font-family: var(--font-mono);
 }
 .hosted-terminal-screen > footer {
   display: flex;

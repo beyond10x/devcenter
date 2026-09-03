@@ -6,6 +6,11 @@ import CssWorker from "monaco-editor/language/css/css.worker.js?worker";
 import HtmlWorker from "monaco-editor/language/html/html.worker.js?worker";
 import JsonWorker from "monaco-editor/language/json/json.worker.js?worker";
 import TypeScriptWorker from "monaco-editor/language/typescript/ts.worker.js?worker";
+import {
+  currentWorkbenchTheme,
+  resolveWorkbenchTheme,
+  WORKBENCH_MONO_FONT,
+} from "./workbenchTheme";
 
 const props = withDefaults(
   defineProps<{
@@ -45,7 +50,9 @@ type MonacoGlobal = typeof globalThis & {
 onMounted(async () => {
   if (!host.value) return;
   const language = normalizeLanguage(props.language, props.path);
-  await loadLanguage(language);
+  await Promise.all([loadLanguage(language), loadWorkbenchFont()]);
+  registerEditorThemes();
+  const workbenchTheme = currentWorkbenchTheme();
   editor = monaco.editor.create(host.value, {
     value: props.modelValue,
     language,
@@ -54,8 +61,11 @@ onMounted(async () => {
     ariaLabel: `Editor for ${props.path}`,
     bracketPairColorization: { enabled: true },
     folding: true,
-    fontFamily: "ui-monospace, SFMono-Regular, Menlo, Consolas, monospace",
+    fontFamily: WORKBENCH_MONO_FONT,
+    fontLigatures: true,
     fontSize: 13,
+    fontWeight: "450",
+    lineHeight: 20,
     lineNumbers: "on",
     lineNumbersMinChars: 3,
     minimap: { enabled: false },
@@ -63,7 +73,8 @@ onMounted(async () => {
     renderWhitespace: "selection",
     scrollBeyondLastLine: false,
     tabSize: 2,
-    theme: editorTheme(),
+    padding: { top: 10, bottom: 10 },
+    theme: workbenchTheme.monacoName,
   });
   editor.addCommand(monaco.KeyMod.CtrlCmd | monaco.KeyCode.KeyS, () => emit("save"));
   contentSubscription = editor.onDidChangeModelContent(() => {
@@ -117,8 +128,43 @@ onBeforeUnmount(() => {
 });
 
 function editorTheme(): string {
-  const theme = document.documentElement.dataset.theme;
-  return !theme || theme === "light" || theme === "solarized-light" ? "vs" : "vs-dark";
+  return currentWorkbenchTheme().monacoName;
+}
+
+function registerEditorThemes() {
+  for (const id of ["light", "dark", "monokai", "solarized-light", "solarized-dark"] as const) {
+    const theme = resolveWorkbenchTheme(id);
+    monaco.editor.defineTheme(theme.monacoName, {
+      base: theme.monacoBase,
+      inherit: true,
+      rules: [
+        { token: "keyword", foreground: theme.syntax.keyword.slice(1), fontStyle: "bold" },
+        { token: "keyword.type", foreground: theme.syntax.type.slice(1), fontStyle: "bold" },
+        { token: "string", foreground: theme.syntax.string.slice(1) },
+        { token: "string.quote", foreground: theme.syntax.string.slice(1) },
+        { token: "string.escape", foreground: theme.syntax.operator.slice(1), fontStyle: "bold" },
+        { token: "number", foreground: theme.syntax.number.slice(1) },
+        { token: "comment", foreground: theme.syntax.comment.slice(1), fontStyle: "italic" },
+        { token: "operator", foreground: theme.syntax.operator.slice(1) },
+      ],
+      colors: {
+        "editor.background": theme.editorBackground,
+        "editor.foreground": theme.editorForeground,
+        "editor.lineHighlightBackground": theme.editorLineHighlight,
+        "editor.selectionBackground": theme.editorSelection,
+        "editor.inactiveSelectionBackground": theme.editorInactiveSelection,
+        "editorCursor.foreground": theme.editorCursor,
+        "editorLineNumber.foreground": theme.editorLineNumber,
+        "editorLineNumber.activeForeground": theme.editorActiveLineNumber,
+        "editorIndentGuide.background1": theme.editorLineHighlight,
+        "editorIndentGuide.activeBackground1": theme.editorLineNumber,
+      },
+    });
+  }
+}
+
+async function loadWorkbenchFont() {
+  await document.fonts.load(`13px ${WORKBENCH_MONO_FONT}`);
 }
 
 function normalizeLanguage(language: string | null | undefined, path: string): string {

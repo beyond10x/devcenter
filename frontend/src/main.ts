@@ -1,3 +1,4 @@
+import "@fontsource-variable/jetbrains-mono";
 import "@fontsource-variable/manrope";
 import { createPinia } from "pinia";
 import { createApp } from "vue";

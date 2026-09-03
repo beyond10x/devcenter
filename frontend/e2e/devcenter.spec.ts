@@ -1042,6 +1042,41 @@ test("restores the native coding workbench from URL-backed state", async ({ page
   await page.getByRole("button", { name: /Editor/ }).click();
   await expect(page).toHaveURL(/pane=editor/);
   await expect(page.locator(".hosted-monaco-editor")).toBeVisible();
+  await expect
+    .poll(() =>
+      page
+        .locator(".hosted-monaco-editor .view-line")
+        .first()
+        .evaluate((line) => {
+          const target = line as unknown as {
+            ownerDocument: {
+              defaultView: {
+                getComputedStyle(element: unknown): { fontFamily: string };
+              } | null;
+            };
+          };
+          return target.ownerDocument.defaultView?.getComputedStyle(target).fontFamily ?? "";
+        }),
+    )
+    .toContain("JetBrains Mono Variable");
+  await expect
+    .poll(() =>
+      page.locator(".hosted-monaco-editor .view-lines span[class*='mtk']").evaluateAll((tokens) => {
+        return new Set(
+          tokens.map((token) => {
+            const target = token as unknown as {
+              ownerDocument: {
+                defaultView: {
+                  getComputedStyle(element: unknown): { color: string };
+                } | null;
+              };
+            };
+            return target.ownerDocument.defaultView?.getComputedStyle(target).color ?? "";
+          }),
+        ).size;
+      }),
+    )
+    .toBeGreaterThanOrEqual(3);
 });
 
 test("drives the hosted terminal byte channel, recovers partial replay, and keeps kill explicit", async ({
@@ -1094,6 +1129,18 @@ test("drives the hosted terminal byte channel, recovers partial replay, and keep
   await page.goto(`/projects/${project.id}/sessions/${codingSession.id}?terminal=terminal-test`);
 
   await expect(page.locator(".terminal-connection.running")).toBeVisible();
+  await expect
+    .poll(() =>
+      page.locator(".ghostty-host canvas").evaluate((canvas) => {
+        const context = (
+          canvas as unknown as {
+            getContext(kind: "2d"): { font: string } | null;
+          }
+        ).getContext("2d");
+        return context?.font ?? "";
+      }),
+    )
+    .toContain("JetBrains Mono Variable");
   await page.locator(".ghostty-host").click();
   await page.keyboard.type("pwd");
   await page.keyboard.press("Enter");

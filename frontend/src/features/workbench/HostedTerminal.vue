@@ -2,6 +2,7 @@
 import { Copy, Link, LoaderCircle, RefreshCw, Search, Unplug, XCircle } from "@lucide/vue";
 import { onBeforeUnmount, onMounted, ref } from "vue";
 import { api, type TerminalSession } from "@/api/client";
+import { currentWorkbenchTheme, type TerminalTheme, WORKBENCH_MONO_FONT } from "./workbenchTheme";
 
 interface Disposable {
   dispose(): void;
@@ -37,7 +38,12 @@ interface GhosttyFitAddon {
 
 interface GhosttyModule {
   init(): Promise<void>;
-  Terminal: new (options: { fontSize: number; scrollback: number }) => GhosttyTerminal;
+  Terminal: new (options: {
+    fontFamily: string;
+    fontSize: number;
+    scrollback: number;
+    theme: TerminalTheme;
+  }) => GhosttyTerminal;
   FitAddon: new () => GhosttyFitAddon;
 }
 
@@ -77,8 +83,14 @@ async function open() {
     // pane exists, and its WASM is never fetched from a CDN.
     const ghostty = await loadGhostty();
     await ghostty.init();
+    await document.fonts.load(`13px ${WORKBENCH_MONO_FONT}`);
     if (!alive || !host.value) return;
-    renderer = new ghostty.Terminal({ fontSize: 13, scrollback: 10_000 });
+    renderer = new ghostty.Terminal({
+      fontFamily: WORKBENCH_MONO_FONT,
+      fontSize: 13,
+      scrollback: 10_000,
+      theme: currentWorkbenchTheme().terminal,
+    });
     fit = new ghostty.FitAddon();
     renderer.loadAddon(fit);
     renderer.open(host.value);
