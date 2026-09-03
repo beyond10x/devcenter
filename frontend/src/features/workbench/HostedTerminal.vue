@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { Copy, Link, LoaderCircle, Search, Unplug, XCircle } from "@lucide/vue";
+import { Copy, Link, LoaderCircle, RefreshCw, Search, Unplug, XCircle } from "@lucide/vue";
 import { onBeforeUnmount, onMounted, ref } from "vue";
 import { api, type TerminalSession } from "@/api/client";
 
@@ -14,6 +14,7 @@ interface GhosttyTerminal {
   loadAddon(addon: GhosttyFitAddon): void;
   write(bytes: Uint8Array): void;
   focus(): void;
+  reset(): void;
   dispose(): void;
   onData(listener: (data: string) => void): Disposable;
   onResize(listener: (size: { cols: number; rows: number }) => void): Disposable;
@@ -120,25 +121,30 @@ function connect() {
   );
   candidate.binaryType = "arraybuffer";
   socket = candidate;
-  candidate.onopen = () => sendResize(renderer?.cols ?? 80, renderer?.rows ?? 24);
-  candidate.onmessage = receive;
+  candidate.onopen = () => {
+    if (socket === candidate) sendResize(renderer?.cols ?? 80, renderer?.rows ?? 24);
+  };
+  candidate.onmessage = (event: MessageEvent<unknown>) => {
+    if (socket === candidate) receive(event);
+  };
   candidate.onerror = () => {
-    detail.value = "The same-origin terminal transport is unavailable.";
+    if (socket === candidate) detail.value = "The same-origin terminal transport is unavailable.";
   };
   candidate.onclose = () => {
-    if (socket === candidate) socket = undefined;
+    if (socket !== candidate) return;
+    socket = undefined;
     if (!alive || connectionState.value === "exited" || connectionState.value === "refused") return;
     connectionState.value = "detached";
     scheduleReconnect();
   };
 }
 
-function receive(event: MessageEvent<string | ArrayBuffer>) {
+function receive(event: MessageEvent<unknown>) {
   if (typeof event.data === "string") {
     receiveLifecycle(event.data);
     return;
   }
-  if (event.data.byteLength < 8 || !renderer) {
+  if (!(event.data instanceof ArrayBuffer) || event.data.byteLength < 8 || !renderer) {
     connectionState.value = "refused";
     detail.value = "terminal_output_frame_invalid";
     socket?.close();
@@ -209,6 +215,23 @@ function scheduleReconnect() {
   }, delay);
 }
 
+function replayRetainedOutput() {
+  if (reconnectTimer !== undefined) {
+    window.clearTimeout(reconnectTimer);
+    reconnectTimer = undefined;
+  }
+  const previous = socket;
+  socket = undefined;
+  previous?.close();
+  renderer?.reset();
+  hasSequence = false;
+  lastSequence = 0n;
+  reconnectAttempt = 0;
+  connectionState.value = "connecting";
+  detail.value = "Reloading the oldest terminal output still retained by Workspace.";
+  connect();
+}
+
 function sendResize(columns: number, rows: number) {
   if (socket?.readyState !== WebSocket.OPEN) return;
   socket.send(JSON.stringify({ kind: "resize", columns, rows }));
@@ -275,6 +298,14 @@ function dispose() {
       <button type="button" title="Paste from clipboard" @click="pasteClipboard">Paste</button>
       <button type="button" title="Attach selection to session context" @click="attachSelection">
         <Link :size="12" /> Attach
+      </button>
+      <button
+        v-if="connectionState === 'partial'"
+        type="button"
+        title="Clear the terminal and reload all output still retained by Workspace"
+        @click="replayRetainedOutput"
+      >
+        <RefreshCw :size="12" /> Reload retained output
       </button>
       <button
         class="terminal-kill"
