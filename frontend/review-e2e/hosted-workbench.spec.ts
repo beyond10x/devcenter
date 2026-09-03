@@ -43,6 +43,40 @@ test("runs the standalone hosted workbench and terminal without viewport overflo
   await expect(page.getByRole("button", { name: /bind/i })).toHaveCount(0);
   await expect(page.locator(".terminal-panel")).toHaveCount(0);
 
+  const staleAttach = await page.evaluate(
+    async (socketOrigin) => {
+      const started = performance.now();
+      return await new Promise<{
+        closeCode: number;
+        elapsedMs: number;
+        refusal: { kind?: unknown; code?: unknown } | null;
+      }>((resolve, reject) => {
+        const timeout = globalThis.setTimeout(
+          () => reject(new Error("stale terminal attach did not finish")),
+          2_000,
+        );
+        let refusal: { kind?: unknown; code?: unknown } | null = null;
+        const socket = new WebSocket(`${socketOrigin}/api/project-terminals/terminal-stale/attach`);
+        socket.addEventListener("message", (event) => {
+          if (typeof event.data === "string") {
+            refusal = JSON.parse(event.data) as { kind?: unknown; code?: unknown };
+          }
+        });
+        socket.addEventListener("close", (event) => {
+          globalThis.clearTimeout(timeout);
+          resolve({ closeCode: event.code, elapsedMs: performance.now() - started, refusal });
+        });
+      });
+    },
+    new URL(page.url()).origin.replace(/^http/, "ws"),
+  );
+  expect(staleAttach.refusal).toEqual({
+    kind: "refused",
+    code: "workspace_terminal_not_found",
+  });
+  expect(staleAttach.closeCode).toBe(1008);
+  expect(staleAttach.elapsedMs).toBeLessThan(1_000);
+
   const terminalButton = page.getByRole("button", { name: "Terminal", exact: true });
   await expect(terminalButton).toBeVisible();
   const terminalBounds = await terminalButton.boundingBox();
