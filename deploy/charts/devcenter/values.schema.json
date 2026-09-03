@@ -21,6 +21,7 @@
         "identity": {
           "type": "object",
           "properties": {
+            "exchangeCallerId": { "type": "string" },
             "providers": {
               "type": "array",
               "items": {

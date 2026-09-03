@@ -79,12 +79,17 @@ DEV_CENTER_IDENTITY_AUDIENCE=urn:b10x:devcenter \
 DEV_CENTER_IDENTITY_WEB_CLIENT_ID=devcenter-web \
 DEV_CENTER_IDENTITY_REDIRECT_URI=https://devcenter.example.test/auth/sso/callback \
 DEV_CENTER_IDENTITY_PROVIDERS='[{"id":"provider-a","display_name":"Provider A"}]' \
+DEV_CENTER_IDENTITY_EXCHANGE_CALLER_ID=relying-service \
 DEV_CENTER_DATABASE_URL=postgresql://... \
 DEV_CENTER_AGENT_PLATFORM_ORIGIN=https://agents.example.test \
 DEV_CENTER_CONNECTORS_API_BASE=https://connectors.example.test/api/connectors/v1 \
 DEV_CENTER_WORKSPACE_ORIGIN=https://workspace.example.test \
 DEV_CENTER_AGENTIDE_WORKSPACE_ENABLED=false
 ```
+
+The matching `DEV_CENTER_IDENTITY_EXCHANGE_SECRET` is injected from deployment-owned Secret
+material, never a ConfigMap or public values file. Identity admits that caller only under an exact
+source-audience, source-scope, target-audience, and target-scope exchange policy.
 
 The browser receives only an opaque, Secure, HttpOnly session cookie. `Connect Claude` starts a
 Connector-owned OAuth2 PKCE flow: Devcenter retains only an opaque flow id in browser memory while
@@ -156,10 +161,13 @@ never rendered into a ConfigMap. A publication URL is `/mcp/{opaque_id}` and its
 RFC 9728 discovery document is `/.well-known/oauth-protected-resource/mcp/{opaque_id}`. All
 publications share the deployment's exact `/mcp` audience while the opaque path and immutable
 projection retain publication isolation. Revoked IDs are terminal and are never reused. Identity
-0.5.2 validates the short-lived human bearer and `mcp.tools.call` scope for discovery and tool
-listing; invocation remains fail-closed until the released authority seam supports a narrowed
-exchange into current Connector authority. Agent task approvals remain distinct from MCP
-publication authorization.
+0.5.6 validates the short-lived human bearer and `mcp.tools.call` scope, then confidentially narrows
+it into the minimum current Connector scope for each describe, approval, and invoke step. Devcenter
+resolves only the immutable profile projection, while Connectors re-checks the current description,
+Connection, Grant, and approval evidence. Effect-bearing calls create an exact-input approval in
+the publication workspace; the owner approves or denies it there and the approval is consumed once
+on an identical client retry. Agent task approvals remain distinct from MCP publication
+authorization.
 
 ## Deployment CLI
 

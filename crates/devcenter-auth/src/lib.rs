@@ -4,6 +4,20 @@
 //! must never retain or forward credential bytes.
 
 use std::{fmt, sync::Arc};
+use zeroize::Zeroizing;
+
+#[derive(Clone)]
+#[doc(hidden)]
+pub struct IdentityAuthentication {
+    client: identity_client::IdentityClient,
+    exchange: Option<ExchangeCaller>,
+}
+
+#[derive(Clone)]
+struct ExchangeCaller {
+    id: Arc<str>,
+    secret: Arc<Zeroizing<String>>,
+}
 
 /// Authentication configured for the process.
 #[derive(Clone, Default)]
@@ -14,7 +28,7 @@ pub enum Authentication {
     /// Exact bearer matching for loopback-only local development.
     DevelopmentBearer(Arc<str>),
     /// Exact-audience session resolution through the Identity-owned client.
-    Identity(identity_client::IdentityClient),
+    Identity(IdentityAuthentication),
 }
 
 /// Credential-free principal facts resolved by the configured authority.
@@ -24,6 +38,13 @@ pub struct Principal {
     pub subject: String,
     pub email: Option<String>,
     pub groups: Vec<String>,
+}
+
+/// Credential-free authority facts for one public MCP authorization.
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub struct PublicationPrincipal {
+    pub principal: Principal,
+    pub token_id: String,
 }
 
 impl Authentication {
@@ -40,8 +61,35 @@ impl Authentication {
     /// Construct the production verifier for one exact Identity audience.
     pub fn identity(origin: &str, audience: &str) -> Result<Self, ConfigurationError> {
         identity_client::IdentityClient::new(origin, audience)
-            .map(Self::Identity)
+            .map(|client| {
+                Self::Identity(IdentityAuthentication {
+                    client,
+                    exchange: None,
+                })
+            })
             .map_err(|_| ConfigurationError)
+    }
+
+    /// Construct a production verifier with a confidential server-side access exchange caller.
+    pub fn identity_with_exchange(
+        origin: &str,
+        audience: &str,
+        caller_id: impl Into<Arc<str>>,
+        caller_secret: String,
+    ) -> Result<Self, ConfigurationError> {
+        let caller_id = caller_id.into();
+        if caller_id.trim().is_empty() || caller_secret.len() < 32 {
+            return Err(ConfigurationError);
+        }
+        let client = identity_client::IdentityClient::new(origin, audience)
+            .map_err(|_| ConfigurationError)?;
+        Ok(Self::Identity(IdentityAuthentication {
+            client,
+            exchange: Some(ExchangeCaller {
+                id: caller_id,
+                secret: Arc::new(Zeroizing::new(caller_secret)),
+            }),
+        }))
     }
 
     /// Verify a borrowed Authorization header without exposing credential bytes in results.
@@ -66,9 +114,10 @@ impl Authentication {
                     Err(AuthenticationError::Invalid)
                 }
             }
-            Self::Identity(client) => {
+            Self::Identity(identity) => {
                 let authorization = authorization.ok_or(AuthenticationError::Invalid)?;
-                client
+                identity
+                    .client
                     .resolve_session(authorization)
                     .await
                     .map(|authority| Principal {
@@ -95,13 +144,21 @@ impl Authentication {
         &self,
         authorization: Option<&str>,
         resource: &str,
-    ) -> Result<Principal, AuthenticationError> {
+    ) -> Result<PublicationPrincipal, AuthenticationError> {
         match self {
-            Self::DevelopmentBearer(_) => self.verify(authorization).await,
+            Self::DevelopmentBearer(_) => {
+                self.verify(authorization)
+                    .await
+                    .map(|principal| PublicationPrincipal {
+                        principal,
+                        token_id: "development-authorization".to_owned(),
+                    })
+            }
             Self::Unconfigured => Err(AuthenticationError::Unavailable),
-            Self::Identity(client) => {
+            Self::Identity(identity) => {
                 let authorization = authorization.ok_or(AuthenticationError::Invalid)?;
-                client
+                identity
+                    .client
                     .resolve_access_token(authorization, resource)
                     .await
                     .map_err(|error| match error {
@@ -120,21 +177,56 @@ impl Authentication {
                         {
                             return Err(AuthenticationError::Invalid);
                         }
-                        Ok(Principal {
-                            tenant_id: authority.tenant_id,
-                            subject: authority.subject,
-                            email: authority.email,
-                            groups: authority.groups,
+                        Ok(PublicationPrincipal {
+                            token_id: authority.token_id,
+                            principal: Principal {
+                                tenant_id: authority.tenant_id,
+                                subject: authority.subject,
+                                email: authority.email,
+                                groups: authority.groups,
+                            },
                         })
                     })
             }
         }
     }
 
+    /// Confidentially exchange a verified publication token for one exact downstream scope.
+    pub async fn exchange_publication_access(
+        &self,
+        source_authorization: &str,
+        source_audience: &str,
+        target_audience: &str,
+        scope: &str,
+    ) -> Result<identity_client::AccessToken, AuthenticationError> {
+        let Self::Identity(identity) = self else {
+            return Err(AuthenticationError::Unavailable);
+        };
+        let exchange = identity
+            .exchange
+            .as_ref()
+            .ok_or(AuthenticationError::Unavailable)?;
+        identity
+            .client
+            .exchange_access_token(
+                source_authorization,
+                &exchange.id,
+                exchange.secret.as_str(),
+                source_audience,
+                target_audience,
+                scope,
+            )
+            .await
+            .map_err(|error| match error {
+                identity_client::ClientError::Transport(_) => AuthenticationError::Unavailable,
+                _ => AuthenticationError::Invalid,
+            })
+    }
+
     /// Return the configured Identity client for browser login and exact-audience exchanges.
     pub fn identity_client(&self) -> Result<&identity_client::IdentityClient, AuthenticationError> {
         match self {
-            Self::Identity(client) => Ok(client),
+            Self::Identity(identity) => Ok(&identity.client),
             Self::Unconfigured | Self::DevelopmentBearer(_) => {
                 Err(AuthenticationError::Unavailable)
             }
@@ -147,7 +239,14 @@ impl fmt::Debug for Authentication {
         match self {
             Self::Unconfigured => formatter.write_str("Unconfigured"),
             Self::DevelopmentBearer(_) => formatter.write_str("DevelopmentBearer([REDACTED])"),
-            Self::Identity(client) => formatter.debug_tuple("Identity").field(client).finish(),
+            Self::Identity(identity) => formatter
+                .debug_struct("Identity")
+                .field("client", &identity.client)
+                .field(
+                    "exchange",
+                    &identity.exchange.as_ref().map(|_| "[REDACTED]"),
+                )
+                .finish(),
         }
     }
 }

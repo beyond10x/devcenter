@@ -755,7 +755,7 @@ dependencies = [
 
 [[package]]
 name = "devcenter-app"
-version = "0.8.4"
+version = "0.8.5"
 dependencies = [
  "anyhow",
  "axum",
@@ -769,15 +769,16 @@ dependencies = [
 
 [[package]]
 name = "devcenter-auth"
-version = "0.8.4"
+version = "0.8.5"
 dependencies = [
- "identity-client 0.5.2",
+ "identity-client 0.5.6",
  "tokio",
+ "zeroize",
 ]
 
 [[package]]
 name = "devcenter-core"
-version = "0.8.4"
+version = "0.8.5"
 dependencies = [
  "devcenter-auth",
  "serde",
@@ -785,7 +786,7 @@ dependencies = [
 
 [[package]]
 name = "devcenter-http"
-version = "0.8.4"
+version = "0.8.5"
 dependencies = [
  "agent-platform-client",
  "agent-platform-core",
@@ -802,7 +803,7 @@ dependencies = [
  "getrandom 0.3.4",
  "hex",
  "http-body-util",
- "identity-client 0.5.2",
+ "identity-client 0.5.6",
  "protocol",
  "reqwest 0.13.4",
  "serde",
@@ -819,7 +820,7 @@ dependencies = [
 
 [[package]]
 name = "devcenter-mcp"
-version = "0.8.4"
+version = "0.8.5"
 dependencies = [
  "serde",
  "serde_json",
@@ -828,7 +829,7 @@ dependencies = [
 
 [[package]]
 name = "devcenter-store"
-version = "0.8.4"
+version = "0.8.5"
 dependencies = [
  "devcenter-mcp",
  "serde",
@@ -841,7 +842,7 @@ dependencies = [
 
 [[package]]
 name = "devcenter-web-assets"
-version = "0.8.4"
+version = "0.8.5"
 dependencies = [
  "mime_guess",
  "rust-embed",
@@ -849,7 +850,7 @@ dependencies = [
 
 [[package]]
 name = "devcenterctl"
-version = "0.8.4"
+version = "0.8.5"
 dependencies = [
  "anyhow",
  "clap",
@@ -1524,8 +1525,8 @@ dependencies = [
 
 [[package]]
 name = "identity-client"
-version = "0.5.2"
-source = "git+ssh://git@github.com/beyond10x/identity.git?tag=0.5.2#b53d6d778f4ad292c50e7b5659946c8fc1593d94"
+version = "0.5.6"
+source = "git+ssh://git@github.com/beyond10x/identity.git?tag=0.5.6#e3231bc34eb65695ba0486e1bbe3a0f1ec5b2a23"
 dependencies = [
  "reqwest 0.12.28",
  "serde",

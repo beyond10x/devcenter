@@ -2,6 +2,15 @@
 
 ## Unreleased
 
+## 0.8.5 - 2026-09-03
+
+- Invoke immutable capability-profile MCP tools through Identity 0.5.6's confidential, exact-scope
+  access exchange without exposing reusable Connector authority to the external client.
+- Revalidate each published operation, connection, description, Grant, and schema before invoking,
+  and refuse stale projections until the profile is republished.
+- Record and revoke individual external authorizations, and let publication owners approve or deny
+  guarded exact-input calls whose decisions are consumed once on an identical retry.
+
 ## 0.8.4 - 2026-09-03
 
 - Make the agent interaction a full-width chat workspace with a compact switcher instead of a

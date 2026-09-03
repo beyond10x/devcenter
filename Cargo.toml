@@ -13,7 +13,7 @@ members = [
 exclude = ["crates/devcenter-connectors"]
 
 [workspace.package]
-version = "0.8.4"
+version = "0.8.5"
 edition = "2024"
 rust-version = "1.98"
 license = "PolyForm-Free-Trial-1.0.0"
@@ -27,7 +27,7 @@ devcenter-web-assets = { path = "crates/devcenter-web-assets" }
 devcenter-http = { path = "crates/devcenter-http" }
 devcenter-mcp = { path = "crates/devcenter-mcp" }
 devcenter-store = { path = "crates/devcenter-store" }
-identity-client = { git = "ssh://git@github.com/beyond10x/identity.git", tag = "0.5.2" }
+identity-client = { git = "ssh://git@github.com/beyond10x/identity.git", tag = "0.5.6" }
 agent-platform-client = { git = "ssh://git@github.com/beyond10x/agent-platform.git", rev = "bdacb8f177cb049d33abd6886c720f47fd567a12" }
 agent-platform-core = { git = "ssh://git@github.com/beyond10x/agent-platform.git", rev = "bdacb8f177cb049d33abd6886c720f47fd567a12" }
 agentide-contracts = { git = "https://github.com/beyond10x/agentide.git", rev = "ed6250bb1f1a3ff56f3c5a6acffe11cbd4f07e20" }

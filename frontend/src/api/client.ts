@@ -578,6 +578,15 @@ export const api = {
     ),
   publicationApprovals: (publicationId: string) =>
     request<Approval[]>(`/api/mcp/publications/${encodeURIComponent(publicationId)}/approvals`),
+  decidePublicationApproval: (
+    publicationId: string,
+    approvalId: string,
+    decision: "approve" | "deny",
+  ) =>
+    request<undefined>(
+      `/api/mcp/publications/${encodeURIComponent(publicationId)}/approvals/${encodeURIComponent(approvalId)}`,
+      { method: "POST", body: JSON.stringify({ decision }) },
+    ),
   connection: () => request<ConnectionStatus>("/api/connectors/claude-code"),
   startOAuth: () =>
     request<ClaudeOAuthStart>("/api/connectors/claude-code/oauth/start", { method: "POST" }),
