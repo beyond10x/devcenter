@@ -1217,7 +1217,7 @@ test("drives the hosted terminal byte channel, recovers partial replay, and keep
           `${Array.from({ length: 80 }, (_, index) => `retained line ${String(index)}`).join("\r\n")}\r\nterminal-search-marker\r\n`,
         );
       }
-      sendOutput("\u001b[32mactor-1@substrate\u001b[0m:/workspace$ ");
+      sendOutput("\u001b[32mactor-1@substrate\u001b[0m:\u001b[34m/workspace\u001b[0m$ ");
     },
   );
   await mockAuthenticatedWorkspace(page, { agentideWorkspace: true, terminalProfile: true });
@@ -1236,6 +1236,40 @@ test("drives the hosted terminal byte channel, recovers partial replay, and keep
       }),
     )
     .toContain("JetBrains Mono Variable");
+  const renderedPalette = async () =>
+    page.locator(".ghostty-host canvas").evaluate((canvas) => {
+      const context = (
+        canvas as unknown as {
+          getContext(kind: "2d"): {
+            canvas: { width: number; height: number };
+            getImageData(
+              x: number,
+              y: number,
+              width: number,
+              height: number,
+            ): { data: Uint8ClampedArray };
+          } | null;
+        }
+      ).getContext("2d");
+      if (!context) return { green: 0, blue: 0, monokaiBackground: 0 };
+      const pixels = context.getImageData(0, 0, context.canvas.width, context.canvas.height).data;
+      const result = { green: 0, blue: 0, monokaiBackground: 0 };
+      for (let index = 0; index < pixels.length; index += 4) {
+        const red = pixels[index];
+        const green = pixels[index + 1];
+        const blue = pixels[index + 2];
+        if (red === 88 && green === 211 && blue === 176) result.green += 1;
+        if (red === 102 && green === 217 && blue === 239) result.blue += 1;
+        if (red === 30 && green === 31 && blue === 28) result.monokaiBackground += 1;
+      }
+      return result;
+    });
+  await expect
+    .poll(async () => {
+      const palette = await renderedPalette();
+      return palette.green > 0 && palette.blue > 0;
+    })
+    .toBe(true);
   await page.locator(".ghostty-host").click();
   await page.keyboard.type("pwd");
   await page.keyboard.press("Enter");
@@ -1247,6 +1281,12 @@ test("drives the hosted terminal byte channel, recovers partial replay, and keep
   await page.getByLabel("Search terminal scrollback").fill("terminal-search-marker");
   await page.getByLabel("Search terminal scrollback").press("Enter");
   await expect.poll(() => pageErrors).toEqual([]);
+
+  const connectionsBeforeThemeChange = connections;
+  await page.evaluate('document.documentElement.dataset.theme = "monokai"');
+  await expect.poll(() => connections).toBeGreaterThan(connectionsBeforeThemeChange);
+  await expect.poll(async () => (await renderedPalette()).monokaiBackground).toBeGreaterThan(0);
+  await expect(page.locator(".terminal-connection.running")).toBeVisible();
 
   const panel = page.locator(".workbench-terminal");
   const before = await panel.boundingBox();

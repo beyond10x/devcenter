@@ -22,6 +22,8 @@
 - Consume AgentIDE's provenance-free renderer draft directly, then carry authenticated,
   revision-bound attachment provenance through the native editor, diff, terminal, and
   agent-context surfaces without reintroducing a manual session bind step.
+- Recreate the Ghostty renderer and replay retained Workspace output after a theme change, with
+  browser assertions over actual ANSI palette pixels, Monaco token colors, and the workbench font.
 
 ## 0.8.7 - 2026-09-03
 
