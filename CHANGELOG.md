@@ -8,6 +8,8 @@
   persistent roster column, while retaining live rendered Markdown and explicit run state.
 - Link capability profiles directly to MCP publication and select profiles by name and revision so
   engineers no longer have to discover or paste opaque profile identifiers.
+- Route the standard OAuth authorization-server metadata document to Identity and include the
+  registered public client and exact MCP resource in Codex and Claude setup commands.
 
 ## 0.8.3 - 2026-09-03
 

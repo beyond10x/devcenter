@@ -45,6 +45,14 @@ const selected = computed(() =>
 const endpoint = computed(() =>
   selected.value ? `${window.location.origin}/mcp/${selected.value.publication_id}` : "",
 );
+const oauthResource = computed(() => `${window.location.origin}/mcp`);
+const codexSetup = computed(
+  () =>
+    `codex mcp add devcenter --url ${endpoint.value} --oauth-client-id devcenter-cli --oauth-resource ${oauthResource.value} && codex mcp login devcenter --scopes mcp.tools.call`,
+);
+const claudeSetup = computed(
+  () => `claude mcp add --transport http --client-id devcenter-cli devcenter ${endpoint.value}`,
+);
 
 async function load() {
   loading.value = true;
@@ -297,29 +305,23 @@ watch(
         <section class="client-setup">
           <h3>Client setup</h3>
           <div>
-            <strong>Codex</strong><code>codex mcp add devcenter --url {{ endpoint }}</code
+            <strong>Codex</strong><code>{{ codexSetup }}</code
             ><button
               class="icon-button"
               type="button"
               aria-label="Copy Codex setup"
-              @click="copy(`codex mcp add devcenter --url ${endpoint}`, 'Codex setup copied.')"
+              @click="copy(codexSetup, 'Codex setup copied.')"
             >
               <Clipboard :size="15" />
             </button>
           </div>
           <div>
-            <strong>Claude Code</strong
-            ><code>claude mcp add --transport http devcenter {{ endpoint }}</code
+            <strong>Claude Code</strong><code>{{ claudeSetup }}</code
             ><button
               class="icon-button"
               type="button"
               aria-label="Copy Claude setup"
-              @click="
-                copy(
-                  `claude mcp add --transport http devcenter ${endpoint}`,
-                  'Claude Code setup copied.',
-                )
-              "
+              @click="copy(claudeSetup, 'Claude Code setup copied.')"
             >
               <Clipboard :size="15" />
             </button>

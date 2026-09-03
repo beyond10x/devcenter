@@ -1273,8 +1273,13 @@ test("shows one stable MCP endpoint and separate client setup commands", async (
   await expect(page.getByLabel("Capability profile ID")).toHaveText(/Release profile/);
   await expect(page.getByRole("heading", { name: "Release profile" })).toBeVisible();
   await expect(page.locator(".endpoint-row code")).toHaveText(/\/mcp\/pub-test-1$/);
-  await expect(page.getByText(/codex mcp add devcenter/)).toBeVisible();
-  await expect(page.getByText(/claude mcp add --transport http/)).toBeVisible();
+  await expect(
+    page.getByText(/codex mcp add devcenter.*--oauth-client-id devcenter-cli/),
+  ).toBeVisible();
+  await expect(page.getByText(/codex mcp login devcenter --scopes mcp\.tools\.call/)).toBeVisible();
+  await expect(
+    page.getByText(/claude mcp add --transport http --client-id devcenter-cli/),
+  ).toBeVisible();
   await expect(page.getByText("Browser logout does not revoke it.")).toBeVisible();
   await page.getByRole("button", { name: "Revoke permanently" }).click();
   await expect(page.getByRole("status").filter({ hasText: "Publication revoked." })).toBeVisible();
