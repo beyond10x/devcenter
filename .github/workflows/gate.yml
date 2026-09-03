@@ -81,13 +81,13 @@ jobs:
       - name: Install pinned ESS compiler
         env:
           ESS_REPOSITORY: ${{ github.repository_owner }}/ess
-          ESS_VERSION: 0.9.1
+          ESS_VERSION: 0.9.2
         run: |
           archive="ess-${ESS_VERSION}-x86_64-unknown-linux-gnu.tar.gz"
           curl --fail --silent --show-error --location \
             --output "/tmp/${archive}" \
             "https://github.com/${ESS_REPOSITORY}/releases/download/${ESS_VERSION}/${archive}"
-          echo '5a9e03f6476449c96210f74ad9538392f4ae5032558501d8771d35447d12c1f7  /tmp/ess-0.9.1-x86_64-unknown-linux-gnu.tar.gz' | sha256sum --check
+          echo '9b973b26679be3e4b822b8fb6aab37833ca96b3cdc46141318583e1939ec3120  /tmp/ess-0.9.2-x86_64-unknown-linux-gnu.tar.gz' | sha256sum --check
           tar --extract --gzip --file "/tmp/${archive}" --directory /tmp
           sudo install "/tmp/ess-${ESS_VERSION}-x86_64-unknown-linux-gnu/ess" /usr/local/bin/ess
       - name: Validate ESS sources and generated build inputs

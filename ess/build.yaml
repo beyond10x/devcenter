@@ -81,10 +81,10 @@ nodes:
         secret: github-token
         target: /run/secrets/github-token
       - kind: cache
-        id: b10x-cargo-registry
+        id: devcenter-server-cargo-registry
         target: /usr/local/cargo/registry
       - kind: cache
-        id: b10x-cargo-git
+        id: devcenter-server-cargo-git
         target: /usr/local/cargo/git
       - kind: cache
         id: devcenter-target
@@ -112,10 +112,10 @@ nodes:
         secret: github-token
         target: /run/secrets/github-token
       - kind: cache
-        id: b10x-cargo-registry
+        id: devcenter-connectors-cargo-registry
         target: /usr/local/cargo/registry
       - kind: cache
-        id: b10x-cargo-git
+        id: devcenter-connectors-cargo-git
         target: /usr/local/cargo/git
       - kind: cache
         id: devcenter-connectors-target
