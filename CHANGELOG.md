@@ -2,6 +2,12 @@
 
 ## Unreleased
 
+## 0.8.2 - 2026-09-03
+
+- Consume Connectors 0.5.3 in both the BFF contracts and composed hosted runtime so GitLab
+  repository file reads admit safe nested paths and Workspace materialization can populate a
+  repository beyond root-level files.
+
 ## 0.8.1 - 2026-09-03
 
 - Add the disabled-by-default native hosted coding workbench with Monaco editing, bounded Workspace
