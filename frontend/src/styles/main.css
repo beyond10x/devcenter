@@ -5298,6 +5298,9 @@ pre,
 .diff-side .diff-line {
   grid-template-columns: 2.7rem minmax(0, 1fr);
 }
+.diff-line.empty {
+  background: color-mix(in srgb, var(--surface-subtle) 60%, transparent);
+}
 .diff-line > span {
   min-height: 1.35rem;
   padding: 0.18rem 0.35rem;

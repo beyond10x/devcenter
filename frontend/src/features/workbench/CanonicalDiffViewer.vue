@@ -1,7 +1,7 @@
 <script setup lang="ts">
 import { ChevronsDownUp, ChevronsUpDown, Paperclip, Search } from "@lucide/vue";
 import { computed, ref, watch } from "vue";
-import type { DiffHunk, DiffMode, DiffProjection } from "@/api/client";
+import type { DiffHunk, DiffLine, DiffMode, DiffProjection } from "@/api/client";
 
 const props = defineProps<{
   projection: DiffProjection;
@@ -45,6 +45,37 @@ function collapseAll() {
 
 function expandAll() {
   collapsed.value = new Set();
+}
+
+interface SplitDiffRow {
+  old?: DiffLine;
+  current?: DiffLine;
+}
+
+function splitRows(hunk: DiffHunk): SplitDiffRow[] {
+  const rows: SplitDiffRow[] = [];
+  let deletions: DiffLine[] = [];
+  let additions: DiffLine[] = [];
+  const flushChanges = () => {
+    const length = Math.max(deletions.length, additions.length);
+    for (let index = 0; index < length; index += 1) {
+      rows.push({ old: deletions[index], current: additions[index] });
+    }
+    deletions = [];
+    additions = [];
+  };
+  for (const line of hunk.lines) {
+    if (line.kind === "deletion") {
+      deletions.push(line);
+    } else if (line.kind === "addition") {
+      additions.push(line);
+    } else {
+      flushChanges();
+      rows.push({ old: line, current: line });
+    }
+  }
+  flushChanges();
+  return rows;
 }
 </script>
 
@@ -150,22 +181,22 @@ function expandAll() {
           <div v-else class="diff-lines split">
             <div class="diff-side old-side">
               <div
-                v-for="(line, index) in hunk.lines.filter((line) => line.kind !== 'addition')"
+                v-for="(row, index) in splitRows(hunk)"
                 :key="`${hunk.id}:old:${index}`"
-                :class="`diff-line ${line.kind}`"
+                :class="`diff-line ${row.old?.kind ?? 'empty'}`"
               >
-                <span>{{ line.old_line ?? "" }}</span
-                ><code>{{ line.content }}</code>
+                <span>{{ row.old?.old_line ?? "" }}</span
+                ><code>{{ row.old?.content ?? "" }}</code>
               </div>
             </div>
             <div class="diff-side new-side">
               <div
-                v-for="(line, index) in hunk.lines.filter((line) => line.kind !== 'deletion')"
+                v-for="(row, index) in splitRows(hunk)"
                 :key="`${hunk.id}:new:${index}`"
-                :class="`diff-line ${line.kind}`"
+                :class="`diff-line ${row.current?.kind ?? 'empty'}`"
               >
-                <span>{{ line.new_line ?? "" }}</span
-                ><code>{{ line.content }}</code>
+                <span>{{ row.current?.new_line ?? "" }}</span
+                ><code>{{ row.current?.content ?? "" }}</code>
               </div>
             </div>
           </div>

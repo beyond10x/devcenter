@@ -584,6 +584,118 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/project-sessions/{session_id}/resume": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post: operations["resumeCodingSession"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/project-sessions/{session_id}/coordination": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get: operations["getCodingCoordination"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/project-sessions/{session_id}/coordination/pins": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post: operations["pinCodingContext"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/project-sessions/{session_id}/coordination/pins/{pin_id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post?: never;
+        delete: operations["removeCodingContextPin"];
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/project-sessions/{session_id}/coordination/grants": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post: operations["createCodingGrant"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/project-sessions/{session_id}/coordination/grants/{grant_id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post?: never;
+        delete: operations["revokeCodingGrant"];
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/project-sessions/{session_id}/coordination/checkpoints/{checkpoint_id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post: operations["decideCodingCheckpoint"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/project-sessions/{session_id}/agents/{agent_id}/turns": {
         parameters: {
             query?: never;
@@ -1261,6 +1373,48 @@ export interface components {
             };
             created_at_ms: number;
             updated_at_ms: number;
+            coordination?: components["schemas"]["CoordinationSummary"];
+        };
+        HostedCodingSession: components["schemas"]["CodingSession"] & Record<string, never>;
+        CoordinationSummary: {
+            /** @enum {string} */
+            state: "ready" | "degraded" | "closed";
+            through_version: number | null;
+            failure_code: string | null;
+            retryable: boolean;
+        };
+        CodingCoordinationView: {
+            summary: components["schemas"]["CoordinationSummary"];
+            session: {
+                [key: string]: unknown;
+            };
+            grants: {
+                [key: string]: unknown;
+            }[];
+            pins: {
+                [key: string]: unknown;
+            }[];
+            checkpoints: {
+                [key: string]: unknown;
+            }[];
+        };
+        PinCodingContext: {
+            /** @enum {string} */
+            kind: "Editor" | "DiffHunk" | "Terminal" | "Process" | "Evidence";
+            reference: string;
+            start_line?: number | null;
+            end_line?: number | null;
+            sha256: string;
+            idempotency_key: string;
+        };
+        CreateCodingGrant: {
+            grantee: string;
+            idempotency_key: string;
+        };
+        DecideCodingCheckpoint: {
+            /** @enum {string} */
+            decision: "approve" | "deny";
+            idempotency_key: string;
         };
         CreateCodingSession: {
             source_revision: string;
@@ -1371,8 +1525,6 @@ export interface components {
             limits: components["schemas"]["TerminalLimits"];
         };
         CreateTerminal: {
-            agentide_session_id: string;
-            authority_grant_id: string;
             profile_id: string;
             columns: number;
             rows: number;
@@ -1543,7 +1695,6 @@ export interface components {
         SubmitCodingTurn: {
             prompt: string;
             messages: components["schemas"]["ConversationMessage"][];
-            agentide_session_id: string;
             focused_selections: components["schemas"]["ContextSelection"][];
             open_files: components["schemas"]["OpenFileReference"][];
             active_diff?: components["schemas"]["ChangeSelector"] | null;
@@ -1619,6 +1770,9 @@ export interface components {
         PublicationId: string;
         ProjectId: string;
         CodingSessionId: string;
+        ContextPinId: string;
+        GrantId: string;
+        CheckpointId: string;
         TerminalId: string;
         ThreadId: string;
         MessageSequence: number;
@@ -2724,7 +2878,7 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": components["schemas"]["CodingSession"];
+                    "application/json": components["schemas"]["HostedCodingSession"];
                 };
             };
             403: components["responses"]["Problem"];
@@ -2776,11 +2930,209 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": components["schemas"]["CodingSession"];
+                    "application/json": components["schemas"]["HostedCodingSession"];
                 };
             };
             403: components["responses"]["Problem"];
             404: components["responses"]["Problem"];
+            503: components["responses"]["Unavailable"];
+        };
+    };
+    resumeCodingSession: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                session_id: components["parameters"]["CodingSessionId"];
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Workspace session with automatically ensured AgentIDE coordination */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HostedCodingSession"];
+                };
+            };
+            403: components["responses"]["Problem"];
+            404: components["responses"]["Problem"];
+            409: components["responses"]["Problem"];
+            503: components["responses"]["Unavailable"];
+        };
+    };
+    getCodingCoordination: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                session_id: components["parameters"]["CodingSessionId"];
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Actor-authorized AgentIDE projections and aggregate revision */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["CodingCoordinationView"];
+                };
+            };
+            403: components["responses"]["Problem"];
+            404: components["responses"]["Problem"];
+            409: components["responses"]["Problem"];
+            503: components["responses"]["Unavailable"];
+        };
+    };
+    pinCodingContext: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                session_id: components["parameters"]["CodingSessionId"];
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["PinCodingContext"];
+            };
+        };
+        responses: {
+            /** @description Context reference pinned through AgentIDE */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["CodingCoordinationView"];
+                };
+            };
+            403: components["responses"]["Problem"];
+            409: components["responses"]["Problem"];
+            422: components["responses"]["Problem"];
+            503: components["responses"]["Unavailable"];
+        };
+    };
+    removeCodingContextPin: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                session_id: components["parameters"]["CodingSessionId"];
+                pin_id: components["parameters"]["ContextPinId"];
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Context reference removed through AgentIDE */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["CodingCoordinationView"];
+                };
+            };
+            403: components["responses"]["Problem"];
+            404: components["responses"]["Problem"];
+            409: components["responses"]["Problem"];
+            503: components["responses"]["Unavailable"];
+        };
+    };
+    createCodingGrant: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                session_id: components["parameters"]["CodingSessionId"];
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["CreateCodingGrant"];
+            };
+        };
+        responses: {
+            /** @description Bounded coding grant created through AgentIDE */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["CodingCoordinationView"];
+                };
+            };
+            403: components["responses"]["Problem"];
+            409: components["responses"]["Problem"];
+            422: components["responses"]["Problem"];
+            503: components["responses"]["Unavailable"];
+        };
+    };
+    revokeCodingGrant: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                session_id: components["parameters"]["CodingSessionId"];
+                grant_id: components["parameters"]["GrantId"];
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Grant revoked through AgentIDE */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["CodingCoordinationView"];
+                };
+            };
+            403: components["responses"]["Problem"];
+            404: components["responses"]["Problem"];
+            409: components["responses"]["Problem"];
+            503: components["responses"]["Unavailable"];
+        };
+    };
+    decideCodingCheckpoint: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                session_id: components["parameters"]["CodingSessionId"];
+                checkpoint_id: components["parameters"]["CheckpointId"];
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["DecideCodingCheckpoint"];
+            };
+        };
+        responses: {
+            /** @description Exact-plan checkpoint decided through AgentIDE */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["CodingCoordinationView"];
+                };
+            };
+            403: components["responses"]["Problem"];
+            404: components["responses"]["Problem"];
+            409: components["responses"]["Problem"];
+            422: components["responses"]["Problem"];
             503: components["responses"]["Unavailable"];
         };
     };

@@ -54,8 +54,8 @@ use tokio_tungstenite::tungstenite::client::IntoClientRequest as _;
 use url::Url;
 use workspace_client::{ClientError as WorkspaceError, WorkspaceClient};
 use workspace_core::{
-    CodingSessionState, CreateCodingSession, CreateMessage, CreateTerminal, CreateThread,
-    OpenProject, ResolveDiff, SelectBranch, StartWorkflow, WriteFile,
+    CodingSession, CodingSessionState, CreateCodingSession, CreateMessage, CreateTerminal,
+    CreateThread, OpenProject, ResolveDiff, SelectBranch, StartWorkflow, WriteFile,
 };
 use zeroize::Zeroizing;
 
@@ -332,6 +332,7 @@ fn project_routes() -> Router<AppState> {
             "/api/project-sessions/{session_id}",
             get(get_coding_session).delete(close_coding_session),
         )
+        .merge(coding_coordination_routes())
         .route(
             "/api/project-sessions/{session_id}/tree",
             get(get_coding_tree),
@@ -363,6 +364,38 @@ fn project_routes() -> Router<AppState> {
         .route(
             "/api/project-terminals/{terminal_id}/attach",
             get(attach_terminal),
+        )
+}
+
+fn coding_coordination_routes() -> Router<AppState> {
+    Router::new()
+        .route(
+            "/api/project-sessions/{session_id}/resume",
+            post(resume_coding_session),
+        )
+        .route(
+            "/api/project-sessions/{session_id}/coordination",
+            get(get_coding_coordination),
+        )
+        .route(
+            "/api/project-sessions/{session_id}/coordination/pins",
+            post(pin_coding_context),
+        )
+        .route(
+            "/api/project-sessions/{session_id}/coordination/pins/{pin_id}",
+            axum::routing::delete(remove_coding_context_pin),
+        )
+        .route(
+            "/api/project-sessions/{session_id}/coordination/grants",
+            post(create_coding_grant),
+        )
+        .route(
+            "/api/project-sessions/{session_id}/coordination/grants/{grant_id}",
+            axum::routing::delete(revoke_coding_grant),
+        )
+        .route(
+            "/api/project-sessions/{session_id}/coordination/checkpoints/{checkpoint_id}",
+            post(decide_coding_checkpoint),
         )
 }
 
@@ -1496,6 +1529,295 @@ async fn list_coding_sessions(
     }
 }
 
+#[derive(Clone, Copy, Serialize)]
+#[serde(rename_all = "snake_case")]
+enum CoordinationState {
+    Ready,
+    Degraded,
+    Closed,
+}
+
+#[derive(Clone, Serialize)]
+struct CoordinationSummary {
+    state: CoordinationState,
+    through_version: Option<u64>,
+    failure_code: Option<&'static str>,
+    retryable: bool,
+}
+
+impl CoordinationSummary {
+    fn ready(through_version: u64) -> Self {
+        Self {
+            state: CoordinationState::Ready,
+            through_version: Some(through_version),
+            failure_code: None,
+            retryable: false,
+        }
+    }
+
+    fn degraded(issue: CoordinationIssue) -> Self {
+        Self {
+            state: CoordinationState::Degraded,
+            through_version: None,
+            failure_code: Some(issue.code),
+            retryable: issue.retryable,
+        }
+    }
+
+    fn closed(through_version: Option<u64>) -> Self {
+        Self {
+            state: CoordinationState::Closed,
+            through_version,
+            failure_code: None,
+            retryable: false,
+        }
+    }
+}
+
+#[derive(Serialize)]
+struct HostedCodingSession {
+    #[serde(flatten)]
+    workspace: CodingSession,
+    coordination: CoordinationSummary,
+}
+
+#[derive(Serialize)]
+struct CodingCoordinationView {
+    summary: CoordinationSummary,
+    session: Value,
+    grants: Vec<Value>,
+    pins: Vec<Value>,
+    checkpoints: Vec<Value>,
+}
+
+#[derive(Clone, Copy, Debug)]
+struct CoordinationIssue {
+    code: &'static str,
+    retryable: bool,
+    status: StatusCode,
+}
+
+impl CoordinationIssue {
+    const UNAVAILABLE: Self = Self {
+        code: "agentide_coordination_unavailable",
+        retryable: true,
+        status: StatusCode::SERVICE_UNAVAILABLE,
+    };
+    const INVALID: Self = Self {
+        code: "agentide_coordination_invalid",
+        retryable: false,
+        status: StatusCode::BAD_GATEWAY,
+    };
+    const IDENTITY_MISMATCH: Self = Self {
+        code: "agentide_session_identity_mismatch",
+        retryable: false,
+        status: StatusCode::CONFLICT,
+    };
+    const CONFLICT: Self = Self {
+        code: "agentide_coordination_conflict",
+        retryable: true,
+        status: StatusCode::CONFLICT,
+    };
+
+    fn response(self) -> Response {
+        problem(self.status, self.code)
+    }
+}
+
+fn coordination_page(output: &Value) -> Result<(Vec<Value>, Option<u64>), CoordinationIssue> {
+    let object = output.as_object().ok_or(CoordinationIssue::INVALID)?;
+    let items = object
+        .get("items")
+        .and_then(Value::as_array)
+        .cloned()
+        .ok_or(CoordinationIssue::INVALID)?;
+    if object.get("partial").and_then(Value::as_bool) == Some(true)
+        || object
+            .get("next_cursor")
+            .is_some_and(|cursor| !cursor.is_null())
+    {
+        return Err(CoordinationIssue::INVALID);
+    }
+    let through_version = match object.get("through_version") {
+        Some(Value::Number(number)) => number.as_u64().ok_or(CoordinationIssue::INVALID)?,
+        Some(Value::Null) | None => return Ok((items, None)),
+        Some(_) => return Err(CoordinationIssue::INVALID),
+    };
+    Ok((items, Some(through_version)))
+}
+
+async fn query_coordination(
+    state: &AppState,
+    authenticated: &AuthenticatedSession,
+    operation: &str,
+    session_id: &str,
+) -> Result<(Vec<Value>, Option<u64>), CoordinationIssue> {
+    let (output, _) = invoke_connector_operation(
+        state,
+        authenticated,
+        operation,
+        json!({"session_id": session_id, "$page": {"limit": 100}}),
+        false,
+    )
+    .await
+    .map_err(|_| CoordinationIssue::UNAVAILABLE)?;
+    coordination_page(&output)
+}
+
+async fn query_coordination_session(
+    state: &AppState,
+    authenticated: &AuthenticatedSession,
+    session_id: &str,
+) -> Result<Option<(Value, Option<u64>)>, CoordinationIssue> {
+    let (items, through_version) =
+        query_coordination(state, authenticated, "agentide.get_session", session_id).await?;
+    match items.len() {
+        0 => Ok(None),
+        1 => Ok(items.into_iter().next().map(|item| (item, through_version))),
+        _ => Err(CoordinationIssue::INVALID),
+    }
+}
+
+fn verify_coordination_identity(
+    snapshot: &Value,
+    workspace: &CodingSession,
+) -> Result<(), CoordinationIssue> {
+    let matches = snapshot.get("session_id").and_then(Value::as_str) == Some(workspace.id.as_str())
+        && snapshot.get("workspace_session_id").and_then(Value::as_str)
+            == Some(workspace.id.as_str())
+        && snapshot.get("project_id").and_then(Value::as_str)
+            == Some(workspace.project_id.as_str())
+        && snapshot.get("source_revision").and_then(Value::as_str)
+            == Some(workspace.source_revision.as_str())
+        && snapshot.get("manifest_digest").and_then(Value::as_str)
+            == workspace.manifest_sha256.as_deref();
+    matches
+        .then_some(())
+        .ok_or(CoordinationIssue::IDENTITY_MISMATCH)
+}
+
+async fn ensure_coordination(
+    state: &AppState,
+    authenticated: &AuthenticatedSession,
+    workspace: &CodingSession,
+) -> Result<(Value, u64), CoordinationIssue> {
+    if workspace.state != CodingSessionState::Ready {
+        return Err(CoordinationIssue::INVALID);
+    }
+    if let Some((snapshot, through_version)) =
+        query_coordination_session(state, authenticated, &workspace.id).await?
+    {
+        verify_coordination_identity(&snapshot, workspace)?;
+        if snapshot.get("state").and_then(Value::as_str) != Some("Active") {
+            return Err(CoordinationIssue::IDENTITY_MISMATCH);
+        }
+        return through_version
+            .map(|version| (snapshot, version))
+            .ok_or(CoordinationIssue::INVALID);
+    }
+
+    let working_materialization_ref = workspace
+        .working_materialization_ref
+        .as_deref()
+        .ok_or(CoordinationIssue::INVALID)?;
+    let manifest_digest = workspace
+        .manifest_sha256
+        .as_deref()
+        .ok_or(CoordinationIssue::INVALID)?;
+    let ensured = invoke_connector_operation(
+        state,
+        authenticated,
+        "agentide.ensure_hosted_session",
+        json!({
+            "session_id": workspace.id,
+            "workspace_root": working_materialization_ref,
+            "workspace_session_id": workspace.id,
+            "objective": format!("Work on project {}", workspace.project_id),
+            "project_id": workspace.project_id,
+            "source_revision": workspace.source_revision,
+            "manifest_digest": manifest_digest,
+            "scopes": {
+                "principal": authenticated.principal.subject,
+                "team": null,
+                "project": null
+            },
+            "idempotency_key": format!("hosted-session:{}", workspace.id)
+        }),
+        true,
+    )
+    .await;
+    if let Err(response) = ensured
+        && response.status() != StatusCode::CONFLICT
+    {
+        return Err(CoordinationIssue::UNAVAILABLE);
+    }
+
+    let Some((snapshot, through_version)) =
+        query_coordination_session(state, authenticated, &workspace.id).await?
+    else {
+        return Err(CoordinationIssue::INVALID);
+    };
+    verify_coordination_identity(&snapshot, workspace)?;
+    through_version
+        .map(|version| (snapshot, version))
+        .ok_or(CoordinationIssue::INVALID)
+}
+
+async fn coordination_view(
+    state: &AppState,
+    authenticated: &AuthenticatedSession,
+    workspace: &CodingSession,
+    ensure: bool,
+) -> Result<CodingCoordinationView, CoordinationIssue> {
+    let (session, through_version) = if ensure {
+        ensure_coordination(state, authenticated, workspace).await?
+    } else {
+        let Some((snapshot, version)) =
+            query_coordination_session(state, authenticated, &workspace.id).await?
+        else {
+            return Err(CoordinationIssue::UNAVAILABLE);
+        };
+        verify_coordination_identity(&snapshot, workspace)?;
+        (snapshot, version.ok_or(CoordinationIssue::INVALID)?)
+    };
+    let (grants, _) =
+        query_coordination(state, authenticated, "agentide.list_grants", &workspace.id).await?;
+    let (pins, _) = query_coordination(
+        state,
+        authenticated,
+        "agentide.list_context_pins",
+        &workspace.id,
+    )
+    .await?;
+    let (checkpoints, _) = query_coordination(
+        state,
+        authenticated,
+        "agentide.list_approval_checkpoints",
+        &workspace.id,
+    )
+    .await?;
+    Ok(CodingCoordinationView {
+        summary: CoordinationSummary::ready(through_version),
+        session,
+        grants,
+        pins,
+        checkpoints,
+    })
+}
+
+fn hosted_coding_session(
+    workspace: CodingSession,
+    coordination: Result<(Value, u64), CoordinationIssue>,
+) -> HostedCodingSession {
+    let summary = coordination.map_or_else(CoordinationSummary::degraded, |(_, version)| {
+        CoordinationSummary::ready(version)
+    });
+    HostedCodingSession {
+        workspace,
+        coordination: summary,
+    }
+}
+
 async fn create_coding_session(
     State(state): State<AppState>,
     headers: HeaderMap,
@@ -1514,7 +1836,10 @@ async fn create_coding_session(
         .create_coding_session(authenticated.authorization.as_str(), &project_id, &input)
         .await
     {
-        Ok(session) => confidential_json(session),
+        Ok(session) => {
+            let coordination = ensure_coordination(&state, &authenticated, &session).await;
+            confidential_json(hosted_coding_session(session, coordination))
+        }
         Err(error) => workspace_error(&error),
     }
 }
@@ -1541,6 +1866,323 @@ async fn get_coding_session(
     }
 }
 
+async fn resume_coding_session(
+    State(state): State<AppState>,
+    headers: HeaderMap,
+    Path(session_id): Path<String>,
+) -> Response {
+    let workspace_client = match require_coding_workbench(&state) {
+        Ok(workspace) => workspace,
+        Err(refusal) => return refusal.response(),
+    };
+    let authenticated = match authenticate(&state, &headers, true).await {
+        Ok(authenticated) => authenticated,
+        Err(response) => return response,
+    };
+    match workspace_client
+        .coding_session(authenticated.authorization.as_str(), &session_id)
+        .await
+    {
+        Ok(workspace) => {
+            let coordination = ensure_coordination(&state, &authenticated, &workspace).await;
+            confidential_json(hosted_coding_session(workspace, coordination))
+        }
+        Err(error) => workspace_error(&error),
+    }
+}
+
+async fn get_coding_coordination(
+    State(state): State<AppState>,
+    headers: HeaderMap,
+    Path(session_id): Path<String>,
+) -> Response {
+    let workspace_client = match require_coding_workbench(&state) {
+        Ok(workspace) => workspace,
+        Err(refusal) => return refusal.response(),
+    };
+    let authenticated = match authenticate(&state, &headers, false).await {
+        Ok(authenticated) => authenticated,
+        Err(response) => return response,
+    };
+    let workspace = match workspace_client
+        .coding_session(authenticated.authorization.as_str(), &session_id)
+        .await
+    {
+        Ok(session) if session.state == CodingSessionState::Ready => session,
+        Ok(_) => return problem(StatusCode::CONFLICT, "coding_session_not_ready"),
+        Err(error) => return workspace_error(&error),
+    };
+    match coordination_view(&state, &authenticated, &workspace, false).await {
+        Ok(view) => confidential_json(view),
+        Err(issue) => issue.response(),
+    }
+}
+
+fn intent_through_version(output: &Value) -> Option<u64> {
+    output.get("through_version").and_then(Value::as_u64)
+}
+
+async fn current_coordination_version(
+    state: &AppState,
+    authenticated: &AuthenticatedSession,
+    workspace: &CodingSession,
+) -> Result<u64, CoordinationIssue> {
+    let Some((snapshot, through_version)) =
+        query_coordination_session(state, authenticated, &workspace.id).await?
+    else {
+        return Err(CoordinationIssue::UNAVAILABLE);
+    };
+    verify_coordination_identity(&snapshot, workspace)?;
+    through_version.ok_or(CoordinationIssue::INVALID)
+}
+
+async fn invoke_coordination_mutation(
+    state: &AppState,
+    authenticated: &AuthenticatedSession,
+    workspace: &CodingSession,
+    operation: &str,
+    idempotency_key: &str,
+    fields: Value,
+) -> Result<CodingCoordinationView, CoordinationIssue> {
+    let expected_version = current_coordination_version(state, authenticated, workspace).await?;
+    let mut input = fields
+        .as_object()
+        .cloned()
+        .ok_or(CoordinationIssue::INVALID)?;
+    input.insert("session_id".to_owned(), json!(workspace.id));
+    input.insert(
+        "request_id".to_owned(),
+        json!(format!("request:{idempotency_key}")),
+    );
+    input.insert("expected_version".to_owned(), json!(expected_version));
+    input.insert("idempotency_key".to_owned(), json!(idempotency_key));
+    invoke_connector_operation(state, authenticated, operation, Value::Object(input), true)
+        .await
+        .map_err(|response| {
+            if response.status() == StatusCode::CONFLICT {
+                CoordinationIssue::CONFLICT
+            } else {
+                CoordinationIssue::UNAVAILABLE
+            }
+        })?;
+    coordination_view(state, authenticated, workspace, false).await
+}
+
+#[derive(Deserialize)]
+#[serde(deny_unknown_fields)]
+struct PinCodingContext {
+    kind: String,
+    reference: String,
+    start_line: Option<u64>,
+    end_line: Option<u64>,
+    sha256: String,
+    idempotency_key: String,
+}
+
+async fn pin_coding_context(
+    State(state): State<AppState>,
+    headers: HeaderMap,
+    Path(session_id): Path<String>,
+    Json(request): Json<PinCodingContext>,
+) -> Response {
+    if !matches!(
+        request.kind.as_str(),
+        "Editor" | "DiffHunk" | "Terminal" | "Process" | "Evidence"
+    ) || request.reference.is_empty()
+        || request.reference.len() > 4_096
+        || request.sha256.len() != 64
+        || !request.sha256.bytes().all(|byte| byte.is_ascii_hexdigit())
+        || !valid_opaque_id(&request.idempotency_key)
+    {
+        return problem(StatusCode::UNPROCESSABLE_ENTITY, "context_pin_invalid");
+    }
+    mutate_coding_coordination(
+        &state,
+        &headers,
+        &session_id,
+        "agentide.pin_context",
+        &request.idempotency_key,
+        json!({
+            "kind": request.kind,
+            "reference": request.reference,
+            "start_line": request.start_line,
+            "end_line": request.end_line,
+            "sha256": request.sha256
+        }),
+    )
+    .await
+}
+
+#[derive(Deserialize)]
+#[serde(deny_unknown_fields)]
+struct CreateCodingGrantRequest {
+    grantee: String,
+    idempotency_key: String,
+}
+
+async fn create_coding_grant(
+    State(state): State<AppState>,
+    headers: HeaderMap,
+    Path(session_id): Path<String>,
+    Json(request): Json<CreateCodingGrantRequest>,
+) -> Response {
+    if !valid_opaque_id(&request.grantee) || !valid_opaque_id(&request.idempotency_key) {
+        return problem(StatusCode::UNPROCESSABLE_ENTITY, "coding_grant_invalid");
+    }
+    let Some(agent_platform) = state.agent_platform.as_ref() else {
+        return unavailable("agent_platform_not_configured");
+    };
+    let Ok(agent_id) = AgentId::new(request.grantee.clone()) else {
+        return problem(StatusCode::UNPROCESSABLE_ENTITY, "coding_grantee_invalid");
+    };
+    let grant_authorized = match authenticate(&state, &headers, true).await {
+        Ok(authenticated) => authenticated,
+        Err(response) => return response,
+    };
+    if let Err(error) = agent_platform
+        .get_agent(grant_authorized.authorization.as_str(), &agent_id)
+        .await
+    {
+        return agent_platform_error(&error);
+    }
+    mutate_coding_coordination(
+        &state,
+        &headers,
+        &session_id,
+        "agentide.create_grant",
+        &request.idempotency_key,
+        json!({
+            "grantee": request.grantee,
+            "allowed_intents": ["code_edit", "code_create", "code_delete", "code_rename"],
+            "path_prefixes": [""],
+            "maximum_risk": "Medium",
+            "expires_at": null,
+            "revision": 1
+        }),
+    )
+    .await
+}
+
+async fn revoke_coding_grant(
+    State(state): State<AppState>,
+    headers: HeaderMap,
+    Path((session_id, grant_id)): Path<(String, String)>,
+) -> Response {
+    if !valid_opaque_id(&grant_id) {
+        return problem(StatusCode::NOT_FOUND, "coding_grant_not_found");
+    }
+    let idempotency_key = format!("revoke:{session_id}:{grant_id}");
+    mutate_coding_coordination(
+        &state,
+        &headers,
+        &session_id,
+        "agentide.revoke_grant",
+        &idempotency_key,
+        json!({"grant_id": grant_id}),
+    )
+    .await
+}
+
+async fn remove_coding_context_pin(
+    State(state): State<AppState>,
+    headers: HeaderMap,
+    Path((session_id, pin_id)): Path<(String, String)>,
+) -> Response {
+    if !valid_opaque_id(&pin_id) {
+        return problem(StatusCode::NOT_FOUND, "context_pin_not_found");
+    }
+    let idempotency_key = format!("unpin:{session_id}:{pin_id}");
+    mutate_coding_coordination(
+        &state,
+        &headers,
+        &session_id,
+        "agentide.remove_context_pin",
+        &idempotency_key,
+        json!({"pin_id": pin_id}),
+    )
+    .await
+}
+
+#[derive(Deserialize)]
+#[serde(rename_all = "snake_case", deny_unknown_fields)]
+enum CodingCheckpointDecision {
+    Approve,
+    Deny,
+}
+
+#[derive(Deserialize)]
+#[serde(deny_unknown_fields)]
+struct DecideCodingCheckpointRequest {
+    decision: CodingCheckpointDecision,
+    idempotency_key: String,
+}
+
+async fn decide_coding_checkpoint(
+    State(state): State<AppState>,
+    headers: HeaderMap,
+    Path((session_id, checkpoint_id)): Path<(String, String)>,
+    Json(request): Json<DecideCodingCheckpointRequest>,
+) -> Response {
+    if !valid_opaque_id(&checkpoint_id) || !valid_opaque_id(&request.idempotency_key) {
+        return problem(
+            StatusCode::UNPROCESSABLE_ENTITY,
+            "checkpoint_decision_invalid",
+        );
+    }
+    let operation = match request.decision {
+        CodingCheckpointDecision::Approve => "agentide.approve_checkpoint",
+        CodingCheckpointDecision::Deny => "agentide.deny_checkpoint",
+    };
+    mutate_coding_coordination(
+        &state,
+        &headers,
+        &session_id,
+        operation,
+        &request.idempotency_key,
+        json!({"checkpoint_id": checkpoint_id}),
+    )
+    .await
+}
+
+async fn mutate_coding_coordination(
+    state: &AppState,
+    headers: &HeaderMap,
+    session_id: &str,
+    operation: &str,
+    idempotency_key: &str,
+    fields: Value,
+) -> Response {
+    let workspace_client = match require_coding_workbench(state) {
+        Ok(workspace) => workspace,
+        Err(refusal) => return refusal.response(),
+    };
+    let authenticated = match authenticate(state, headers, true).await {
+        Ok(authenticated) => authenticated,
+        Err(response) => return response,
+    };
+    let workspace = match workspace_client
+        .coding_session(authenticated.authorization.as_str(), session_id)
+        .await
+    {
+        Ok(session) if session.state == CodingSessionState::Ready => session,
+        Ok(_) => return problem(StatusCode::CONFLICT, "coding_session_not_ready"),
+        Err(error) => return workspace_error(&error),
+    };
+    match invoke_coordination_mutation(
+        state,
+        &authenticated,
+        &workspace,
+        operation,
+        idempotency_key,
+        fields,
+    )
+    .await
+    {
+        Ok(view) => confidential_json(view),
+        Err(issue) => issue.response(),
+    }
+}
+
 async fn close_coding_session(
     State(state): State<AppState>,
     headers: HeaderMap,
@@ -1558,7 +2200,50 @@ async fn close_coding_session(
         .close_coding_session(authenticated.authorization.as_str(), &session_id)
         .await
     {
-        Ok(session) => confidential_json(session),
+        Ok(session) => {
+            let coordination =
+                match query_coordination_session(&state, &authenticated, &session.id).await {
+                    Ok(Some((snapshot, _)))
+                        if verify_coordination_identity(&snapshot, &session).is_err() =>
+                    {
+                        CoordinationSummary::degraded(CoordinationIssue::IDENTITY_MISMATCH)
+                    }
+                    Ok(Some((snapshot, through_version)))
+                        if snapshot.get("state").and_then(Value::as_str) == Some("Closed") =>
+                    {
+                        CoordinationSummary::closed(through_version)
+                    }
+                    Ok(Some((_, Some(expected_version)))) => {
+                        match invoke_connector_operation(
+                            &state,
+                            &authenticated,
+                            "agentide.close_session",
+                            json!({
+                                "session_id": session.id,
+                                "request_id": format!("hosted-close:{}", session.id),
+                                "expected_version": expected_version,
+                                "idempotency_key": format!("hosted-close:{}", session.id)
+                            }),
+                            true,
+                        )
+                        .await
+                        {
+                            Ok((output, _)) => {
+                                CoordinationSummary::closed(intent_through_version(&output))
+                            }
+                            Err(_) => CoordinationSummary::degraded(CoordinationIssue::UNAVAILABLE),
+                        }
+                    }
+                    Ok(None) => CoordinationSummary::closed(None),
+                    Ok(Some((_, None))) | Err(_) => {
+                        CoordinationSummary::degraded(CoordinationIssue::UNAVAILABLE)
+                    }
+                };
+            confidential_json(HostedCodingSession {
+                workspace: session,
+                coordination,
+            })
+        }
         Err(error) => workspace_error(&error),
     }
 }
@@ -1736,11 +2421,42 @@ async fn list_terminals(
     }
 }
 
+#[derive(Deserialize)]
+#[serde(deny_unknown_fields)]
+struct OpenHostedTerminal {
+    profile_id: String,
+    columns: u16,
+    rows: u16,
+    idempotency_key: String,
+}
+
+fn active_interactive_terminal_grant<'a>(grants: &'a [Value], subject: &str) -> Option<&'a str> {
+    grants.iter().find_map(|grant| {
+        (grant.get("state").and_then(Value::as_str) == Some("Active")
+            && grant.get("grantee").and_then(Value::as_str) == Some(subject)
+            && grant.get("maximum_risk").and_then(Value::as_str) == Some("Medium")
+            && grant
+                .get("allowed_intents")
+                .and_then(Value::as_array)
+                .is_some_and(|intents| {
+                    intents
+                        .iter()
+                        .any(|intent| intent == "interactive_terminal")
+                })
+            && grant
+                .get("path_prefixes")
+                .and_then(Value::as_array)
+                .is_some_and(|paths| paths.iter().any(|path| path == "")))
+        .then(|| grant.get("grant_id").and_then(Value::as_str))
+        .flatten()
+    })
+}
+
 async fn create_terminal(
     State(state): State<AppState>,
     headers: HeaderMap,
     Path(session_id): Path<String>,
-    Json(input): Json<CreateTerminal>,
+    Json(input): Json<OpenHostedTerminal>,
 ) -> Response {
     let workspace = match require_coding_workbench(&state) {
         Ok(workspace) => workspace,
@@ -1750,8 +2466,74 @@ async fn create_terminal(
         Ok(authenticated) => authenticated,
         Err(response) => return response,
     };
+    if !valid_opaque_id(&input.profile_id)
+        || !valid_opaque_id(&input.idempotency_key)
+        || input.columns == 0
+        || input.rows == 0
+    {
+        return problem(StatusCode::UNPROCESSABLE_ENTITY, "terminal_request_invalid");
+    }
+    let coding_session = match workspace
+        .coding_session(authenticated.authorization.as_str(), &session_id)
+        .await
+    {
+        Ok(session) if session.state == CodingSessionState::Ready => session,
+        Ok(_) => return problem(StatusCode::CONFLICT, "coding_session_not_ready"),
+        Err(error) => return workspace_error(&error),
+    };
+    let mut coordination =
+        match coordination_view(&state, &authenticated, &coding_session, false).await {
+            Ok(view) => view,
+            Err(issue) => return issue.response(),
+        };
+    let authority_grant_id = if let Some(grant_id) =
+        active_interactive_terminal_grant(&coordination.grants, &authenticated.principal.subject)
+    {
+        grant_id.to_owned()
+    } else {
+        let grant_idempotency = format!("terminal-grant-{}", input.idempotency_key);
+        coordination = match invoke_coordination_mutation(
+            &state,
+            &authenticated,
+            &coding_session,
+            "agentide.create_grant",
+            &grant_idempotency,
+            json!({
+                "grantee": authenticated.principal.subject,
+                "allowed_intents": ["interactive_terminal"],
+                "path_prefixes": [""],
+                "maximum_risk": "Medium",
+                "expires_at": null,
+                "revision": 1
+            }),
+        )
+        .await
+        {
+            Ok(view) => view,
+            Err(issue) => return issue.response(),
+        };
+        let Some(grant_id) = active_interactive_terminal_grant(
+            &coordination.grants,
+            &authenticated.principal.subject,
+        ) else {
+            return unavailable("terminal_grant_projection_unavailable");
+        };
+        grant_id.to_owned()
+    };
+    let workspace_input = CreateTerminal {
+        agentide_session_id: coding_session.id,
+        authority_grant_id,
+        profile_id: input.profile_id,
+        columns: input.columns,
+        rows: input.rows,
+        idempotency_key: input.idempotency_key,
+    };
     match workspace
-        .create_terminal(authenticated.authorization.as_str(), &session_id, &input)
+        .create_terminal(
+            authenticated.authorization.as_str(),
+            &session_id,
+            &workspace_input,
+        )
         .await
     {
         Ok(terminal) => confidential_json(terminal),
@@ -2785,7 +3567,6 @@ struct SubmitCodingTurn {
     prompt: String,
     #[serde(default)]
     messages: Vec<ConversationMessage>,
-    agentide_session_id: String,
     #[serde(default)]
     focused_selections: Vec<ContextSelection>,
     #[serde(default)]
@@ -2796,7 +3577,6 @@ struct SubmitCodingTurn {
 
 fn coding_turn_is_bounded(input: &SubmitCodingTurn) -> bool {
     if input.prompt.trim().is_empty()
-        || !valid_opaque_id(&input.agentide_session_id)
         || input.focused_selections.len() > MAX_CODING_SELECTIONS
         || input.open_files.len() > MAX_CODING_OPEN_FILES
     {
@@ -2851,6 +3631,9 @@ async fn submit_coding_turn(
         Ok(_) => return problem(StatusCode::CONFLICT, "coding_session_not_ready"),
         Err(error) => return workspace_error(&error),
     };
+    if let Err(issue) = current_coordination_version(&state, &authenticated, &session).await {
+        return issue.response();
+    }
     let Some(client) = state.agent_platform.as_ref() else {
         return unavailable("agent_platform_not_configured");
     };
@@ -2860,8 +3643,8 @@ async fn submit_coding_turn(
     let input = ConversationInput::CodingSessionTurn {
         prompt: request.prompt,
         messages: request.messages,
-        workspace_session_id: session.id,
-        agentide_session_id: request.agentide_session_id,
+        workspace_session_id: session.id.clone(),
+        agentide_session_id: session.id,
         focused_selections: request.focused_selections,
         open_files: request.open_files,
         active_diff: request.active_diff,
@@ -4372,6 +5155,7 @@ mod tests {
     #[tokio::test]
     async fn coding_workbench_routes_are_fail_closed_by_default() {
         for path in [
+            "/api/project-sessions/session-1/coordination",
             "/api/project-sessions/session-1/tree",
             "/api/project-sessions/session-1/terminal-profiles",
             "/api/project-sessions/session-1/terminals",
@@ -4397,7 +5181,6 @@ mod tests {
                         serde_json::json!({
                             "prompt": "Review the saved change",
                             "messages": [],
-                            "agentide_session_id": "agentide-1",
                             "focused_selections": [],
                             "open_files": [],
                             "active_diff": null,
@@ -4420,7 +5203,6 @@ mod tests {
         let valid = serde_json::json!({
             "prompt": "Review the saved change",
             "messages": [],
-            "agentide_session_id": "agentide-1",
             "focused_selections": [{
                 "id": "selection-1",
                 "kind": "editor",
@@ -4452,6 +5234,29 @@ mod tests {
         truncated["focused_selections"][0]["truncated"] = Value::Bool(true);
         let request: SubmitCodingTurn = serde_json::from_value(truncated).unwrap();
         assert!(!coding_turn_is_bounded(&request));
+    }
+
+    #[test]
+    fn coordination_pages_require_an_exact_authorized_revision() {
+        let (items, version) = coordination_page(&json!({
+            "items": [{"session_id": "session-1"}],
+            "through_version": 7,
+            "next_cursor": null,
+            "partial": false
+        }))
+        .unwrap();
+        assert_eq!(items.len(), 1);
+        assert_eq!(version, Some(7));
+
+        assert!(
+            coordination_page(&json!({
+                "items": [],
+                "through_version": 7,
+                "next_cursor": "more",
+                "partial": true
+            }))
+            .is_err()
+        );
     }
 
     #[tokio::test]
@@ -4570,6 +5375,8 @@ mod tests {
         assert!(contract["paths"]["/api/services"].is_object());
         assert!(contract["paths"]["/api/services/catalog"].is_object());
         assert!(contract["paths"]["/api/services/invoke"].is_object());
+        assert!(contract["paths"]["/api/project-sessions/{session_id}/resume"].is_object());
+        assert!(contract["paths"]["/api/project-sessions/{session_id}/coordination"].is_object());
         assert!(
             contract["paths"]["/api/project-sessions/{session_id}/terminal-profiles"].is_object()
         );

@@ -204,7 +204,6 @@ describe("workspace store", () => {
         const body = (await request.json()) as Record<string, unknown>;
         expect(body).toMatchObject({
           prompt: "Review the saved change.",
-          agentide_session_id: "agentide-1",
           active_diff: { kind: "workspace" },
         });
         expect(body.open_files).toEqual([
@@ -229,7 +228,6 @@ describe("workspace store", () => {
     const task = await workspace.submitCodingTurn("session-1", "agent-1", {
       prompt: "Review the saved change.",
       messages: [],
-      agentide_session_id: "agentide-1",
       focused_selections: [],
       open_files: [{ path: "src/main.rs", sha256: "a".repeat(64), cursor: null, dirty: true }],
       active_diff: { kind: "workspace" },
