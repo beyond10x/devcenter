@@ -36,13 +36,16 @@ use connectors_protocol::{
     approval, catalog, connection,
     operation::{self, OwnerContext},
 };
-use devcenter_auth::{AuthenticationError, Principal};
+use devcenter_auth::{AuthenticationError, Principal, PublicationPrincipal};
 use devcenter_core::{Config, IdentityProvider};
 use devcenter_mcp::{
     ApprovalPosture as McpApprovalPosture, CompiledTool, Effect as McpEffect,
     Outcome as McpOutcome, Request as McpRequest, Toolset,
 };
-use devcenter_store::{Publication, PublicationRevision, PublicationState, Store, StoreError};
+use devcenter_store::{
+    Approval, ApprovalState, AuthorizationState, ClientAuthorization, Publication,
+    PublicationRevision, PublicationState, Store, StoreError,
+};
 use futures_util::{SinkExt as _, StreamExt as _};
 use serde::{Deserialize, Serialize};
 use serde_json::{Value, json};
@@ -66,6 +69,9 @@ const CONNECTORS_CATALOG_SCOPE: &str = "connectors.catalog.read";
 const CONNECTORS_INVOKE_SCOPE: &str = "connectors.invoke";
 const CONNECTORS_APPROVAL_SCOPE: &str = "connectors.approvals.issue";
 const CONNECTOR_APPROVAL_TTL_SECONDS: u64 = 120;
+const MCP_APPROVAL_TTL_MILLISECONDS: i64 = 10 * 60 * 1_000;
+const MCP_CLIENT_ID: &str = "identity-public-client";
+const MCP_CLIENT_DISPLAY_NAME: &str = "External MCP client";
 const SERVICE_CATALOG_LIST_OPERATION: &str = "service_catalog.list_services";
 const SERVICE_CATALOG_GET_OPERATION: &str = "service_catalog.get_service";
 const MAX_TERMINAL_WEBSOCKET_FRAME_BYTES: usize = 64 * 1024;
@@ -206,6 +212,10 @@ fn publication_routes() -> Router<AppState> {
         .route(
             "/api/mcp/publications/{publication_id}/approvals",
             get(list_publication_approvals),
+        )
+        .route(
+            "/api/mcp/publications/{publication_id}/approvals/{approval_id}",
+            post(decide_publication_approval),
         )
 }
 
@@ -3154,7 +3164,7 @@ async fn mcp(
         return mcp_authentication_problem(&state, &publication_id, false);
     };
     let resource = publication_resource(&state, &publication_id);
-    let principal = match state
+    let publication_principal = match state
         .config
         .authentication
         .verify_publication(Some(authorization.as_str()), &resource)
@@ -3176,10 +3186,45 @@ async fn mcp(
     if publication.state != PublicationState::Active {
         return problem(StatusCode::FORBIDDEN, "publication_not_active");
     }
-    if principal.tenant_id != publication.tenant_id
-        || principal.subject != publication.owner_subject
+    if publication_principal.principal.tenant_id != publication.tenant_id
+        || publication_principal.principal.subject != publication.owner_subject
     {
         return problem(StatusCode::FORBIDDEN, "publication_authority_refused");
+    }
+    let authorization_id =
+        publication_authorization_id(&publication_id, &publication_principal.token_id);
+    let now = now_millis();
+    if state
+        .publications
+        .record_client_use(&ClientAuthorization {
+            authorization_id: authorization_id.clone(),
+            publication_id: publication_id.clone(),
+            subject: publication_principal.principal.subject.clone(),
+            client_id: MCP_CLIENT_ID.to_owned(),
+            display_name: MCP_CLIENT_DISPLAY_NAME.to_owned(),
+            state: AuthorizationState::Active,
+            first_used_at_ms: now,
+            last_used_at_ms: now,
+        })
+        .await
+        .is_err()
+    {
+        return unavailable("publication_store_unavailable");
+    }
+    match state
+        .publications
+        .client_authorization(
+            &publication_id,
+            &authorization_id,
+            &publication_principal.principal.subject,
+        )
+        .await
+    {
+        Ok(Some(client)) if client.state == AuthorizationState::Active => {}
+        Ok(Some(_) | None) => {
+            return problem(StatusCode::FORBIDDEN, "publication_client_revoked");
+        }
+        Err(_) => return unavailable("publication_store_unavailable"),
     }
     let Ok(revision) = state.publications.active_revision(&publication).await else {
         return unavailable("publication_revision_unavailable");
@@ -3191,13 +3236,389 @@ async fn mcp(
     match devcenter_mcp::handle(request, &tools) {
         McpOutcome::Reply(reply) => confidential_json(reply),
         McpOutcome::AcceptedNotification => StatusCode::ACCEPTED.into_response(),
-        McpOutcome::Call(call) => confidential_json(devcenter_mcp::call_error(
-            &call.request_id,
-            "authority_exchange_unavailable",
-            "current Connector authority could not be established",
-            &json!({"retry_required": true}),
-        )),
+        McpOutcome::Call(call) => confidential_json(
+            execute_mcp_call(
+                &state,
+                &publication,
+                &publication_principal,
+                &authorization_id,
+                authorization.as_str(),
+                &resource,
+                &call,
+            )
+            .await,
+        ),
     }
+}
+
+#[allow(clippy::too_many_arguments, clippy::too_many_lines)]
+async fn execute_mcp_call(
+    state: &AppState,
+    publication: &Publication,
+    authority: &PublicationPrincipal,
+    authorization_id: &str,
+    source_authorization: &str,
+    source_audience: &str,
+    call: &devcenter_mcp::ToolCall,
+) -> Value {
+    let Some(connectors) = state.connectors.as_ref() else {
+        return mcp_call_refusal(call, "connectors_unavailable", "Connectors is unavailable");
+    };
+    let Ok(catalog_access) = state
+        .config
+        .authentication
+        .exchange_publication_access(
+            source_authorization,
+            source_audience,
+            CONNECTORS_AUDIENCE,
+            CONNECTORS_CATALOG_SCOPE,
+        )
+        .await
+    else {
+        return mcp_call_refusal(
+            call,
+            "authority_exchange_refused",
+            "Current Connector authority could not be established",
+        );
+    };
+    let Ok(agent_revision) = u64::try_from(publication.active_revision) else {
+        return mcp_call_refusal(
+            call,
+            "publication_projection_invalid",
+            "The published capability revision is invalid",
+        );
+    };
+    let context =
+        publication_owner_context(publication, authority, source_authorization, agent_revision);
+    let Ok(described) = connectors
+        .operation(
+            catalog_access.credential.expose_at_authorization_boundary(),
+            &context,
+            operation::OperationRequest::Describe(operation::DescribeRequest {
+                operation_ref: call.tool.operation_ref.clone(),
+            }),
+        )
+        .await
+    else {
+        return mcp_call_refusal(
+            call,
+            "connector_describe_unavailable",
+            "The capability could not be described",
+        );
+    };
+    let Some(operation::OperationResult::Describe(description)) = described.response else {
+        return mcp_call_refusal(
+            call,
+            "connector_authority_refused",
+            "The current Connector grant refused this capability",
+        );
+    };
+    if !description_matches_compiled_tool(&description, &call.tool) {
+        return mcp_call_refusal(
+            call,
+            "publication_projection_stale",
+            "The published capability changed and must be republished",
+        );
+    }
+
+    let approval_evidence_ref = if call.tool.approval == McpApprovalPosture::Required {
+        match mcp_approval_evidence(
+            state,
+            connectors,
+            publication,
+            authority,
+            authorization_id,
+            source_authorization,
+            source_audience,
+            call,
+            &description,
+            &context,
+        )
+        .await
+        {
+            Ok(evidence) => evidence,
+            Err(refusal) => return refusal,
+        }
+    } else {
+        None
+    };
+    let Ok(invoke_access) = state
+        .config
+        .authentication
+        .exchange_publication_access(
+            source_authorization,
+            source_audience,
+            CONNECTORS_AUDIENCE,
+            CONNECTORS_INVOKE_SCOPE,
+        )
+        .await
+    else {
+        return mcp_call_refusal(
+            call,
+            "authority_exchange_refused",
+            "Current Connector authority could not be established",
+        );
+    };
+    let Ok(invoked) = connectors
+        .operation(
+            invoke_access.credential.expose_at_authorization_boundary(),
+            &context,
+            operation::OperationRequest::Invoke(operation::InvokeRequest {
+                operation_ref: call.tool.operation_ref.clone(),
+                connection_ref: call.tool.connection_id.clone(),
+                description_ref: description.description_ref,
+                input: call.arguments.clone(),
+                approval_evidence_ref,
+            }),
+        )
+        .await
+    else {
+        return mcp_call_refusal(
+            call,
+            "connector_invocation_unavailable",
+            "The capability invocation is unavailable",
+        );
+    };
+    match invoked.response {
+        Some(operation::OperationResult::Invoke(result))
+            if result.operation_ref == call.tool.operation_ref =>
+        {
+            devcenter_mcp::call_success(&call.request_id, &result.output)
+        }
+        _ => mcp_call_refusal(
+            call,
+            "connector_invocation_refused",
+            "The current Connector grant refused this invocation",
+        ),
+    }
+}
+
+fn mcp_call_refusal(call: &devcenter_mcp::ToolCall, code: &str, message: &str) -> Value {
+    devcenter_mcp::call_error(
+        &call.request_id,
+        code,
+        message,
+        &json!({"retry_required": true}),
+    )
+}
+
+fn description_matches_compiled_tool(
+    description: &operation::OperationDescription,
+    tool: &CompiledTool,
+) -> bool {
+    let effect = match description.effect {
+        operation::EffectClass::ReadOnly => McpEffect::ReadOnly,
+        operation::EffectClass::Mutating => McpEffect::Mutation,
+        operation::EffectClass::Destructive => McpEffect::Destructive,
+    };
+    let connector_approval = match description.approval {
+        operation::ApprovalPosture::NotRequired => McpApprovalPosture::NotRequired,
+        operation::ApprovalPosture::Required => McpApprovalPosture::Required,
+    };
+    let approval_is_compatible = tool.approval == McpApprovalPosture::Required
+        || connector_approval == McpApprovalPosture::NotRequired;
+    description.operation_ref == tool.operation_ref
+        && description.title == tool.title
+        && description.description == tool.description
+        && description.input_schema == tool.input_schema
+        && description.output_schema == tool.output_schema
+        && effect == tool.effect
+        && approval_is_compatible
+        && description
+            .connections
+            .iter()
+            .any(|connection| connection.connection_ref == tool.connection_id)
+}
+
+fn publication_owner_context(
+    publication: &Publication,
+    authority: &PublicationPrincipal,
+    source_authorization: &str,
+    agent_revision: u64,
+) -> OwnerContext {
+    OwnerContext {
+        tenant_id: publication.tenant_id.clone(),
+        agent_id: "devcenter-mcp".to_owned(),
+        agent_revision,
+        authority_snapshot_id: authority.token_id.clone(),
+        authority_snapshot_sha256: format!("{:x}", Sha256::digest(source_authorization.as_bytes())),
+    }
+}
+
+#[allow(clippy::too_many_arguments, clippy::too_many_lines)]
+async fn mcp_approval_evidence(
+    state: &AppState,
+    connectors: &HostedClient,
+    publication: &Publication,
+    authority: &PublicationPrincipal,
+    authorization_id: &str,
+    source_authorization: &str,
+    source_audience: &str,
+    call: &devcenter_mcp::ToolCall,
+    description: &operation::OperationDescription,
+    context: &OwnerContext,
+) -> Result<Option<String>, Value> {
+    let input = serde_json::to_vec(&call.arguments)
+        .map_err(|_| mcp_call_refusal(call, "tool_input_invalid", "The tool input is invalid"))?;
+    let input_digest = format!("{:x}", Sha256::digest(input));
+    let now = now_millis();
+    let existing = state
+        .publications
+        .live_approval_for_request(
+            &publication.publication_id,
+            authorization_id,
+            &authority.principal.subject,
+            MCP_CLIENT_ID,
+            &call.tool.name,
+            &call.tool.operation_ref,
+            &call.tool.connection_id,
+            &input_digest,
+            now,
+        )
+        .await
+        .map_err(|_| {
+            mcp_call_refusal(
+                call,
+                "publication_store_unavailable",
+                "The approval store is unavailable",
+            )
+        })?;
+    let approval = if let Some(approval) = existing {
+        approval
+    } else {
+        let approval_id = random_token(18)
+            .map(|token| format!("approval_{token}"))
+            .map_err(|()| {
+                mcp_call_refusal(
+                    call,
+                    "approval_unavailable",
+                    "An approval request could not be created",
+                )
+            })?;
+        let approval = Approval {
+            approval_id,
+            publication_id: publication.publication_id.clone(),
+            authorization_id: authorization_id.to_owned(),
+            subject: authority.principal.subject.clone(),
+            client_id: MCP_CLIENT_ID.to_owned(),
+            tool_name: call.tool.name.clone(),
+            operation_ref: call.tool.operation_ref.clone(),
+            connection_id: call.tool.connection_id.clone(),
+            input_digest: input_digest.clone(),
+            state: ApprovalState::Pending,
+            expires_at_ms: now.saturating_add(MCP_APPROVAL_TTL_MILLISECONDS),
+            audit_ref: None,
+            created_at_ms: now,
+            updated_at_ms: now,
+        };
+        state
+            .publications
+            .create_approval(&approval)
+            .await
+            .map_err(|_| {
+                mcp_call_refusal(
+                    call,
+                    "approval_unavailable",
+                    "An approval request could not be created",
+                )
+            })?;
+        approval
+    };
+    if approval.state == ApprovalState::Pending {
+        return Err(devcenter_mcp::call_error(
+            &call.request_id,
+            "approval_required",
+            "Approve this exact tool call in Devcenter, then retry it",
+            &json!({
+                "approval_id": approval.approval_id,
+                "publication_id": publication.publication_id,
+                "expires_at_ms": approval.expires_at_ms,
+                "retry_required": true
+            }),
+        ));
+    }
+    if approval.state != ApprovalState::Approved {
+        return Err(mcp_call_refusal(
+            call,
+            "approval_refused",
+            "The exact tool call was not approved",
+        ));
+    }
+    let approval_evidence_ref = if description.approval == operation::ApprovalPosture::Required {
+        let approval_access = state
+            .config
+            .authentication
+            .exchange_publication_access(
+                source_authorization,
+                source_audience,
+                CONNECTORS_AUDIENCE,
+                CONNECTORS_APPROVAL_SCOPE,
+            )
+            .await
+            .map_err(|_| {
+                mcp_call_refusal(
+                    call,
+                    "authority_exchange_refused",
+                    "Current approval authority could not be established",
+                )
+            })?;
+        let issued = connectors
+            .issue_approval(
+                approval_access
+                    .credential
+                    .expose_at_authorization_boundary(),
+                context,
+                approval::IssueRequest {
+                    operation_ref: call.tool.operation_ref.clone(),
+                    connection_ref: call.tool.connection_id.clone(),
+                    description_ref: description.description_ref.clone(),
+                    input: call.arguments.clone(),
+                    ttl_seconds: CONNECTOR_APPROVAL_TTL_SECONDS,
+                },
+            )
+            .await
+            .map_err(|_| {
+                mcp_call_refusal(
+                    call,
+                    "connector_approval_refused",
+                    "The current Connector grant refused approval",
+                )
+            })?;
+        Some(issued.approval_evidence_ref)
+    } else {
+        None
+    };
+    state
+        .publications
+        .consume_approval(
+            &approval.approval_id,
+            &publication.publication_id,
+            authorization_id,
+            &authority.principal.subject,
+            MCP_CLIENT_ID,
+            &call.tool.name,
+            &call.tool.operation_ref,
+            &call.tool.connection_id,
+            &input_digest,
+            now_millis(),
+        )
+        .await
+        .map_err(|_| {
+            mcp_call_refusal(
+                call,
+                "approval_already_consumed",
+                "The exact approval was already consumed",
+            )
+        })?;
+    Ok(approval_evidence_ref)
+}
+
+fn publication_authorization_id(publication_id: &str, token_id: &str) -> String {
+    let mut digest = Sha256::new();
+    digest.update(publication_id.as_bytes());
+    digest.update([0]);
+    digest.update(token_id.as_bytes());
+    format!("mcp_auth_{:x}", digest.finalize())
 }
 
 #[derive(Deserialize)]
@@ -3481,6 +3902,65 @@ async fn list_publication_approvals(
         .await
     {
         Ok(approvals) => Json(approvals).into_response(),
+        Err(_) => unavailable("publication_store_unavailable"),
+    }
+}
+
+#[derive(Deserialize)]
+#[serde(rename_all = "snake_case", deny_unknown_fields)]
+enum PublicationApprovalDecision {
+    Approve,
+    Deny,
+}
+
+#[derive(Deserialize)]
+#[serde(deny_unknown_fields)]
+struct DecidePublicationApproval {
+    decision: PublicationApprovalDecision,
+}
+
+async fn decide_publication_approval(
+    State(state): State<AppState>,
+    headers: HeaderMap,
+    Path((publication_id, approval_id)): Path<(String, String)>,
+    Json(request): Json<DecidePublicationApproval>,
+) -> Response {
+    let authenticated = match authenticate(&state, &headers, true).await {
+        Ok(authenticated) => authenticated,
+        Err(response) => return response,
+    };
+    if !valid_opaque_id(&approval_id) {
+        return problem(StatusCode::NOT_FOUND, "publication_approval_not_found");
+    }
+    if let Err(response) =
+        owned_publication(&state, &authenticated.principal, &publication_id).await
+    {
+        return response;
+    }
+    let decision = match request.decision {
+        PublicationApprovalDecision::Approve => ApprovalState::Approved,
+        PublicationApprovalDecision::Deny => ApprovalState::Denied,
+    };
+    let audit_ref = match random_token(18) {
+        Ok(token) => format!("mcp_decision_{token}"),
+        Err(()) => return unavailable("publication_approval_unavailable"),
+    };
+    match state
+        .publications
+        .decide_approval(
+            &approval_id,
+            &publication_id,
+            &authenticated.principal.subject,
+            decision,
+            Some(&audit_ref),
+            now_millis(),
+        )
+        .await
+    {
+        Ok(()) => StatusCode::NO_CONTENT.into_response(),
+        Err(StoreError::Conflict) => {
+            problem(StatusCode::NOT_FOUND, "publication_approval_not_found")
+        }
         Err(_) => unavailable("publication_store_unavailable"),
     }
 }
@@ -4100,6 +4580,10 @@ mod tests {
         assert!(contract["paths"]["/api/capability-profiles"].is_object());
         assert!(contract["paths"]["/api/tasks/{task_id}/approvals"].is_object());
         assert!(contract["paths"]["/api/tasks/{task_id}/approvals/{approval_id}"].is_object());
+        assert!(
+            contract["paths"]["/api/mcp/publications/{publication_id}/approvals/{approval_id}"]
+                .is_object()
+        );
         assert!(contract["paths"]["/.well-known/oauth-protected-resource"].is_object());
     }
 
@@ -4415,6 +4899,54 @@ mod tests {
             }))
             .is_err()
         );
+        assert!(
+            serde_json::from_value::<DecidePublicationApproval>(json!({"decision": "approve"}))
+                .is_ok()
+        );
+        assert!(
+            serde_json::from_value::<DecidePublicationApproval>(json!({
+                "decision": "approve",
+                "operation_ref": "todo.item.delete"
+            }))
+            .is_err()
+        );
+    }
+
+    #[test]
+    fn published_projection_may_be_stricter_but_never_weaker_than_connector_approval() {
+        let description = operation::OperationDescription {
+            operation_ref: "git/issue.get".to_owned(),
+            title: "Get issue".to_owned(),
+            description: "Read one issue".to_owned(),
+            input_schema: json!({"type":"object"}),
+            output_schema: json!({"type":"object"}),
+            effect: operation::EffectClass::ReadOnly,
+            approval: operation::ApprovalPosture::NotRequired,
+            connections: vec![operation::ConnectionSummary {
+                connection_ref: "connection-1".to_owned(),
+                label: "Git".to_owned(),
+                provider: "git".to_owned(),
+                audiences: Vec::new(),
+                purpose: None,
+            }],
+            description_ref: "description-1".to_owned(),
+        };
+        let mut tool = CompiledTool {
+            name: "issue_get".to_owned(),
+            title: description.title.clone(),
+            description: description.description.clone(),
+            operation_ref: description.operation_ref.clone(),
+            connection_id: "connection-1".to_owned(),
+            input_schema: description.input_schema.clone(),
+            output_schema: description.output_schema.clone(),
+            effect: McpEffect::ReadOnly,
+            approval: McpApprovalPosture::Required,
+        };
+        assert!(description_matches_compiled_tool(&description, &tool));
+        tool.approval = McpApprovalPosture::NotRequired;
+        let mut tightened = description.clone();
+        tightened.approval = operation::ApprovalPosture::Required;
+        assert!(!description_matches_compiled_tool(&tightened, &tool));
     }
 
     #[test]

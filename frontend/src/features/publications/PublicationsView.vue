@@ -38,6 +38,7 @@ const profileId = ref(typeof route.query.profile === "string" ? route.query.prof
 const error = ref("");
 const notice = ref("");
 const mutating = ref(false);
+const decidingApprovalId = ref("");
 
 const selected = computed(() =>
   publications.value.find((publication) => publication.publication_id === selectedId.value),
@@ -147,6 +148,27 @@ async function revokeClient(client: ClientAuthorization) {
     await loadDetail();
   } catch (cause) {
     error.value = errorMessage(cause);
+  }
+}
+
+async function decideApproval(approval: Approval, decision: "approve" | "deny") {
+  if (!selected.value) return;
+  decidingApprovalId.value = approval.approval_id;
+  error.value = "";
+  try {
+    await api.decidePublicationApproval(
+      selected.value.publication_id,
+      approval.approval_id,
+      decision,
+    );
+    approvals.value = approvals.value.filter(
+      (candidate) => candidate.approval_id !== approval.approval_id,
+    );
+    notice.value = decision === "approve" ? "Exact tool call approved." : "Tool call denied.";
+  } catch (cause) {
+    error.value = errorMessage(cause);
+  } finally {
+    decidingApprovalId.value = "";
   }
 }
 
@@ -369,6 +391,24 @@ watch(
                 >{{ approval.operation_ref }} · expires
                 {{ new Date(approval.expires_at_ms).toLocaleTimeString() }}</span
               >
+            </div>
+            <div class="approval-actions">
+              <button
+                class="button danger-quiet small"
+                type="button"
+                :disabled="decidingApprovalId === approval.approval_id"
+                @click="decideApproval(approval, 'deny')"
+              >
+                <Ban :size="14" /> Deny
+              </button>
+              <button
+                class="button primary small"
+                type="button"
+                :disabled="decidingApprovalId === approval.approval_id"
+                @click="decideApproval(approval, 'approve')"
+              >
+                <Check :size="14" /> Approve
+              </button>
             </div>
           </div>
         </section>

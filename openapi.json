@@ -2,7 +2,7 @@
   "openapi": "3.1.0",
   "info": {
     "title": "Devcenter API",
-    "version": "0.8.4",
+    "version": "0.8.5",
     "description": "Authenticated browser/BFF surface for identity, connector custody, agents, and tasks."
   },
   "paths": {
@@ -914,6 +914,41 @@
               }
             }
           }
+        }
+      }
+    },
+    "/api/mcp/publications/{publication_id}/approvals/{approval_id}": {
+      "post": {
+        "operationId": "decideMcpApproval",
+        "security": [{ "browserSession": [] }, { "identityBearer": [] }],
+        "parameters": [
+          { "$ref": "#/components/parameters/PublicationId" },
+          {
+            "name": "approval_id",
+            "in": "path",
+            "required": true,
+            "schema": { "type": "string" }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "required": ["decision"],
+                "properties": {
+                  "decision": { "type": "string", "enum": ["approve", "deny"] }
+                },
+                "additionalProperties": false
+              }
+            }
+          }
+        },
+        "responses": {
+          "204": { "description": "Exact pending tool call approved or denied" },
+          "404": { "$ref": "#/components/responses/Problem" },
+          "503": { "$ref": "#/components/responses/Unavailable" }
         }
       }
     },

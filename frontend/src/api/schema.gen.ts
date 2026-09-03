@@ -470,6 +470,22 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/mcp/publications/{publication_id}/approvals/{approval_id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post: operations["decideMcpApproval"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/repositories": {
         parameters: {
             query?: never;
@@ -2531,6 +2547,36 @@ export interface operations {
                     "application/json": components["schemas"]["Approval"][];
                 };
             };
+        };
+    };
+    decideMcpApproval: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                publication_id: components["parameters"]["PublicationId"];
+                approval_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": {
+                    /** @enum {string} */
+                    decision: "approve" | "deny";
+                };
+            };
+        };
+        responses: {
+            /** @description Exact pending tool call approved or denied */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            404: components["responses"]["Problem"];
+            503: components["responses"]["Unavailable"];
         };
     };
     listRepositories: {

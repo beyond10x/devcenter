@@ -23,6 +23,16 @@ struct Args {
     /// Identity service origin used for production session resolution.
     #[arg(long, env = "DEV_CENTER_IDENTITY_ORIGIN")]
     identity_origin: Option<String>,
+    /// Confidential Identity access-exchange caller id.
+    #[arg(long, env = "DEV_CENTER_IDENTITY_EXCHANGE_CALLER_ID")]
+    identity_exchange_caller_id: Option<String>,
+    /// Environment variable containing the confidential access-exchange caller secret.
+    #[arg(
+        long,
+        env = "DEV_CENTER_IDENTITY_EXCHANGE_SECRET_ENV",
+        default_value = "DEV_CENTER_IDENTITY_EXCHANGE_SECRET"
+    )]
+    identity_exchange_secret_env: String,
     #[arg(
         long,
         env = "DEV_CENTER_IDENTITY_AUDIENCE",
@@ -115,7 +125,23 @@ async fn main() -> Result<()> {
         })?;
         Authentication::development_bearer(token)?
     } else if let Some(origin) = args.identity_origin.as_deref() {
-        Authentication::identity(origin, &args.identity_audience)?
+        if let Some(caller_id) = args.identity_exchange_caller_id {
+            let caller_secret =
+                env::var(&args.identity_exchange_secret_env).with_context(|| {
+                    format!(
+                        "{} must contain the Identity access-exchange caller secret",
+                        args.identity_exchange_secret_env
+                    )
+                })?;
+            Authentication::identity_with_exchange(
+                origin,
+                &args.identity_audience,
+                caller_id,
+                caller_secret,
+            )?
+        } else {
+            Authentication::identity(origin, &args.identity_audience)?
+        }
     } else {
         Authentication::Unconfigured
     };

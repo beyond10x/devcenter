@@ -370,6 +370,24 @@ impl Store {
         rows.iter().map(client_from_row).collect()
     }
 
+    pub async fn client_authorization(
+        &self,
+        publication_id: &str,
+        authorization_id: &str,
+        subject: &str,
+    ) -> Result<Option<ClientAuthorization>, StoreError> {
+        self.ensure_schema().await?;
+        sqlx::query("SELECT authorization_id, publication_id, subject, client_id, display_name, state, first_used_at_ms, last_used_at_ms FROM mcp_client_authorizations WHERE publication_id = $1 AND authorization_id = $2 AND subject = $3")
+            .bind(publication_id)
+            .bind(authorization_id)
+            .bind(subject)
+            .fetch_optional(&self.pool)
+            .await
+            .map_err(StoreError::Database)?
+            .map(|row| client_from_row(&row))
+            .transpose()
+    }
+
     pub async fn revoke_client(
         &self,
         publication_id: &str,
@@ -440,9 +458,48 @@ impl Store {
         rows.iter().map(approval_from_row).collect()
     }
 
+    /// Return the one live approval for an identical request, expiring stale rows first.
+    #[allow(clippy::too_many_arguments)]
+    pub async fn live_approval_for_request(
+        &self,
+        publication_id: &str,
+        authorization_id: &str,
+        subject: &str,
+        client_id: &str,
+        tool_name: &str,
+        operation_ref: &str,
+        connection_id: &str,
+        input_digest: &str,
+        now_ms: i64,
+    ) -> Result<Option<Approval>, StoreError> {
+        self.ensure_schema().await?;
+        sqlx::query("UPDATE mcp_approvals SET state = 'expired', updated_at_ms = $1 WHERE publication_id = $2 AND state IN ('pending', 'approved') AND expires_at_ms <= $3")
+            .bind(now_ms)
+            .bind(publication_id)
+            .bind(now_ms)
+            .execute(&self.pool)
+            .await
+            .map_err(StoreError::Database)?;
+        sqlx::query("SELECT approval_id, publication_id, authorization_id, subject, client_id, tool_name, operation_ref, connection_id, input_digest, state, expires_at_ms, audit_ref, created_at_ms, updated_at_ms FROM mcp_approvals WHERE publication_id = $1 AND authorization_id = $2 AND subject = $3 AND client_id = $4 AND tool_name = $5 AND operation_ref = $6 AND connection_id = $7 AND input_digest = $8 AND state IN ('pending', 'approved')")
+            .bind(publication_id)
+            .bind(authorization_id)
+            .bind(subject)
+            .bind(client_id)
+            .bind(tool_name)
+            .bind(operation_ref)
+            .bind(connection_id)
+            .bind(input_digest)
+            .fetch_optional(&self.pool)
+            .await
+            .map_err(StoreError::Database)?
+            .map(|row| approval_from_row(&row))
+            .transpose()
+    }
+
     pub async fn decide_approval(
         &self,
         approval_id: &str,
+        publication_id: &str,
         subject: &str,
         decision: ApprovalState,
         audit_ref: Option<&str>,
@@ -452,11 +509,12 @@ impl Store {
         if !matches!(decision, ApprovalState::Approved | ApprovalState::Denied) {
             return Err(StoreError::Conflict);
         }
-        let result = sqlx::query("UPDATE mcp_approvals SET state = $1, audit_ref = $2, updated_at_ms = $3 WHERE approval_id = $4 AND subject = $5 AND state = 'pending' AND expires_at_ms > $6")
+        let result = sqlx::query("UPDATE mcp_approvals SET state = $1, audit_ref = $2, updated_at_ms = $3 WHERE approval_id = $4 AND publication_id = $5 AND subject = $6 AND state = 'pending' AND expires_at_ms > $7")
             .bind(decision.as_str())
             .bind(audit_ref)
             .bind(now_ms)
             .bind(approval_id)
+            .bind(publication_id)
             .bind(subject)
             .bind(now_ms)
             .execute(&self.pool)
@@ -764,6 +822,7 @@ mod tests {
     }
 
     #[tokio::test]
+    #[allow(clippy::too_many_lines)]
     async fn approval_decision_is_exact_expiring_and_compare_and_swap() {
         let store = store().await;
         let publication = seed(&store).await;
@@ -780,6 +839,19 @@ mod tests {
             })
             .await
             .unwrap();
+        assert_eq!(
+            store
+                .client_authorization(
+                    &publication.publication_id,
+                    "authorization-1",
+                    &publication.owner_subject,
+                )
+                .await
+                .unwrap()
+                .unwrap()
+                .state,
+            AuthorizationState::Active
+        );
         store
             .create_approval(&Approval {
                 approval_id: "approval-1".to_owned(),
@@ -799,9 +871,26 @@ mod tests {
             })
             .await
             .unwrap();
+        let live = store
+            .live_approval_for_request(
+                "pub_opaque",
+                "authorization-1",
+                "human-1",
+                "client-1",
+                "issue_close",
+                "git/issue.close",
+                "connection-1",
+                "digest",
+                20,
+            )
+            .await
+            .unwrap()
+            .unwrap();
+        assert_eq!(live.state, ApprovalState::Pending);
         store
             .decide_approval(
                 "approval-1",
+                "pub_opaque",
                 "human-1",
                 ApprovalState::Approved,
                 Some("audit-1"),
@@ -811,7 +900,14 @@ mod tests {
             .unwrap();
         assert!(
             store
-                .decide_approval("approval-1", "human-1", ApprovalState::Denied, None, 21,)
+                .decide_approval(
+                    "approval-1",
+                    "pub_opaque",
+                    "human-1",
+                    ApprovalState::Denied,
+                    None,
+                    21,
+                )
                 .await
                 .is_err()
         );
@@ -949,6 +1045,7 @@ mod tests {
         store
             .decide_approval(
                 &approval_id,
+                &publication_id,
                 &subject,
                 ApprovalState::Approved,
                 Some("audit-1"),
