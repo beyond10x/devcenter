@@ -24,6 +24,7 @@
     "@b10x/service-console-vue": "git+https://github.com/beyond10x/service-sdk.git#e309e3e5757eff4515b6cf5aeb995580c350c138",
     "@fontsource-variable/manrope": "5.3.0",
     "@lucide/vue": "1.38.0",
+    "monaco-editor": "0.56.0",
     "pinia": "4.0.3",
     "vue": "3.5.42",
     "vue-router": "5.3.0",

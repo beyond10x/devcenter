@@ -22,6 +22,10 @@ export type ConnectorSetupProfile = components["schemas"]["ConnectorSetupProfile
 export type GeneratedServiceSummary = components["schemas"]["GeneratedServiceSummary"];
 export type GeneratedServicePage = components["schemas"]["GeneratedServicePage"];
 export type { ServiceCatalog };
+export interface GeneratedServiceInvocation {
+  output: unknown;
+  connector_audit_ref: string;
+}
 export interface RepositoryCandidate {
   forge_instance_ref: string;
   project_ref: string;
@@ -101,6 +105,95 @@ export interface WorkflowRun {
   failure_code?: string | null;
   created_at_ms: number;
 }
+export type CodingSessionState =
+  "preparing" | "ready" | "refused" | "unknown" | "closing" | "closed";
+export interface CodingSession {
+  id: string;
+  project_id: string;
+  source_revision: string;
+  base_materialization_ref?: string | null;
+  working_materialization_ref?: string | null;
+  manifest_sha256?: string | null;
+  state: CodingSessionState;
+  failure_code?: string | null;
+  limits: { max_files: number; max_total_bytes: number; max_file_bytes: number };
+  created_at_ms: number;
+  updated_at_ms: number;
+}
+export interface CodingTreeEntry {
+  path: string;
+  kind: string;
+  size?: number | null;
+  sha256?: string | null;
+}
+export interface CodingTreeProjection {
+  format: string;
+  entries: CodingTreeEntry[];
+  truncated: boolean;
+  omitted?: number | null;
+}
+export type FileModificationState = "unchanged" | "added" | "modified";
+export interface FileRevision {
+  path: string;
+  sha256: string;
+  size: number;
+  language?: string | null;
+  modification: FileModificationState;
+}
+export interface FileProjection {
+  format: string;
+  revision: FileRevision;
+  content?: string | null;
+  binary: boolean;
+  truncated: boolean;
+}
+export interface FileConflict {
+  code: string;
+  base?: FileProjection | null;
+  latest: FileProjection;
+}
+export type ChangeSelector =
+  | { kind: "workspace" }
+  | { kind: "plan"; digest: string }
+  | { kind: "agent_attempt"; attempt_id: string }
+  | { kind: "publication"; publication_id: string }
+  | { kind: "revision_pair"; old: string; new: string };
+export type DiffMode = "patch" | "stat" | "files_only";
+export interface DiffLine {
+  kind: string;
+  old_line?: number | null;
+  new_line?: number | null;
+  content: string;
+}
+export interface DiffHunk {
+  id: string;
+  old: { start: number; lines: number };
+  new: { start: number; lines: number };
+  heading?: string | null;
+  lines: DiffLine[];
+}
+export interface DiffFile {
+  old_path?: string | null;
+  new_path?: string | null;
+  status: string;
+  additions?: number | null;
+  deletions?: number | null;
+  old_sha256?: string | null;
+  new_sha256?: string | null;
+  hunks: DiffHunk[];
+  attribution: string[];
+}
+export interface DiffProjection {
+  format: string;
+  selector: ChangeSelector;
+  mode: DiffMode;
+  digest: string;
+  source_revision: string;
+  files: DiffFile[];
+  additions: number;
+  deletions: number;
+  partial: boolean;
+}
 export type CapabilityPosture = "allow" | "approval_required" | "deny";
 export interface CapabilityConnection {
   connection_ref: string;
@@ -156,6 +249,7 @@ export class ApiError extends Error {
   constructor(
     public readonly status: number,
     public readonly code: string,
+    public readonly details?: unknown,
   ) {
     super(code);
     this.name = "ApiError";
@@ -174,13 +268,15 @@ async function request<T>(path: string, init: RequestInit = {}): Promise<T> {
   });
   if (!response.ok) {
     let code = `http_${String(response.status)}`;
+    let details: unknown;
     try {
       const problem = (await response.json()) as { code?: unknown };
+      details = problem;
       if (typeof problem.code === "string") code = problem.code;
     } catch {
       // The status remains useful when an intermediary returns a non-JSON response.
     }
-    throw new ApiError(response.status, code);
+    throw new ApiError(response.status, code, details);
   }
   if (response.status === 204) return undefined as T;
   return (await response.json()) as T;
@@ -244,6 +340,50 @@ export const api = {
         idempotency_key: crypto.randomUUID(),
       }),
     }),
+  codingSessions: (projectId: string) =>
+    request<CodingSession[]>(`/api/projects/${encodeURIComponent(projectId)}/sessions`),
+  createCodingSession: (projectId: string, sourceRevision: string) =>
+    request<CodingSession>(`/api/projects/${encodeURIComponent(projectId)}/sessions`, {
+      method: "POST",
+      body: JSON.stringify({
+        source_revision: sourceRevision,
+        idempotency_key: crypto.randomUUID(),
+      }),
+    }),
+  codingSession: (sessionId: string) =>
+    request<CodingSession>(`/api/project-sessions/${encodeURIComponent(sessionId)}`),
+  closeCodingSession: (sessionId: string) =>
+    request<CodingSession>(`/api/project-sessions/${encodeURIComponent(sessionId)}`, {
+      method: "DELETE",
+    }),
+  codingTree: (sessionId: string, query = "", limit = 500) => {
+    const parameters = new URLSearchParams({ query, limit: String(limit) });
+    return request<CodingTreeProjection>(
+      `/api/project-sessions/${encodeURIComponent(sessionId)}/tree?${parameters.toString()}`,
+    );
+  },
+  codingFile: (sessionId: string, path: string) =>
+    request<FileProjection>(
+      `/api/project-sessions/${encodeURIComponent(sessionId)}/files/${encodeWorkspacePath(path)}`,
+    ),
+  saveCodingFile: (sessionId: string, path: string, content: string, expectedSha256: string) =>
+    request<FileProjection>(
+      `/api/project-sessions/${encodeURIComponent(sessionId)}/files/${encodeWorkspacePath(path)}`,
+      {
+        method: "PUT",
+        body: JSON.stringify({
+          content,
+          expected: { state: "sha256", sha256: expectedSha256 },
+          create_parents: false,
+          operation_id: crypto.randomUUID(),
+        }),
+      },
+    ),
+  codingDiff: (sessionId: string, selector: ChangeSelector, mode: DiffMode) =>
+    request<DiffProjection>(`/api/project-sessions/${encodeURIComponent(sessionId)}/diff`, {
+      method: "POST",
+      body: JSON.stringify({ selector, mode }),
+    }),
   connections: () => request<ConnectorConnection[]>("/api/connections"),
   connectorCatalog: (query = "", offset = 0, limit = 24) => {
     const parameters = new URLSearchParams({
@@ -266,6 +406,15 @@ export const api = {
     assertServiceCatalog(catalog);
     return catalog;
   },
+  invokeGeneratedService: (
+    operationRef: string,
+    input: Record<string, unknown>,
+    confirmed = false,
+  ) =>
+    request<GeneratedServiceInvocation>("/api/services/invoke", {
+      method: "POST",
+      body: JSON.stringify({ operation_ref: operationRef, input, confirmed }),
+    }),
   startConnection: (integrationRef: string, label: string, authProfile?: string) =>
     request<ConnectSession>("/api/connections", {
       method: "POST",
@@ -372,12 +521,19 @@ const FRIENDLY_ERRORS: Record<string, string> = {
   workspace_access_refused: "Your current GitLab grant does not admit this repository.",
   workspace_snapshot_conflict: "The branch snapshot changed. Refresh the project and try again.",
   workspace_request_refused: "The central engineering plan query was refused.",
+  agentide_workspace_disabled: "The hosted coding workbench is disabled in this environment.",
+  workspace_file_conflict:
+    "This file changed after it was loaded. Review the conflict before editing further.",
   identity_publication_revocation_unavailable:
     "Identity cannot yet revoke every authorization for this publication safely.",
   identity_client_revocation_unavailable:
     "Identity cannot yet revoke this client authorization safely.",
   identity_authentication_required: "Your session has expired. Sign in again.",
 };
+
+function encodeWorkspacePath(path: string): string {
+  return path.split("/").map(encodeURIComponent).join("/");
+}
 
 export function errorMessage(error: unknown): string {
   if (error instanceof ApiError) {

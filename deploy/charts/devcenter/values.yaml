@@ -6,6 +6,10 @@ global:
 
 devcenter:
   replicaCount: 1
+  features:
+    # The native AgentIDE workbench remains fail-closed until its deployment dependencies pass.
+    agentideWorkspace:
+      enabled: false
   nodeSelector:
     kubernetes.io/arch: amd64
     kubernetes.io/os: linux

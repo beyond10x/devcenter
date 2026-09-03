@@ -164,6 +164,31 @@ const reviewProject = {
   pinned_commit: "6d17f3812ca53ef7aacb4cb973bcbb2ddc93be12",
   web_url: "https://gitlab.example.test/foundation/devcenter",
 };
+const reviewCodingSession = {
+  id: "workspace-session-review",
+  project_id: reviewProject.id,
+  source_revision: reviewProject.pinned_commit,
+  base_materialization_ref: "substrate:base:review",
+  working_materialization_ref: "substrate:working:review",
+  manifest_sha256: "a".repeat(64),
+  state: "ready",
+  failure_code: null,
+  limits: { max_files: 10_000, max_total_bytes: 268_435_456, max_file_bytes: 4_194_304 },
+  created_at_ms: 1_788_260_000_000,
+  updated_at_ms: 1_788_260_000_000,
+};
+const reviewCodingSource = `use std::process::ExitCode;
+
+fn main() -> ExitCode {
+    println!("DevCenter owns the human surface; Workspace owns files and diffs.");
+    ExitCode::SUCCESS
+}
+`;
+let reviewAgentIdeBound = false;
+let reviewAgentIdeVersion = 1;
+const reviewAgentIdeSessionId = "agentide-session-review";
+const reviewAgentIdeGrants: Array<Record<string, unknown>> = [];
+const reviewAgentIdePins: Array<Record<string, unknown>> = [];
 const reviewBranches = [
   { name: "trunk", commit: reviewProject.pinned_commit, provider_default: true, protected: true },
   {
@@ -416,6 +441,7 @@ export function reviewApi(): Plugin {
               email: "reviewer@example.test",
               groups: ["engineers"],
               connectors_docs_available: true,
+              agentide_workspace_enabled: true,
             });
             return;
           }
@@ -461,6 +487,115 @@ export function reviewApi(): Plugin {
           }
           if (path === `/api/projects/${reviewProject.id}/tree` && method === "GET") {
             sendJson(response, 200, reviewTree);
+            return;
+          }
+          if (path === `/api/projects/${reviewProject.id}/sessions` && method === "GET") {
+            sendJson(response, 200, [reviewCodingSession]);
+            return;
+          }
+          if (path === `/api/project-sessions/${reviewCodingSession.id}` && method === "GET") {
+            sendJson(response, 200, reviewCodingSession);
+            return;
+          }
+          if (path === `/api/project-sessions/${reviewCodingSession.id}/tree` && method === "GET") {
+            sendJson(response, 200, {
+              format: "workspace.tree/1",
+              entries: [
+                { path: "src", kind: "directory", size: null, sha256: null },
+                {
+                  path: "src/main.rs",
+                  kind: "file",
+                  size: Buffer.byteLength(reviewCodingSource),
+                  sha256: "b".repeat(64),
+                },
+                { path: "Cargo.toml", kind: "file", size: 162, sha256: "c".repeat(64) },
+                { path: "README.md", kind: "file", size: 940, sha256: "d".repeat(64) },
+              ],
+              truncated: true,
+              omitted: 27,
+            });
+            return;
+          }
+          if (
+            path === `/api/project-sessions/${reviewCodingSession.id}/files/src/main.rs` &&
+            (method === "GET" || method === "PUT")
+          ) {
+            const draft = method === "PUT" ? (await readJson(request)).content : undefined;
+            const content = typeof draft === "string" ? draft : reviewCodingSource;
+            sendJson(response, 200, {
+              format: "workspace.file/1",
+              revision: {
+                path: "src/main.rs",
+                sha256: method === "PUT" ? "e".repeat(64) : "b".repeat(64),
+                size: Buffer.byteLength(content),
+                language: "rust",
+                modification: "modified",
+              },
+              content,
+              binary: false,
+              truncated: false,
+            });
+            return;
+          }
+          if (
+            path === `/api/project-sessions/${reviewCodingSession.id}/diff` &&
+            method === "POST"
+          ) {
+            const submitted = await readJson(request);
+            sendJson(response, 200, {
+              format: "workspace.diff/1",
+              selector: submitted.selector ?? { kind: "workspace" },
+              mode: submitted.mode ?? "patch",
+              digest: "f".repeat(64),
+              source_revision: reviewCodingSession.source_revision,
+              files: [
+                {
+                  old_path: "src/main.rs",
+                  new_path: "src/main.rs",
+                  status: "modified",
+                  additions: 2,
+                  deletions: 1,
+                  old_sha256: "1".repeat(64),
+                  new_sha256: "b".repeat(64),
+                  attribution: ["workspace", "review-engineer"],
+                  hunks:
+                    submitted.mode === "patch"
+                      ? [
+                          {
+                            id: "review-hunk-runtime-boundary",
+                            old: { start: 3, lines: 1 },
+                            new: { start: 3, lines: 2 },
+                            heading: "fn main() -> ExitCode",
+                            lines: [
+                              {
+                                kind: "deletion",
+                                old_line: 3,
+                                new_line: null,
+                                content: '    println!("hello");',
+                              },
+                              {
+                                kind: "addition",
+                                old_line: null,
+                                new_line: 3,
+                                content:
+                                  '    println!("DevCenter owns the human surface; Workspace owns files and diffs.");',
+                              },
+                              {
+                                kind: "addition",
+                                old_line: null,
+                                new_line: 4,
+                                content: "    ExitCode::SUCCESS",
+                              },
+                            ],
+                          },
+                        ]
+                      : [],
+                },
+              ],
+              additions: 2,
+              deletions: 1,
+              partial: false,
+            });
             return;
           }
           if (
@@ -715,6 +850,124 @@ export function reviewApi(): Plugin {
           }
           if (path === "/api/services/invoke" && method === "POST") {
             const submitted = await readJson(request);
+            const serviceInput: Record<string, unknown> =
+              submitted.input &&
+              typeof submitted.input === "object" &&
+              !Array.isArray(submitted.input)
+                ? { ...submitted.input }
+                : {};
+            if (submitted.operation_ref === "agentide.list_sessions") {
+              sendJson(response, 200, {
+                output: {
+                  items: reviewAgentIdeBound
+                    ? [
+                        {
+                          session_id: reviewAgentIdeSessionId,
+                          workspace_session_id: reviewCodingSession.id,
+                          project_id: reviewProject.id,
+                          source_revision: reviewProject.pinned_commit,
+                          manifest_digest: reviewCodingSession.manifest_sha256,
+                          objective: "Review the hosted coding workspace",
+                        },
+                      ]
+                    : [],
+                  next_cursor: null,
+                  partial: false,
+                },
+                connector_audit_ref: "audit:review:agentide:sessions",
+              });
+              return;
+            }
+            if (
+              submitted.operation_ref === "agentide.list_grants" ||
+              submitted.operation_ref === "agentide.list_context_pins" ||
+              submitted.operation_ref === "agentide.list_approval_checkpoints"
+            ) {
+              const items =
+                submitted.operation_ref === "agentide.list_grants"
+                  ? reviewAgentIdeGrants
+                  : submitted.operation_ref === "agentide.list_context_pins"
+                    ? reviewAgentIdePins
+                    : [];
+              sendJson(response, 200, {
+                output: { items, next_cursor: null, partial: false },
+                connector_audit_ref: `audit:review:${submitted.operation_ref}`,
+              });
+              return;
+            }
+            if (
+              submitted.operation_ref === "agentide.start_session" &&
+              submitted.confirmed === true
+            ) {
+              reviewAgentIdeBound = true;
+              reviewAgentIdeVersion = 1;
+              sendJson(response, 200, {
+                output: {
+                  outcome: "started",
+                  events: [
+                    {
+                      name: "agentide.session.SessionStarted",
+                      fields: { session_id: reviewAgentIdeSessionId },
+                    },
+                  ],
+                  through_version: reviewAgentIdeVersion,
+                  replayed: false,
+                },
+                connector_audit_ref: "audit:review:agentide:start",
+              });
+              return;
+            }
+            if (
+              submitted.operation_ref === "agentide.create_grant" &&
+              submitted.confirmed === true
+            ) {
+              reviewAgentIdeVersion += 1;
+              reviewAgentIdeGrants.push({
+                grant_id: `grant-review-${String(reviewAgentIdeGrants.length + 1)}`,
+                grantee: serviceInput.grantee,
+                allowed_intents: serviceInput.allowed_intents,
+                path_prefixes: serviceInput.path_prefixes,
+                maximum_risk: serviceInput.maximum_risk,
+                expires_at: null,
+                revision: 1,
+                state: "Active",
+              });
+              sendJson(response, 200, {
+                output: {
+                  outcome: "created",
+                  events: [{ name: "agentide.coordination.GrantCreated", fields: {} }],
+                  through_version: reviewAgentIdeVersion,
+                  replayed: false,
+                },
+                connector_audit_ref: "audit:review:agentide:grant",
+              });
+              return;
+            }
+            if (
+              submitted.operation_ref === "agentide.pin_context" &&
+              submitted.confirmed === true
+            ) {
+              reviewAgentIdeVersion += 1;
+              reviewAgentIdePins.push({
+                pin_id: `pin-review-${String(reviewAgentIdePins.length + 1)}`,
+                kind: serviceInput.kind,
+                reference: serviceInput.reference,
+                start_line: serviceInput.start_line,
+                end_line: serviceInput.end_line,
+                sha256: serviceInput.sha256,
+                state: "Active",
+              });
+              sendJson(response, 200, {
+                output: {
+                  outcome: "pinned",
+                  events: [{ name: "agentide.coordination.ContextPinned", fields: {} }],
+                  through_version: reviewAgentIdeVersion,
+                  replayed: false,
+                },
+                connector_audit_ref: "audit:review:agentide:pin",
+              });
+              return;
+            }
             if (submitted.operation_ref === "todo.list_visible_lists") {
               sendJson(response, 200, {
                 output: [{ list_id: "release", title: "Release service console", state: "active" }],

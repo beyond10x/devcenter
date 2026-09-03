@@ -41,7 +41,10 @@ use serde_json::{Value, json};
 use sha2::{Digest, Sha256};
 use url::Url;
 use workspace_client::{ClientError as WorkspaceError, WorkspaceClient};
-use workspace_core::{CreateMessage, CreateThread, OpenProject, SelectBranch, StartWorkflow};
+use workspace_core::{
+    CreateCodingSession, CreateMessage, CreateThread, OpenProject, ResolveDiff, SelectBranch,
+    StartWorkflow, WriteFile,
+};
 use zeroize::Zeroizing;
 
 const SESSION_COOKIE: &str = "__Host-devcenter_session";
@@ -141,6 +144,7 @@ fn frontend_routes() -> Router<AppState> {
         .route("/connections", get(legacy_connections))
         .route("/projects", get(app))
         .route("/projects/{project_id}", get(app))
+        .route("/projects/{project_id}/sessions/{session_id}", get(app))
         .route("/profiles", get(app))
         .route("/publications", get(app))
         .route("/docs", get(app))
@@ -289,6 +293,26 @@ fn project_routes() -> Router<AppState> {
         .route(
             "/api/projects/{project_id}/workflow-runs",
             post(start_project_workflow),
+        )
+        .route(
+            "/api/projects/{project_id}/sessions",
+            get(list_coding_sessions).post(create_coding_session),
+        )
+        .route(
+            "/api/project-sessions/{session_id}",
+            get(get_coding_session).delete(close_coding_session),
+        )
+        .route(
+            "/api/project-sessions/{session_id}/tree",
+            get(get_coding_tree),
+        )
+        .route(
+            "/api/project-sessions/{session_id}/files/{*path}",
+            get(get_coding_file).put(write_coding_file),
+        )
+        .route(
+            "/api/project-sessions/{session_id}/diff",
+            post(resolve_coding_diff),
         )
 }
 
@@ -563,7 +587,8 @@ async fn session(State(state): State<AppState>, headers: HeaderMap) -> Response 
         "subject": authenticated.principal.subject,
         "email": authenticated.principal.email,
         "groups": authenticated.principal.groups,
-        "connectors_docs_available": state.config.connectors_docs_available
+        "connectors_docs_available": state.config.connectors_docs_available,
+        "agentide_workspace_enabled": state.config.agentide_workspace_enabled
     }))
     .into_response()
 }
@@ -1307,6 +1332,249 @@ async fn start_project_workflow(
         .await
     {
         Ok(run) => confidential_json(run),
+        Err(error) => workspace_error(&error),
+    }
+}
+
+#[derive(Clone, Copy)]
+enum CodingWorkbenchRefusal {
+    Disabled,
+    NotConfigured,
+}
+
+impl CodingWorkbenchRefusal {
+    fn response(self) -> Response {
+        match self {
+            Self::Disabled => problem(StatusCode::NOT_FOUND, "agentide_workspace_disabled"),
+            Self::NotConfigured => unavailable("workspace_not_configured"),
+        }
+    }
+}
+
+fn require_coding_workbench(state: &AppState) -> Result<&WorkspaceClient, CodingWorkbenchRefusal> {
+    if !state.config.agentide_workspace_enabled {
+        return Err(CodingWorkbenchRefusal::Disabled);
+    }
+    state
+        .workspace
+        .as_ref()
+        .ok_or(CodingWorkbenchRefusal::NotConfigured)
+}
+
+async fn list_coding_sessions(
+    State(state): State<AppState>,
+    headers: HeaderMap,
+    Path(project_id): Path<String>,
+) -> Response {
+    let workspace = match require_coding_workbench(&state) {
+        Ok(workspace) => workspace,
+        Err(refusal) => return refusal.response(),
+    };
+    let authenticated = match authenticate(&state, &headers, false).await {
+        Ok(authenticated) => authenticated,
+        Err(response) => return response,
+    };
+    match workspace
+        .coding_sessions(authenticated.authorization.as_str(), &project_id)
+        .await
+    {
+        Ok(sessions) => confidential_json(sessions),
+        Err(error) => workspace_error(&error),
+    }
+}
+
+async fn create_coding_session(
+    State(state): State<AppState>,
+    headers: HeaderMap,
+    Path(project_id): Path<String>,
+    Json(input): Json<CreateCodingSession>,
+) -> Response {
+    let workspace = match require_coding_workbench(&state) {
+        Ok(workspace) => workspace,
+        Err(refusal) => return refusal.response(),
+    };
+    let authenticated = match authenticate(&state, &headers, true).await {
+        Ok(authenticated) => authenticated,
+        Err(response) => return response,
+    };
+    match workspace
+        .create_coding_session(authenticated.authorization.as_str(), &project_id, &input)
+        .await
+    {
+        Ok(session) => confidential_json(session),
+        Err(error) => workspace_error(&error),
+    }
+}
+
+async fn get_coding_session(
+    State(state): State<AppState>,
+    headers: HeaderMap,
+    Path(session_id): Path<String>,
+) -> Response {
+    let workspace = match require_coding_workbench(&state) {
+        Ok(workspace) => workspace,
+        Err(refusal) => return refusal.response(),
+    };
+    let authenticated = match authenticate(&state, &headers, false).await {
+        Ok(authenticated) => authenticated,
+        Err(response) => return response,
+    };
+    match workspace
+        .coding_session(authenticated.authorization.as_str(), &session_id)
+        .await
+    {
+        Ok(session) => confidential_json(session),
+        Err(error) => workspace_error(&error),
+    }
+}
+
+async fn close_coding_session(
+    State(state): State<AppState>,
+    headers: HeaderMap,
+    Path(session_id): Path<String>,
+) -> Response {
+    let workspace = match require_coding_workbench(&state) {
+        Ok(workspace) => workspace,
+        Err(refusal) => return refusal.response(),
+    };
+    let authenticated = match authenticate(&state, &headers, true).await {
+        Ok(authenticated) => authenticated,
+        Err(response) => return response,
+    };
+    match workspace
+        .close_coding_session(authenticated.authorization.as_str(), &session_id)
+        .await
+    {
+        Ok(session) => confidential_json(session),
+        Err(error) => workspace_error(&error),
+    }
+}
+
+#[derive(Deserialize)]
+#[serde(default, deny_unknown_fields)]
+struct CodingTreeQuery {
+    query: String,
+    limit: u32,
+}
+
+impl Default for CodingTreeQuery {
+    fn default() -> Self {
+        Self {
+            query: String::new(),
+            limit: 500,
+        }
+    }
+}
+
+async fn get_coding_tree(
+    State(state): State<AppState>,
+    headers: HeaderMap,
+    Path(session_id): Path<String>,
+    query: Result<Query<CodingTreeQuery>, axum::extract::rejection::QueryRejection>,
+) -> Response {
+    let Ok(Query(query)) = query else {
+        return problem(
+            StatusCode::UNPROCESSABLE_ENTITY,
+            "workspace_tree_query_invalid",
+        );
+    };
+    if query.query.len() > 512 || !(1..=1_000).contains(&query.limit) {
+        return problem(
+            StatusCode::UNPROCESSABLE_ENTITY,
+            "workspace_tree_query_invalid",
+        );
+    }
+    let workspace = match require_coding_workbench(&state) {
+        Ok(workspace) => workspace,
+        Err(refusal) => return refusal.response(),
+    };
+    let authenticated = match authenticate(&state, &headers, false).await {
+        Ok(authenticated) => authenticated,
+        Err(response) => return response,
+    };
+    match workspace
+        .coding_tree(
+            authenticated.authorization.as_str(),
+            &session_id,
+            query.query.trim(),
+            query.limit,
+        )
+        .await
+    {
+        Ok(tree) => confidential_json(tree),
+        Err(error) => workspace_error(&error),
+    }
+}
+
+async fn get_coding_file(
+    State(state): State<AppState>,
+    headers: HeaderMap,
+    Path((session_id, path)): Path<(String, String)>,
+) -> Response {
+    let workspace = match require_coding_workbench(&state) {
+        Ok(workspace) => workspace,
+        Err(refusal) => return refusal.response(),
+    };
+    let authenticated = match authenticate(&state, &headers, false).await {
+        Ok(authenticated) => authenticated,
+        Err(response) => return response,
+    };
+    match workspace
+        .coding_file(authenticated.authorization.as_str(), &session_id, &path)
+        .await
+    {
+        Ok(file) => confidential_json(file),
+        Err(error) => workspace_error(&error),
+    }
+}
+
+async fn write_coding_file(
+    State(state): State<AppState>,
+    headers: HeaderMap,
+    Path((session_id, path)): Path<(String, String)>,
+    Json(input): Json<WriteFile>,
+) -> Response {
+    let workspace = match require_coding_workbench(&state) {
+        Ok(workspace) => workspace,
+        Err(refusal) => return refusal.response(),
+    };
+    let authenticated = match authenticate(&state, &headers, true).await {
+        Ok(authenticated) => authenticated,
+        Err(response) => return response,
+    };
+    match workspace
+        .write_coding_file(
+            authenticated.authorization.as_str(),
+            &session_id,
+            &path,
+            &input,
+        )
+        .await
+    {
+        Ok(file) => confidential_json(file),
+        Err(error) => workspace_error(&error),
+    }
+}
+
+async fn resolve_coding_diff(
+    State(state): State<AppState>,
+    headers: HeaderMap,
+    Path(session_id): Path<String>,
+    Json(input): Json<ResolveDiff>,
+) -> Response {
+    let workspace = match require_coding_workbench(&state) {
+        Ok(workspace) => workspace,
+        Err(refusal) => return refusal.response(),
+    };
+    let authenticated = match authenticate(&state, &headers, false).await {
+        Ok(authenticated) => authenticated,
+        Err(response) => return response,
+    };
+    match workspace
+        .resolve_diff(authenticated.authorization.as_str(), &session_id, &input)
+        .await
+    {
+        Ok(diff) => confidential_json(diff),
         Err(error) => workspace_error(&error),
     }
 }
@@ -2972,6 +3240,13 @@ fn agent_platform_error(error: &AgentPlatformError) -> Response {
 
 fn workspace_error(error: &WorkspaceError) -> Response {
     match error {
+        WorkspaceError::FileConflict(conflict) => {
+            let mut response = (StatusCode::CONFLICT, Json(conflict)).into_response();
+            response
+                .headers_mut()
+                .insert(header::CACHE_CONTROL, HeaderValue::from_static("no-store"));
+            response
+        }
         WorkspaceError::Refused(401) => {
             problem(StatusCode::UNAUTHORIZED, "workspace_authentication_refused")
         }
@@ -3079,6 +3354,7 @@ mod tests {
             connectors_api_base: None,
             connectors_docs_available: false,
             workspace_origin: None,
+            agentide_workspace_enabled: false,
         })
         .unwrap()
     }
@@ -3117,6 +3393,22 @@ mod tests {
     }
 
     #[tokio::test]
+    async fn coding_workbench_routes_are_fail_closed_by_default() {
+        let response = test_router(devcenter_auth::Authentication::Unconfigured)
+            .oneshot(
+                Request::builder()
+                    .uri("/api/project-sessions/session-1/tree")
+                    .body(Body::empty())
+                    .unwrap(),
+            )
+            .await
+            .unwrap();
+        assert_eq!(response.status(), StatusCode::NOT_FOUND);
+        let body = response.into_body().collect().await.unwrap().to_bytes();
+        assert_eq!(body, r#"{"code":"agentide_workspace_disabled"}"#);
+    }
+
+    #[tokio::test]
     async fn vue_application_docs_and_openapi_are_embedded() {
         for path in [
             "/",
@@ -3125,6 +3417,7 @@ mod tests {
             "/connectors",
             "/connectors/gitlab",
             "/services",
+            "/projects/project-1/sessions/session-1",
             "/docs",
             "/docs/",
         ] {
@@ -3154,11 +3447,16 @@ mod tests {
         let script_path = devcenter_web_assets::WebAssets::iter()
             .find(|path| path.ends_with(".js"))
             .expect("compiled Vue script");
-        let script = devcenter_web_assets::get(&script_path).expect("script asset");
-        let script = String::from_utf8(script.bytes.into_owned()).unwrap();
+        let script = devcenter_web_assets::WebAssets::iter()
+            .filter(|path| path.ends_with(".js"))
+            .filter_map(|path| devcenter_web_assets::get(&path))
+            .filter_map(|asset| String::from_utf8(asset.bytes.into_owned()).ok())
+            .collect::<Vec<_>>()
+            .join("\n");
         assert!(script.contains("/api/connectors/claude-code/oauth/start"));
         assert!(script.contains("/api/connectors/claude-code/oauth/complete"));
         assert!(script.contains("/api/services/invoke"));
+        assert!(script.contains("/api/project-sessions/"));
         assert!(!script.contains("id=\"credential\""));
         assert!(script.contains("claude-opus-5"));
         assert!(!script.contains("claude-opus-4-1"));
@@ -3430,6 +3728,7 @@ mod tests {
             connectors_api_base: None,
             connectors_docs_available: false,
             workspace_origin: None,
+            agentide_workspace_enabled: false,
         };
         router_with_store(config, store).unwrap()
     }

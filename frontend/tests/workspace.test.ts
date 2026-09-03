@@ -10,6 +10,7 @@ const session = {
   email: "engineer@example.test",
   groups: [],
   connectors_docs_available: false,
+  agentide_workspace_enabled: false,
 };
 const agent = {
   id: "agent-1",

@@ -2,6 +2,12 @@
 
 ## Unreleased
 
+- Add the disabled-by-default native hosted coding workbench with Monaco editing, bounded Workspace
+  tree and file reads, digest-guarded saves and conflict review, canonical Workspace diff rendering,
+  URL-restored panes, and explicit terminal refusal when no admitted Substrate profile exists.
+- Compose AgentIDE's generated Service SDK factory beside Todo using the existing Eventlog
+  PostgreSQL adapter, and bind Workspace sessions to durable grants, context references, and exact
+  approval checkpoints without adding an AgentIDE file store or a second Devcenter service layer.
 - Replace the no-use proprietary notice with the standard PolyForm Free Trial License 1.0.0, making
   the documented public review path legally usable for a time-bounded evaluation while keeping
   production, redistribution, private images, and post-trial use outside the public grant.

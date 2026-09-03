@@ -16,6 +16,7 @@ name = "devcenter-connectors"
 path = "src/main.rs"
 
 [dependencies]
+agentide-generated-service = { git = "https://github.com/beyond10x/agentide.git", rev = "00d63ee1a04c3d2ad954a76273b66cb717673c88" }
 anyhow = "1"
 clap = { version = "4.6", features = ["derive", "env"] }
 connectors-runtime = { git = "https://github.com/beyond10x/connectors.git", rev = "9badb8a46b5fd60a82cac4c909dbb584929172e4", default-features = false }

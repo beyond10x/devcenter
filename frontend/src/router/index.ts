@@ -13,6 +13,11 @@ export default createRouter({
     { path: "/", redirect: "/projects" },
     { path: "/projects", name: "projects", component: ProjectsView },
     { path: "/projects/:projectId", name: "project", component: ProjectsView },
+    {
+      path: "/projects/:projectId/sessions/:sessionId",
+      name: "coding-session",
+      component: () => import("@/features/workbench/HostedWorkspaceView.vue"),
+    },
     { path: "/agents", name: "agents", component: AgentsView },
     { path: "/agents/:agentId", name: "agent", component: AgentsView },
     { path: "/connectors", name: "connectors", component: ConnectorsView },

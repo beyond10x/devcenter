@@ -14,6 +14,7 @@ import {
   RefreshCw,
   Search,
   ShieldCheck,
+  SquareTerminal,
 } from "@lucide/vue";
 import { computed, onMounted, ref, watch } from "vue";
 import { useRoute, useRouter } from "vue-router";
@@ -21,6 +22,7 @@ import {
   api,
   errorMessage,
   type Branch,
+  type CodingSession,
   type EngineeringArtifact,
   type Project,
   type ProjectMessage,
@@ -30,11 +32,13 @@ import {
   type WorkflowDefinition,
   type WorkflowRun,
 } from "@/api/client";
+import { useWorkspaceStore } from "@/stores/workspace";
 
 type Tab = "overview" | "files" | "chat" | "workflows" | "aep";
 
 const route = useRoute();
 const router = useRouter();
+const workspace = useWorkspaceStore();
 const loading = ref(true);
 const error = ref("");
 const search = ref(typeof route.query.q === "string" ? route.query.q : "");
@@ -58,9 +62,17 @@ const refreshing = ref(false);
 const sending = ref(false);
 const draft = ref("");
 const runningWorkflow = ref<string>();
+const codingSessions = ref<CodingSession[]>([]);
+const startingCodingSession = ref(false);
 
 const projectId = computed(() =>
   typeof route.params.projectId === "string" ? route.params.projectId : undefined,
+);
+const resumableCodingSession = computed(() =>
+  codingSessions.value.find(
+    (session) =>
+      session.state === "ready" && session.source_revision === project.value?.pinned_commit,
+  ),
 );
 const selectedThread = computed(() =>
   threads.value.find((thread) => thread.id === selectedThreadId.value),
@@ -122,11 +134,34 @@ async function load() {
       selectedThreadId.value = loadedThreads[0]?.id;
       if (selectedThreadId.value) await loadMessages();
       await loadEngineeringArtifacts(loadedProject.id);
+      if (workspace.session?.agentide_workspace_enabled) {
+        codingSessions.value = await api.codingSessions(loadedProject.id);
+      }
     }
   } catch (caught) {
     error.value = errorMessage(caught);
   } finally {
     loading.value = false;
+  }
+}
+
+async function openCodingWorkbench(existing?: CodingSession) {
+  const snapshot = project.value;
+  if (!snapshot?.pinned_commit) return;
+  startingCodingSession.value = true;
+  error.value = "";
+  try {
+    const session =
+      existing ?? (await api.createCodingSession(snapshot.id, snapshot.pinned_commit));
+    await router.push({
+      name: "coding-session",
+      params: { projectId: snapshot.id, sessionId: session.id },
+      query: { pane: "editor" },
+    });
+  } catch (caught) {
+    error.value = errorMessage(caught);
+  } finally {
+    startingCodingSession.value = false;
   }
 }
 
@@ -334,6 +369,17 @@ function shortCommit(commit?: string | null) {
           @click="pinBranch(project.selected_branch)"
         >
           <RefreshCw :size="15" :class="{ spinning: refreshing }" /> Refresh snapshot
+        </button>
+        <button
+          v-if="workspace.session?.agentide_workspace_enabled"
+          class="button primary small"
+          type="button"
+          :disabled="startingCodingSession || !project.pinned_commit"
+          @click="openCodingWorkbench(resumableCodingSession)"
+        >
+          <LoaderCircle v-if="startingCodingSession" class="spinning" :size="15" />
+          <SquareTerminal v-else :size="15" />
+          {{ resumableCodingSession ? "Resume coding" : "Open coding workspace" }}
         </button>
         <a class="text-link" :href="project.web_url" target="_blank" rel="noreferrer"
           >GitLab <ArrowUpRight :size="14"

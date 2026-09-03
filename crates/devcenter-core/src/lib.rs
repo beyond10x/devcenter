@@ -38,4 +38,6 @@ pub struct Config {
     pub connectors_docs_available: bool,
     /// Internal Workspace origin. Absence disables repository projects fail-closed.
     pub workspace_origin: Option<String>,
+    /// Expose the native hosted coding workbench. Disabled unless deployment opts in.
+    pub agentide_workspace_enabled: bool,
 }

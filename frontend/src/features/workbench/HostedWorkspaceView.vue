@@ -1,0 +1,1291 @@
+<script setup lang="ts">
+import {
+  Bot,
+  Braces,
+  ChevronRight,
+  CircleAlert,
+  File,
+  FileDiff,
+  Folder,
+  GitBranch,
+  LoaderCircle,
+  PanelBottomClose,
+  PanelBottomOpen,
+  PanelRight,
+  RefreshCw,
+  Save,
+  Search,
+  ShieldCheck,
+  SplitSquareHorizontal,
+  SquareTerminal,
+  X,
+} from "@lucide/vue";
+import { computed, onMounted, ref, watch } from "vue";
+import { useRoute, useRouter } from "vue-router";
+import {
+  ApiError,
+  api,
+  errorMessage,
+  type CodingSession,
+  type CodingTreeEntry,
+  type DiffHunk,
+  type DiffMode,
+  type DiffProjection,
+  type FileConflict,
+  type FileProjection,
+  type Project,
+} from "@/api/client";
+import { useWorkspaceStore } from "@/stores/workspace";
+import CanonicalDiffViewer from "./CanonicalDiffViewer.vue";
+import CodeEditor from "./CodeEditor.vue";
+
+type CenterPane = "editor" | "diff" | "agent" | "evidence";
+type RightPane = "context" | "activity" | "agents" | "grants" | "approvals";
+type LoadState = "loading" | "ready" | "error" | "refused";
+
+interface OpenFile {
+  projection: FileProjection;
+  draft: string;
+  dirty: boolean;
+  saving: boolean;
+  error: string;
+}
+
+interface ContextAttachment {
+  id: string;
+  kind: "selection" | "diff_hunk";
+  label: string;
+  detail: string;
+  reference: string;
+  sha256: string;
+  startLine?: number;
+  endLine?: number;
+}
+
+interface AgentIdeSessionSnapshot {
+  session_id: string;
+  workspace_session_id?: string | null;
+  project_id?: string | null;
+  source_revision?: string | null;
+  manifest_digest?: string | null;
+  objective: string;
+}
+
+interface AgentIdeGrantSnapshot {
+  grant_id: string;
+  grantee: string;
+  allowed_intents: string[];
+  path_prefixes: string[];
+  maximum_risk: "Low" | "Medium";
+  expires_at?: string | null;
+  revision: number;
+  state: "Active" | "Revoked";
+}
+
+interface AgentIdeContextPinSnapshot {
+  pin_id: string;
+  kind: string;
+  reference: string;
+  start_line?: number | null;
+  end_line?: number | null;
+  sha256: string;
+  state: "Active" | "Removed";
+}
+
+interface AgentIdeCheckpointSnapshot {
+  checkpoint_id: string;
+  attempt_ref: string;
+  plan_digest: string;
+  state: "Pending" | "Approved" | "Denied";
+}
+
+const route = useRoute();
+const router = useRouter();
+const workspace = useWorkspaceStore();
+const state = ref<LoadState>("loading");
+const error = ref("");
+const project = ref<Project>();
+const session = ref<CodingSession>();
+const tree = ref<CodingTreeEntry[]>([]);
+const treeTruncated = ref(false);
+const treeOmitted = ref<number | null>();
+const treeSearch = ref("");
+const treeLoading = ref(false);
+const openFiles = ref<OpenFile[]>([]);
+const activePath = ref<string>();
+const splitPath = ref<string>();
+const diff = ref<DiffProjection>();
+const diffLoading = ref(false);
+const diffError = ref("");
+const terminalOpen = ref(true);
+const rightPane = ref<RightPane>("context");
+const conflict = ref<{ payload: FileConflict; localDraft: string; path: string }>();
+const attachments = ref<ContextAttachment[]>([]);
+const selectedRange = ref<{ startLine: number; endLine: number; content: string }>();
+const agentIdeSession = ref<AgentIdeSessionSnapshot>();
+const agentIdeGrants = ref<AgentIdeGrantSnapshot[]>([]);
+const agentIdePins = ref<AgentIdeContextPinSnapshot[]>([]);
+const agentIdeCheckpoints = ref<AgentIdeCheckpointSnapshot[]>([]);
+const coordinationState = ref<"loading" | "ready" | "unbound" | "refused" | "error">("loading");
+const coordinationError = ref("");
+const coordinationVersion = ref<number>();
+const coordinationMutation = ref("");
+
+const projectId = computed(() => String(route.params.projectId ?? ""));
+const sessionId = computed(() => String(route.params.sessionId ?? ""));
+const activePane = computed<CenterPane>(() => {
+  const pane = route.query.pane;
+  return pane === "diff" || pane === "agent" || pane === "evidence" ? pane : "editor";
+});
+const diffMode = computed<DiffMode>(() => {
+  const mode = route.query.mode;
+  return mode === "stat" || mode === "files_only" ? mode : "patch";
+});
+const diffLayout = computed<"unified" | "side_by_side">(() =>
+  route.query.layout === "side_by_side" ? "side_by_side" : "unified",
+);
+const activeFile = computed(() =>
+  openFiles.value.find((file) => file.projection.revision.path === activePath.value),
+);
+const splitFile = computed(() =>
+  openFiles.value.find((file) => file.projection.revision.path === splitPath.value),
+);
+const dirtyCount = computed(() => openFiles.value.filter((file) => file.dirty).length);
+const fileEntries = computed(() => tree.value.filter((entry) => !isDirectory(entry)));
+const selectedAgentId = computed(() =>
+  typeof route.query.agent === "string" ? route.query.agent : undefined,
+);
+
+onMounted(load);
+watch([projectId, sessionId], load);
+watch(
+  () => route.query.file,
+  (path) => {
+    if (typeof path === "string" && path !== activePath.value) void openFile(path);
+  },
+);
+watch([activePane, diffMode], ([pane]) => {
+  if (pane === "diff") void loadDiff();
+});
+let treeTimer: number | undefined;
+watch(treeSearch, () => {
+  if (treeTimer !== undefined) window.clearTimeout(treeTimer);
+  treeTimer = window.setTimeout(() => void loadTree(), 250);
+});
+
+async function load() {
+  error.value = "";
+  if (!workspace.session?.agentide_workspace_enabled) {
+    state.value = "refused";
+    return;
+  }
+  state.value = "loading";
+  try {
+    const [loadedProject, loadedSession] = await Promise.all([
+      api.project(projectId.value),
+      api.codingSession(sessionId.value),
+    ]);
+    if (loadedSession.project_id !== loadedProject.id) {
+      state.value = "refused";
+      error.value = "The session does not belong to this project route.";
+      return;
+    }
+    project.value = loadedProject;
+    session.value = loadedSession;
+    if (loadedSession.state !== "ready") {
+      state.value = loadedSession.state === "refused" ? "refused" : "error";
+      error.value = loadedSession.failure_code ?? `Workspace session is ${loadedSession.state}.`;
+      return;
+    }
+    await loadTree();
+    const requestedFile =
+      typeof route.query.file === "string" ? route.query.file : fileEntries.value[0]?.path;
+    if (requestedFile) await openFile(requestedFile, false, activePane.value === "editor");
+    if (activePane.value === "diff") await loadDiff();
+    await loadCoordination();
+    state.value = "ready";
+  } catch (caught) {
+    state.value = "error";
+    error.value = errorMessage(caught);
+  }
+}
+
+async function loadCoordination() {
+  coordinationState.value = "loading";
+  coordinationError.value = "";
+  agentIdeSession.value = undefined;
+  agentIdeGrants.value = [];
+  agentIdePins.value = [];
+  agentIdeCheckpoints.value = [];
+  try {
+    const response = await api.invokeGeneratedService(
+      "agentide.list_sessions",
+      { $page: { limit: 100 } },
+      false,
+    );
+    const snapshots = serviceRows<AgentIdeSessionSnapshot>(response.output);
+    const requestedAgentIdeSession =
+      typeof route.query.agentide === "string" ? route.query.agentide : undefined;
+    const match = snapshots.find((candidate) =>
+      requestedAgentIdeSession
+        ? candidate.session_id === requestedAgentIdeSession &&
+          candidate.workspace_session_id === sessionId.value
+        : candidate.workspace_session_id === sessionId.value,
+    );
+    if (!match) {
+      coordinationState.value = "unbound";
+      return;
+    }
+    agentIdeSession.value = match;
+    if (!requestedAgentIdeSession) await setRoute({ agentide: match.session_id });
+    const storedVersion = window.sessionStorage.getItem(coordinationVersionKey(match.session_id));
+    const parsedVersion = storedVersion ? Number(storedVersion) : undefined;
+    coordinationVersion.value = Number.isInteger(parsedVersion) ? parsedVersion : undefined;
+    await loadCoordinationChildren(match.session_id);
+    coordinationState.value = "ready";
+  } catch (caught) {
+    coordinationState.value =
+      caught instanceof ApiError && (caught.status === 403 || caught.status === 404)
+        ? "refused"
+        : "error";
+    coordinationError.value = errorMessage(caught);
+  }
+}
+
+async function bindCoordination() {
+  if (!session.value || !project.value || !workspace.session?.subject) return;
+  coordinationState.value = "loading";
+  coordinationError.value = "";
+  try {
+    const response = await api.invokeGeneratedService(
+      "agentide.start_session",
+      {
+        workspace_root: `workspace-session/${session.value.id}`,
+        workspace_session_id: session.value.id,
+        objective: `Work on ${project.value.path_with_namespace}`,
+        project_id: project.value.id,
+        source_revision: session.value.source_revision,
+        manifest_digest: session.value.manifest_sha256 ?? null,
+        scopes: {
+          principal: workspace.session.subject,
+          team: null,
+          project: null,
+        },
+        idempotency_key: globalThis.crypto.randomUUID(),
+      },
+      true,
+    );
+    const result = serviceIntentResult(response.output);
+    const started = result.events.find((event) => event.name.endsWith("SessionStarted"));
+    if (!started || typeof started.fields.session_id !== "string") {
+      throw new Error("agentide_session_start_invalid");
+    }
+    agentIdeSession.value = {
+      session_id: started.fields.session_id,
+      workspace_session_id: session.value.id,
+      project_id: project.value.id,
+      source_revision: session.value.source_revision,
+      manifest_digest: session.value.manifest_sha256,
+      objective: `Work on ${project.value.path_with_namespace}`,
+    };
+    const agentIdeSessionId = started.fields.session_id;
+    setCoordinationVersion(agentIdeSessionId, result.through_version);
+    await setRoute({ agentide: agentIdeSessionId });
+    await loadCoordinationChildren(agentIdeSessionId);
+    coordinationState.value = "ready";
+  } catch (caught) {
+    coordinationState.value = "error";
+    coordinationError.value = errorMessage(caught);
+  }
+}
+
+async function loadCoordinationChildren(agentIdeSessionId: string) {
+  const input = { session_id: agentIdeSessionId, $page: { limit: 100 } };
+  const [grants, pins, checkpoints] = await Promise.all([
+    api.invokeGeneratedService("agentide.list_grants", input, false),
+    api.invokeGeneratedService("agentide.list_context_pins", input, false),
+    api.invokeGeneratedService("agentide.list_approval_checkpoints", input, false),
+  ]);
+  agentIdeGrants.value = serviceRows<AgentIdeGrantSnapshot>(grants.output);
+  agentIdePins.value = serviceRows<AgentIdeContextPinSnapshot>(pins.output);
+  agentIdeCheckpoints.value = serviceRows<AgentIdeCheckpointSnapshot>(checkpoints.output);
+}
+
+async function loadTree() {
+  if (!sessionId.value) return;
+  treeLoading.value = true;
+  try {
+    const projection = await api.codingTree(sessionId.value, treeSearch.value, 500);
+    tree.value = projection.entries;
+    treeTruncated.value = projection.truncated;
+    treeOmitted.value = projection.omitted;
+  } catch (caught) {
+    error.value = errorMessage(caught);
+  } finally {
+    treeLoading.value = false;
+  }
+}
+
+async function openFile(path: string, split = false, navigate = true) {
+  let opened = openFiles.value.find((file) => file.projection.revision.path === path);
+  if (!opened) {
+    try {
+      const projection = await api.codingFile(sessionId.value, path);
+      opened = {
+        projection,
+        draft: projection.content ?? "",
+        dirty: false,
+        saving: false,
+        error: "",
+      };
+      openFiles.value.push(opened);
+    } catch (caught) {
+      error.value = errorMessage(caught);
+      return;
+    }
+  }
+  if (split) splitPath.value = path;
+  else activePath.value = path;
+  if (navigate) await setRoute({ pane: "editor", file: activePath.value });
+}
+
+function closeFile(path: string) {
+  const index = openFiles.value.findIndex((file) => file.projection.revision.path === path);
+  if (index < 0) return;
+  openFiles.value.splice(index, 1);
+  if (splitPath.value === path) splitPath.value = undefined;
+  if (activePath.value === path) {
+    activePath.value = openFiles.value[Math.max(0, index - 1)]?.projection.revision.path;
+    void setRoute({ file: activePath.value });
+  }
+}
+
+function updateDraft(file: OpenFile, value: string) {
+  file.draft = value;
+  file.dirty = value !== (file.projection.content ?? "");
+}
+
+async function saveFile(file = activeFile.value) {
+  if (!file || !file.dirty || file.projection.binary || file.projection.truncated) return;
+  file.saving = true;
+  file.error = "";
+  try {
+    const saved = await api.saveCodingFile(
+      sessionId.value,
+      file.projection.revision.path,
+      file.draft,
+      file.projection.revision.sha256,
+    );
+    file.projection = saved;
+    file.draft = saved.content ?? "";
+    file.dirty = false;
+    await Promise.all([loadTree(), loadDiff()]);
+  } catch (caught) {
+    if (caught instanceof ApiError && caught.status === 409 && isFileConflict(caught.details)) {
+      conflict.value = {
+        payload: caught.details,
+        localDraft: file.draft,
+        path: file.projection.revision.path,
+      };
+    } else {
+      file.error = errorMessage(caught);
+    }
+  } finally {
+    file.saving = false;
+  }
+}
+
+async function saveAll() {
+  for (const file of openFiles.value.filter((candidate) => candidate.dirty)) {
+    await saveFile(file);
+    if (conflict.value) return;
+  }
+}
+
+async function loadDiff() {
+  if (!session.value || session.value.state !== "ready") return;
+  diffLoading.value = true;
+  diffError.value = "";
+  try {
+    diff.value = await api.codingDiff(sessionId.value, { kind: "workspace" }, diffMode.value);
+  } catch (caught) {
+    diffError.value = errorMessage(caught);
+  } finally {
+    diffLoading.value = false;
+  }
+}
+
+async function closeSession() {
+  if (!session.value || dirtyCount.value > 0) return;
+  try {
+    await api.closeCodingSession(session.value.id);
+    await router.push({ name: "project", params: { projectId: projectId.value } });
+  } catch (caught) {
+    error.value = errorMessage(caught);
+  }
+}
+
+async function attachSelection() {
+  if (!activePath.value || !selectedRange.value) return;
+  const selection = selectedRange.value;
+  attachments.value.push({
+    id: globalThis.crypto.randomUUID(),
+    kind: "selection",
+    label: `${activePath.value}:${String(selection.startLine)}-${String(selection.endLine)}`,
+    detail: selection.content,
+    reference: activePath.value,
+    sha256: await sha256(selection.content),
+    startLine: selection.startLine,
+    endLine: selection.endLine,
+  });
+  rightPane.value = "context";
+}
+
+async function attachHunk(hunk: DiffHunk, path: string) {
+  const content = hunk.lines.map((line) => line.content).join("\n");
+  attachments.value.push({
+    id: globalThis.crypto.randomUUID(),
+    kind: "diff_hunk",
+    label: `${path} · ${hunk.id.slice(0, 10)}`,
+    detail: content,
+    reference: `workspace-diff/${diff.value?.digest ?? "unknown"}/${path}/${hunk.id}`,
+    sha256: await sha256(content),
+    startLine: hunk.new.start,
+    endLine: hunk.new.start + Math.max(0, hunk.new.lines - 1),
+  });
+  rightPane.value = "context";
+}
+
+async function shareAttachment(attachment: ContextAttachment) {
+  const current = agentIdeSession.value;
+  if (!current || coordinationVersion.value == null) {
+    coordinationError.value = unknownCoordinationVersionMessage();
+    return;
+  }
+  coordinationError.value = "";
+  try {
+    const response = await api.invokeGeneratedService(
+      "agentide.pin_context",
+      {
+        session_id: current.session_id,
+        request_id: globalThis.crypto.randomUUID(),
+        kind: attachment.kind === "selection" ? "Editor" : "DiffHunk",
+        reference: attachment.reference,
+        start_line: attachment.startLine ?? null,
+        end_line: attachment.endLine ?? null,
+        sha256: attachment.sha256,
+        expected_version: coordinationVersion.value,
+        idempotency_key: globalThis.crypto.randomUUID(),
+      },
+      true,
+    );
+    const result = serviceIntentResult(response.output);
+    setCoordinationVersion(current.session_id, result.through_version);
+    attachments.value = attachments.value.filter((item) => item.id !== attachment.id);
+    await loadCoordinationChildren(current.session_id);
+  } catch (caught) {
+    coordinationError.value = errorMessage(caught);
+  }
+}
+
+async function createCodingGrant(grantee: string) {
+  const current = agentIdeSession.value;
+  if (!current || coordinationVersion.value == null) {
+    coordinationError.value = unknownCoordinationVersionMessage();
+    return;
+  }
+  coordinationMutation.value = `grant:${grantee}`;
+  coordinationError.value = "";
+  try {
+    const response = await api.invokeGeneratedService(
+      "agentide.create_grant",
+      {
+        session_id: current.session_id,
+        request_id: globalThis.crypto.randomUUID(),
+        grantee,
+        allowed_intents: ["code_edit", "code_create", "code_delete", "code_rename"],
+        path_prefixes: ["."],
+        maximum_risk: "Medium",
+        expires_at: null,
+        revision: 1,
+        expected_version: coordinationVersion.value,
+        idempotency_key: globalThis.crypto.randomUUID(),
+      },
+      true,
+    );
+    updateVersionFromIntent(current.session_id, response.output);
+    await loadCoordinationChildren(current.session_id);
+  } catch (caught) {
+    coordinationError.value = errorMessage(caught);
+  } finally {
+    coordinationMutation.value = "";
+  }
+}
+
+async function revokeGrant(grantId: string) {
+  await coordinationIntent("agentide.revoke_grant", { grant_id: grantId }, `revoke:${grantId}`);
+}
+
+async function removeContextPin(pinId: string) {
+  await coordinationIntent("agentide.remove_context_pin", { pin_id: pinId }, `unpin:${pinId}`);
+}
+
+async function decideCheckpoint(checkpointId: string, decision: "approve" | "deny") {
+  await coordinationIntent(
+    decision === "approve" ? "agentide.approve_checkpoint" : "agentide.deny_checkpoint",
+    { checkpoint_id: checkpointId },
+    `${decision}:${checkpointId}`,
+  );
+}
+
+async function coordinationIntent(
+  operationRef: string,
+  fields: Record<string, unknown>,
+  mutation: string,
+) {
+  const current = agentIdeSession.value;
+  if (!current || coordinationVersion.value == null) {
+    coordinationError.value = unknownCoordinationVersionMessage();
+    return;
+  }
+  coordinationMutation.value = mutation;
+  coordinationError.value = "";
+  try {
+    const response = await api.invokeGeneratedService(
+      operationRef,
+      {
+        session_id: current.session_id,
+        request_id: globalThis.crypto.randomUUID(),
+        expected_version: coordinationVersion.value,
+        idempotency_key: globalThis.crypto.randomUUID(),
+        ...fields,
+      },
+      true,
+    );
+    updateVersionFromIntent(current.session_id, response.output);
+    await loadCoordinationChildren(current.session_id);
+  } catch (caught) {
+    coordinationError.value = errorMessage(caught);
+  } finally {
+    coordinationMutation.value = "";
+  }
+}
+
+function acceptLatestConflict() {
+  const current = conflict.value;
+  if (!current) return;
+  const file = openFiles.value.find(
+    (candidate) => candidate.projection.revision.path === current.path,
+  );
+  if (file) {
+    file.projection = current.payload.latest;
+    file.draft = current.payload.latest.content ?? "";
+    file.dirty = false;
+  }
+  conflict.value = undefined;
+}
+
+async function setPane(pane: CenterPane) {
+  await setRoute({ pane });
+}
+
+async function setRoute(values: Record<string, string | undefined>) {
+  const query = Object.fromEntries(
+    Object.entries({ ...route.query, ...values }).filter(([, value]) => value !== undefined),
+  );
+  await router.replace({ query });
+}
+
+function isDirectory(entry: CodingTreeEntry): boolean {
+  return entry.kind === "directory" || entry.kind === "tree";
+}
+
+function isFileConflict(value: unknown): value is FileConflict {
+  if (!value || typeof value !== "object") return false;
+  const candidate = value as Partial<FileConflict>;
+  return candidate.code === "workspace_file_conflict" && Boolean(candidate.latest?.revision);
+}
+
+function serviceRows<T>(output: unknown): T[] {
+  if (Array.isArray(output)) return output as T[];
+  if (
+    output &&
+    typeof output === "object" &&
+    Array.isArray((output as { items?: unknown }).items)
+  ) {
+    return (output as { items: T[] }).items;
+  }
+  throw new Error("agentide_projection_invalid");
+}
+
+function serviceIntentResult(output: unknown): {
+  through_version: number;
+  events: { name: string; fields: Record<string, unknown> }[];
+} {
+  if (!output || typeof output !== "object") throw new Error("agentide_intent_result_invalid");
+  const candidate = output as {
+    through_version?: unknown;
+    events?: { name?: unknown; fields?: unknown }[];
+  };
+  if (
+    typeof candidate.through_version !== "number" ||
+    !Number.isInteger(candidate.through_version) ||
+    !Array.isArray(candidate.events)
+  ) {
+    throw new Error("agentide_intent_result_invalid");
+  }
+  const events = candidate.events.map((event) => {
+    if (
+      typeof event.name !== "string" ||
+      !event.fields ||
+      typeof event.fields !== "object" ||
+      Array.isArray(event.fields)
+    ) {
+      throw new Error("agentide_intent_event_invalid");
+    }
+    return { name: event.name, fields: event.fields as Record<string, unknown> };
+  });
+  return { through_version: candidate.through_version, events };
+}
+
+function coordinationVersionKey(agentIdeSessionId: string): string {
+  return `agentide:${agentIdeSessionId}:stream-version`;
+}
+
+function setCoordinationVersion(agentIdeSessionId: string, version: number) {
+  coordinationVersion.value = version;
+  window.sessionStorage.setItem(coordinationVersionKey(agentIdeSessionId), String(version));
+}
+
+function updateVersionFromIntent(agentIdeSessionId: string, output: unknown) {
+  setCoordinationVersion(agentIdeSessionId, serviceIntentResult(output).through_version);
+}
+
+function unknownCoordinationVersionMessage(): string {
+  return "The coordination stream version is unknown after resume. Mutations stay unavailable until a refresh-safe event cursor is supplied.";
+}
+
+async function sha256(content: string): Promise<string> {
+  const digest = await globalThis.crypto.subtle.digest(
+    "SHA-256",
+    new TextEncoder().encode(content),
+  );
+  return [...new Uint8Array(digest)].map((byte) => byte.toString(16).padStart(2, "0")).join("");
+}
+</script>
+
+<template>
+  <main class="hosted-workbench">
+    <section v-if="state === 'loading'" class="workbench-gate-state">
+      <LoaderCircle class="spinning" :size="26" />
+      <strong>Resuming the exact workspace materialization…</strong>
+      <p>Workspace is revalidating the project and current browser authority.</p>
+    </section>
+    <section v-else-if="state === 'refused'" class="workbench-gate-state refused-state">
+      <ShieldCheck :size="28" />
+      <strong>Hosted coding workspace unavailable</strong>
+      <p>{{ error || "This deployment has not enabled the AgentIDE workbench feature." }}</p>
+      <RouterLink class="button" :to="`/projects/${projectId}`">Return to project</RouterLink>
+    </section>
+    <section v-else-if="state === 'error'" class="workbench-gate-state error-state">
+      <CircleAlert :size="28" />
+      <strong>Workspace could not be resumed</strong>
+      <p>{{ error }}</p>
+      <button class="button" type="button" @click="load">Try again</button>
+    </section>
+
+    <template v-else>
+      <header class="workbench-titlebar">
+        <RouterLink :to="`/projects/${projectId}`" class="workbench-project-link">
+          <strong>{{ project?.path_with_namespace }}</strong>
+        </RouterLink>
+        <span><GitBranch :size="14" /> {{ project?.selected_branch }}</span>
+        <code><Braces :size="13" /> {{ session?.source_revision.slice(0, 10) }}</code>
+        <span class="status-pill">{{ session?.state }}</span>
+        <span
+          class="status-pill"
+          :class="{
+            refused:
+              coordinationState === 'error' ||
+              coordinationState === 'unbound' ||
+              coordinationState === 'refused',
+          }"
+          >AgentIDE {{ coordinationState }}</span
+        >
+        <div class="workbench-title-actions">
+          <button class="button small" type="button" :disabled="dirtyCount === 0" @click="saveAll">
+            <Save :size="14" /> Save all <span v-if="dirtyCount">({{ dirtyCount }})</span>
+          </button>
+          <button
+            class="button quiet small"
+            type="button"
+            :disabled="dirtyCount > 0"
+            @click="closeSession"
+          >
+            Close session
+          </button>
+        </div>
+      </header>
+
+      <div v-if="error" class="workbench-notice error-state" role="alert">{{ error }}</div>
+      <div
+        v-if="coordinationState === 'unbound'"
+        class="workbench-notice coordination-notice"
+        role="status"
+      >
+        <div>
+          <strong>Workspace ready; durable coordination is not bound</strong>
+          <p>
+            Files and diffs already use Workspace. Bind an AgentIDE session to store grants, context
+            references, and approval checkpoints through Service SDK and Eventlog.
+          </p>
+        </div>
+        <button class="button primary" type="button" @click="bindCoordination">
+          Bind AgentIDE session
+        </button>
+      </div>
+      <div
+        v-else-if="coordinationState === 'refused'"
+        class="workbench-notice error-state coordination-notice"
+        role="status"
+      >
+        <div>
+          <strong>AgentIDE coordination refused</strong>
+          <p>
+            {{ coordinationError }} The Workspace remains usable, but this deployment has not
+            admitted the generated-service operations required for this actor.
+          </p>
+        </div>
+      </div>
+      <div
+        v-else-if="coordinationState === 'error' || coordinationError"
+        class="workbench-notice error-state coordination-notice"
+        role="alert"
+      >
+        <div>
+          <strong>AgentIDE coordination unavailable</strong>
+          <p>{{ coordinationError }}</p>
+        </div>
+        <button class="button" type="button" @click="loadCoordination">Retry</button>
+      </div>
+      <div
+        v-else-if="coordinationState === 'ready' && coordinationVersion == null"
+        class="workbench-notice coordination-notice"
+        role="status"
+      >
+        <div>
+          <strong>Coordination is read-only after resume</strong>
+          <p>
+            Service projections loaded, but no authoritative stream version was returned. Mutations
+            remain refused instead of risking a blind write.
+          </p>
+        </div>
+      </div>
+      <div class="workbench-grid" :class="{ 'terminal-collapsed': !terminalOpen }">
+        <aside class="workbench-explorer" aria-label="Project explorer and context pins">
+          <header>
+            <strong>Explorer</strong
+            ><button class="icon-button" type="button" title="Refresh tree" @click="loadTree">
+              <RefreshCw :size="14" :class="{ spinning: treeLoading }" />
+            </button>
+          </header>
+          <label class="workbench-tree-search">
+            <Search :size="14" /><span class="sr-only">Search files</span>
+            <input v-model="treeSearch" type="search" placeholder="Search files" />
+          </label>
+          <div v-if="treeTruncated" class="tree-boundary-state">
+            Showing a bounded result.
+            {{
+              treeOmitted == null
+                ? "Additional count is unknown."
+                : `${treeOmitted} entries omitted.`
+            }}
+          </div>
+          <div class="workbench-tree" role="tree">
+            <button
+              v-for="entry in tree"
+              :key="entry.path"
+              type="button"
+              role="treeitem"
+              :disabled="isDirectory(entry)"
+              :class="{ active: activePath === entry.path, directory: isDirectory(entry) }"
+              :style="{
+                paddingLeft: `${10 + Math.min(entry.path.split('/').length - 1, 6) * 10}px`,
+              }"
+              @click="!isDirectory(entry) && openFile(entry.path)"
+              @dblclick="!isDirectory(entry) && openFile(entry.path, true)"
+            >
+              <Folder v-if="isDirectory(entry)" :size="14" /><File v-else :size="14" />
+              <span>{{ entry.path }}</span>
+              <small v-if="entry.size != null">{{ entry.size }}</small>
+            </button>
+            <div v-if="!tree.length && !treeLoading" class="workbench-empty compact">
+              No matching files.
+            </div>
+          </div>
+          <section class="explorer-pins">
+            <header>
+              <strong>Local attachment tray</strong><span>{{ attachments.length }}</span>
+            </header>
+            <button
+              v-if="selectedRange"
+              class="button small"
+              type="button"
+              @click="attachSelection"
+            >
+              Attach editor selection
+            </button>
+            <p v-if="!attachments.length">
+              Selections and diff hunks stay browser-local until you share their references.
+            </p>
+            <article v-for="attachment in attachments" :key="attachment.id">
+              <span>{{ attachment.kind.replace("_", " ") }}</span
+              ><strong>{{ attachment.label }}</strong>
+              <button
+                type="button"
+                class="attachment-share"
+                :disabled="coordinationState !== 'ready' || coordinationVersion == null"
+                @click="shareAttachment(attachment)"
+              >
+                Share reference
+              </button>
+              <button
+                type="button"
+                aria-label="Remove attachment"
+                @click="attachments = attachments.filter((item) => item.id !== attachment.id)"
+              >
+                <X :size="12" />
+              </button>
+            </article>
+          </section>
+        </aside>
+
+        <section class="workbench-center">
+          <nav class="workbench-pane-tabs" aria-label="Workspace panes">
+            <button
+              type="button"
+              :class="{ active: activePane === 'editor' }"
+              @click="setPane('editor')"
+            >
+              <File :size="14" /> Editor
+            </button>
+            <button
+              type="button"
+              :class="{ active: activePane === 'diff' }"
+              @click="setPane('diff')"
+            >
+              <FileDiff :size="14" /> Diff
+            </button>
+            <button
+              type="button"
+              :class="{ active: activePane === 'agent' }"
+              @click="setPane('agent')"
+            >
+              <Bot :size="14" /> Agent
+            </button>
+            <button
+              type="button"
+              :class="{ active: activePane === 'evidence' }"
+              @click="setPane('evidence')"
+            >
+              <ShieldCheck :size="14" /> Evidence
+            </button>
+          </nav>
+
+          <template v-if="activePane === 'editor'">
+            <nav v-if="openFiles.length" class="editor-file-tabs" aria-label="Open files">
+              <button
+                v-for="file in openFiles"
+                :key="file.projection.revision.path"
+                type="button"
+                :class="{ active: activePath === file.projection.revision.path }"
+                @click="openFile(file.projection.revision.path)"
+              >
+                <span v-if="file.dirty" class="dirty-dot" title="Unsaved"></span>
+                {{ file.projection.revision.path.split("/").at(-1) }}
+                <X :size="12" @click.stop="closeFile(file.projection.revision.path)" />
+              </button>
+              <button
+                v-if="activeFile"
+                class="editor-split-action"
+                type="button"
+                title="Open active file in split"
+                @click="openFile(activeFile.projection.revision.path, true)"
+              >
+                <SplitSquareHorizontal :size="14" />
+              </button>
+            </nav>
+            <div v-if="activeFile" class="editor-surface" :class="{ split: splitFile }">
+              <section class="editor-column">
+                <header>
+                  <code>{{ activeFile.projection.revision.path }}</code>
+                  <span
+                    >{{ activeFile.projection.revision.language || "plain text" }} ·
+                    {{ activeFile.projection.revision.modification }}</span
+                  >
+                  <button
+                    class="button small"
+                    type="button"
+                    :disabled="
+                      !activeFile.dirty ||
+                      activeFile.saving ||
+                      activeFile.projection.binary ||
+                      activeFile.projection.truncated
+                    "
+                    @click="saveFile(activeFile)"
+                  >
+                    <LoaderCircle v-if="activeFile.saving" class="spinning" :size="13" /><Save
+                      v-else
+                      :size="13"
+                    />
+                    Save
+                  </button>
+                </header>
+                <div
+                  v-if="activeFile.projection.binary || activeFile.projection.truncated"
+                  class="workbench-gate-state compact"
+                >
+                  <CircleAlert :size="20" /><strong>Read-only file</strong>
+                  <p>
+                    {{
+                      activeFile.projection.binary
+                        ? "Workspace identified this as binary content."
+                        : "Workspace refused incomplete editing."
+                    }}
+                  </p>
+                </div>
+                <CodeEditor
+                  v-else
+                  :model-value="activeFile.draft"
+                  :path="activeFile.projection.revision.path"
+                  :language="activeFile.projection.revision.language"
+                  @update:model-value="updateDraft(activeFile, $event)"
+                  @save="saveFile(activeFile)"
+                  @selection="selectedRange = $event"
+                />
+                <p v-if="activeFile.error" class="editor-error">{{ activeFile.error }}</p>
+              </section>
+              <section v-if="splitFile" class="editor-column">
+                <header>
+                  <code>{{ splitFile.projection.revision.path }}</code
+                  ><button
+                    class="icon-button"
+                    type="button"
+                    aria-label="Close split"
+                    @click="splitPath = undefined"
+                  >
+                    <X :size="14" />
+                  </button>
+                </header>
+                <CodeEditor
+                  :model-value="splitFile.draft"
+                  :path="splitFile.projection.revision.path"
+                  :language="splitFile.projection.revision.language"
+                  :read-only="splitFile.projection.binary || splitFile.projection.truncated"
+                  @update:model-value="updateDraft(splitFile, $event)"
+                  @save="saveFile(splitFile)"
+                />
+              </section>
+            </div>
+            <div v-else class="workbench-empty">
+              <File :size="28" /><strong>Choose a file</strong>
+              <p>The explorer is bounded and reflects the working materialization.</p>
+            </div>
+          </template>
+
+          <template v-else-if="activePane === 'diff'">
+            <div v-if="diffLoading" class="workbench-empty">
+              <LoaderCircle class="spinning" :size="22" /> Resolving canonical diff…
+            </div>
+            <div v-else-if="diffError" class="workbench-empty error-state">
+              <CircleAlert :size="22" /><strong>Diff unavailable</strong>
+              <p>{{ diffError }}</p>
+              <button class="button" type="button" @click="loadDiff">Retry</button>
+            </div>
+            <CanonicalDiffViewer
+              v-else-if="diff"
+              :projection="diff"
+              :layout="diffLayout"
+              @mode="setRoute({ mode: $event })"
+              @layout="setRoute({ layout: $event })"
+              @attach="attachHunk"
+            />
+          </template>
+
+          <div v-else class="workbench-unavailable-pane">
+            <CircleAlert :size="24" /><strong>{{
+              activePane === "agent"
+                ? "Agent Platform transcript unavailable"
+                : "Evidence projection unavailable"
+            }}</strong>
+            <p>
+              {{
+                coordinationState === "ready"
+                  ? "The AgentIDE coordination stream is bound, but this deployment has not exposed this projection yet."
+                  : "The Workspace session is live, but no AgentIDE coordination session is bound."
+              }}
+              No browser-local substitute is shown.
+            </p>
+          </div>
+        </section>
+
+        <aside class="workbench-inspector">
+          <nav aria-label="Session inspector">
+            <button
+              v-for="pane in ['context', 'activity', 'agents', 'grants', 'approvals'] as const"
+              :key="pane"
+              type="button"
+              :class="{ active: rightPane === pane }"
+              @click="rightPane = pane"
+            >
+              {{ pane }}
+            </button>
+          </nav>
+          <section v-if="rightPane === 'context'">
+            <h2>Session context</h2>
+            <dl>
+              <dt>Actor</dt>
+              <dd>{{ workspace.session?.subject }}</dd>
+              <dt>Source</dt>
+              <dd>
+                <code>{{ session?.source_revision }}</code>
+              </dd>
+              <dt>Manifest</dt>
+              <dd>
+                <code>{{ session?.manifest_sha256?.slice(0, 16) || "unknown" }}</code>
+              </dd>
+              <dt>Files limit</dt>
+              <dd>{{ session?.limits.max_files }}</dd>
+              <dt>File bytes</dt>
+              <dd>{{ session?.limits.max_file_bytes }}</dd>
+              <dt>AgentIDE</dt>
+              <dd>
+                <code>{{ agentIdeSession?.session_id || coordinationState }}</code>
+              </dd>
+            </dl>
+            <h3>Local attachment tray</h3>
+            <article
+              v-for="attachment in attachments"
+              :key="attachment.id"
+              class="context-attachment"
+            >
+              <strong>{{ attachment.label }}</strong>
+              <pre>{{ attachment.detail }}</pre>
+            </article>
+            <p v-if="!attachments.length" class="muted">No unshared browser-local selections.</p>
+            <h3>Shared context references</h3>
+            <article
+              v-for="pin in agentIdePins.filter((item) => item.state === 'Active')"
+              :key="pin.pin_id"
+              class="context-reference"
+            >
+              <div>
+                <strong>{{ pin.kind }}</strong>
+                <code>{{ pin.reference }}</code>
+                <small>
+                  {{ pin.start_line ?? "?" }}–{{ pin.end_line ?? "?" }} ·
+                  {{ pin.sha256.slice(0, 12) }}
+                </small>
+              </div>
+              <button
+                class="button quiet small"
+                type="button"
+                :disabled="
+                  coordinationVersion == null || coordinationMutation === `unpin:${pin.pin_id}`
+                "
+                @click="removeContextPin(pin.pin_id)"
+              >
+                Remove
+              </button>
+            </article>
+            <p v-if="!agentIdePins.some((item) => item.state === 'Active')" class="muted">
+              No references are shared with the session.
+            </p>
+          </section>
+          <section v-else-if="rightPane === 'activity'">
+            <h2>Activity</h2>
+            <div class="workbench-unavailable-pane compact">
+              <CircleAlert :size="20" /><strong>Event cursor projection unavailable</strong>
+              <p>
+                Durable events remain in Eventlog. This deployment has not exposed the AgentIDE
+                cursor/SSE projection to this browser route yet.
+              </p>
+            </div>
+          </section>
+          <section v-else-if="rightPane === 'agents'">
+            <h2>Agents</h2>
+            <article
+              v-for="agent in workspace.agents"
+              :key="agent.id"
+              class="inspector-agent"
+              :class="{ active: selectedAgentId === agent.id }"
+            >
+              <button
+                class="inspector-agent-select"
+                type="button"
+                @click="setRoute({ agent: agent.id })"
+              >
+                <Bot :size="15" /><span
+                  ><strong>{{ agent.name }}</strong
+                  ><small>Agent Platform identity {{ agent.id }}</small></span
+                ><ChevronRight :size="14" />
+              </button>
+              <button
+                v-if="coordinationState === 'ready'"
+                class="button small"
+                type="button"
+                :disabled="
+                  coordinationVersion == null || coordinationMutation === `grant:${agent.id}`
+                "
+                @click.stop="createCodingGrant(agent.id)"
+              >
+                Grant coding edits
+              </button>
+            </article>
+            <p v-if="!workspace.agents.length" class="muted">
+              No agents are available to this actor.
+            </p>
+          </section>
+          <section v-else-if="rightPane === 'grants'">
+            <h2>Authority grants</h2>
+            <article v-for="grant in agentIdeGrants" :key="grant.grant_id" class="authority-card">
+              <header>
+                <strong>{{ grant.grantee }}</strong
+                ><span class="status-pill">{{ grant.state }}</span>
+              </header>
+              <p>{{ grant.allowed_intents.join(", ") }}</p>
+              <small>
+                {{ grant.maximum_risk }} risk · paths {{ grant.path_prefixes.join(", ") }} ·
+                revision
+                {{ grant.revision }}
+              </small>
+              <button
+                v-if="grant.state === 'Active'"
+                class="button quiet small"
+                type="button"
+                :disabled="
+                  coordinationVersion == null || coordinationMutation === `revoke:${grant.grant_id}`
+                "
+                @click="revokeGrant(grant.grant_id)"
+              >
+                Revoke
+              </button>
+            </article>
+            <p v-if="!agentIdeGrants.length" class="muted">No bounded grants exist.</p>
+          </section>
+          <section v-else-if="rightPane === 'approvals'">
+            <h2>Exact-plan approvals</h2>
+            <article
+              v-for="checkpoint in agentIdeCheckpoints"
+              :key="checkpoint.checkpoint_id"
+              class="authority-card"
+            >
+              <header>
+                <strong>{{ checkpoint.attempt_ref }}</strong
+                ><span class="status-pill">{{ checkpoint.state }}</span>
+              </header>
+              <code>{{ checkpoint.plan_digest }}</code>
+              <div v-if="checkpoint.state === 'Pending'" class="approval-actions">
+                <button
+                  class="button quiet small"
+                  type="button"
+                  :disabled="coordinationVersion == null || Boolean(coordinationMutation)"
+                  @click="decideCheckpoint(checkpoint.checkpoint_id, 'deny')"
+                >
+                  Deny
+                </button>
+                <button
+                  class="button primary small"
+                  type="button"
+                  :disabled="coordinationVersion == null || Boolean(coordinationMutation)"
+                  @click="decideCheckpoint(checkpoint.checkpoint_id, 'approve')"
+                >
+                  Approve exact plan
+                </button>
+              </div>
+            </article>
+            <p v-if="!agentIdeCheckpoints.length" class="muted">No approval checkpoints exist.</p>
+          </section>
+        </aside>
+
+        <section class="workbench-terminal" :class="{ collapsed: !terminalOpen }">
+          <header>
+            <button type="button" @click="terminalOpen = !terminalOpen">
+              <PanelBottomClose v-if="terminalOpen" :size="15" /><PanelBottomOpen
+                v-else
+                :size="15"
+              />
+              Terminal
+            </button>
+            <span v-if="terminalOpen" class="status-pill refused">No admitted profile</span>
+            <button
+              v-if="terminalOpen"
+              class="icon-button"
+              type="button"
+              aria-label="Terminal authority details"
+            >
+              <PanelRight :size="14" />
+            </button>
+          </header>
+          <div v-if="terminalOpen" class="terminal-refused">
+            <SquareTerminal :size="22" />
+            <div>
+              <strong>Interactive terminal refused</strong>
+              <p>
+                No deployment-declared terminal profile and explicit human grant are available for
+                this session. DevCenter will never fall back to its host shell.
+              </p>
+            </div>
+          </div>
+        </section>
+      </div>
+
+      <dialog
+        :open="Boolean(conflict)"
+        class="file-conflict-dialog"
+        aria-labelledby="file-conflict-title"
+      >
+        <header>
+          <div>
+            <p class="eyebrow">Digest conflict</p>
+            <h2 id="file-conflict-title">{{ conflict?.path }} changed after loading</h2>
+          </div>
+          <button
+            class="icon-button"
+            type="button"
+            aria-label="Close conflict"
+            @click="conflict = undefined"
+          >
+            <X :size="17" />
+          </button>
+        </header>
+        <p>
+          Workspace refused the save. Compare the immutable base, your local draft, and the latest
+          working content. There is no blind overwrite action.
+        </p>
+        <div class="conflict-columns">
+          <section>
+            <strong>Immutable base</strong>
+            <pre>{{ conflict?.payload.base?.content ?? "File absent from base" }}</pre>
+          </section>
+          <section>
+            <strong>Local draft</strong>
+            <pre>{{ conflict?.localDraft }}</pre>
+          </section>
+          <section>
+            <strong>Latest workspace</strong>
+            <pre>{{ conflict?.payload.latest.content ?? "Binary content" }}</pre>
+          </section>
+        </div>
+        <footer>
+          <button class="button" type="button" @click="conflict = undefined">
+            Keep local draft
+          </button>
+          <button class="button primary" type="button" @click="acceptLatestConflict">
+            Replace draft with latest
+          </button>
+        </footer>
+      </dialog>
+    </template>
+  </main>
+</template>

@@ -61,6 +61,13 @@ struct Args {
     /// Internal Workspace service origin.
     #[arg(long, env = "DEV_CENTER_WORKSPACE_ORIGIN")]
     workspace_origin: Option<String>,
+    /// Enable the native hosted coding workbench routes and browser surface.
+    #[arg(
+        long,
+        env = "DEV_CENTER_AGENTIDE_WORKSPACE_ENABLED",
+        default_value_t = false
+    )]
+    agentide_workspace_enabled: bool,
     /// Environment variable containing the exact loopback-only development bearer token.
     #[arg(long, default_value = "DEV_CENTER_DEV_BEARER_TOKEN")]
     dev_token_env: String,
@@ -129,6 +136,7 @@ async fn main() -> Result<()> {
             connectors_api_base: args.connectors_api_base,
             connectors_docs_available: args.connectors_docs_available,
             workspace_origin: args.workspace_origin,
+            agentide_workspace_enabled: args.agentide_workspace_enabled,
         })?,
     )
     .with_graceful_shutdown(shutdown())

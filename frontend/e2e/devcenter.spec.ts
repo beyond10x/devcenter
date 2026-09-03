@@ -44,6 +44,19 @@ const project = {
   pinned_commit: "0123456789abcdef0123456789abcdef01234567",
   web_url: "https://gitlab.example.test/foundation/devcenter",
 };
+const codingSession = {
+  id: "session-test",
+  project_id: project.id,
+  source_revision: project.pinned_commit,
+  base_materialization_ref: "substrate:base:test",
+  working_materialization_ref: "substrate:working:test",
+  manifest_sha256: "a".repeat(64),
+  state: "ready",
+  failure_code: null,
+  limits: { max_files: 1000, max_total_bytes: 268_435_456, max_file_bytes: 184_320 },
+  created_at_ms: 1_788_260_000_000,
+  updated_at_ms: 1_788_260_000_000,
+};
 const todoCatalog = {
   format: "service-catalog/1",
   service_ref: "service:todo",
@@ -99,7 +112,10 @@ const todoCatalog = {
   ],
 };
 
-async function mockAuthenticatedWorkspace(page: Page) {
+async function mockAuthenticatedWorkspace(
+  page: Page,
+  options: { agentideWorkspace?: boolean } = {},
+) {
   const capabilities = [
     {
       operation_ref: "git.project.list",
@@ -167,6 +183,10 @@ async function mockAuthenticatedWorkspace(page: Page) {
     created_at_ms: 1_788_260_000_000,
     updated_at_ms: 1_788_260_000_000,
   };
+  let agentIdeBound = false;
+  let agentIdeVersion = 1;
+  const agentIdeGrants: Array<Record<string, unknown>> = [];
+  const agentIdePins: Array<Record<string, unknown>> = [];
   await page.route(/^https?:\/\/[^/]+\/api\//, async (route) => {
     const request = route.request();
     const path = new URL(request.url()).pathname;
@@ -178,6 +198,7 @@ async function mockAuthenticatedWorkspace(page: Page) {
           email: "engineer@example.test",
           groups: ["engineers"],
           connectors_docs_available: false,
+          agentide_workspace_enabled: options.agentideWorkspace ?? false,
         },
       });
       return;
@@ -237,6 +258,122 @@ async function mockAuthenticatedWorkspace(page: Page) {
         input: Record<string, unknown>;
         confirmed: boolean;
       };
+      if (submitted.operation_ref === "agentide.list_sessions") {
+        await route.fulfill({
+          json: {
+            output: {
+              items: agentIdeBound
+                ? [
+                    {
+                      session_id: "agentide-session-test",
+                      workspace_session_id: codingSession.id,
+                      project_id: project.id,
+                      source_revision: codingSession.source_revision,
+                      manifest_digest: codingSession.manifest_sha256,
+                      objective: "Work on foundation/devcenter",
+                    },
+                  ]
+                : [],
+              next_cursor: null,
+              partial: false,
+            },
+            connector_audit_ref: "audit:agentide:sessions",
+          },
+        });
+        return;
+      }
+      if (
+        submitted.operation_ref === "agentide.list_grants" ||
+        submitted.operation_ref === "agentide.list_context_pins" ||
+        submitted.operation_ref === "agentide.list_approval_checkpoints"
+      ) {
+        await route.fulfill({
+          json: {
+            output: {
+              items:
+                submitted.operation_ref === "agentide.list_grants"
+                  ? agentIdeGrants
+                  : submitted.operation_ref === "agentide.list_context_pins"
+                    ? agentIdePins
+                    : [],
+              next_cursor: null,
+              partial: false,
+            },
+            connector_audit_ref: `audit:${submitted.operation_ref}`,
+          },
+        });
+        return;
+      }
+      if (submitted.operation_ref === "agentide.start_session" && submitted.confirmed) {
+        agentIdeBound = true;
+        agentIdeVersion = 1;
+        await route.fulfill({
+          json: {
+            output: {
+              outcome: "started",
+              events: [
+                {
+                  name: "agentide.session.SessionStarted",
+                  fields: { session_id: "agentide-session-test" },
+                },
+              ],
+              through_version: agentIdeVersion,
+              replayed: false,
+            },
+            connector_audit_ref: "audit:agentide:start",
+          },
+        });
+        return;
+      }
+      if (submitted.operation_ref === "agentide.create_grant" && submitted.confirmed) {
+        agentIdeVersion += 1;
+        agentIdeGrants.push({
+          grant_id: "grant-test",
+          grantee: submitted.input.grantee,
+          allowed_intents: submitted.input.allowed_intents,
+          path_prefixes: submitted.input.path_prefixes,
+          maximum_risk: submitted.input.maximum_risk,
+          expires_at: null,
+          revision: 1,
+          state: "Active",
+        });
+        await route.fulfill({
+          json: {
+            output: {
+              outcome: "created",
+              events: [{ name: "agentide.coordination.GrantCreated", fields: {} }],
+              through_version: agentIdeVersion,
+              replayed: false,
+            },
+            connector_audit_ref: "audit:agentide:grant",
+          },
+        });
+        return;
+      }
+      if (submitted.operation_ref === "agentide.pin_context" && submitted.confirmed) {
+        agentIdeVersion += 1;
+        agentIdePins.push({
+          pin_id: "pin-test",
+          kind: submitted.input.kind,
+          reference: submitted.input.reference,
+          start_line: submitted.input.start_line,
+          end_line: submitted.input.end_line,
+          sha256: submitted.input.sha256,
+          state: "Active",
+        });
+        await route.fulfill({
+          json: {
+            output: {
+              outcome: "pinned",
+              events: [{ name: "agentide.coordination.ContextPinned", fields: {} }],
+              through_version: agentIdeVersion,
+              replayed: false,
+            },
+            connector_audit_ref: "audit:agentide:pin",
+          },
+        });
+        return;
+      }
       await route.fulfill({
         json: {
           output:
@@ -394,6 +531,89 @@ async function mockAuthenticatedWorkspace(page: Page) {
             description: "Commit-pinned findings.",
           },
         ],
+      });
+      return;
+    }
+    if (path === `/api/projects/${project.id}/sessions`) {
+      await route.fulfill({ json: [codingSession] });
+      return;
+    }
+    if (path === `/api/project-sessions/${codingSession.id}`) {
+      await route.fulfill({ json: codingSession });
+      return;
+    }
+    if (path === `/api/project-sessions/${codingSession.id}/tree`) {
+      await route.fulfill({
+        json: {
+          format: "workspace.tree/1",
+          entries: [
+            { path: "src", kind: "directory", size: null, sha256: null },
+            { path: "src/main.rs", kind: "file", size: 32, sha256: "b".repeat(64) },
+          ],
+          truncated: true,
+          omitted: 3,
+        },
+      });
+      return;
+    }
+    if (path === `/api/project-sessions/${codingSession.id}/files/src/main.rs`) {
+      await route.fulfill({
+        json: {
+          format: "workspace.file/1",
+          revision: {
+            path: "src/main.rs",
+            sha256: "b".repeat(64),
+            size: 32,
+            language: "rust",
+            modification: "modified",
+          },
+          content: 'fn main() {\n    println!("hello");\n}\n',
+          binary: false,
+          truncated: false,
+        },
+      });
+      return;
+    }
+    if (path === `/api/project-sessions/${codingSession.id}/diff`) {
+      const submitted = request.postDataJSON() as { mode: "patch" | "stat" | "files_only" };
+      await route.fulfill({
+        json: {
+          format: "workspace.diff/1",
+          selector: { kind: "workspace" },
+          mode: submitted.mode,
+          digest: "c".repeat(64),
+          source_revision: codingSession.source_revision,
+          files: [
+            {
+              old_path: "src/main.rs",
+              new_path: "src/main.rs",
+              status: "modified",
+              additions: 1,
+              deletions: 1,
+              old_sha256: "d".repeat(64),
+              new_sha256: "b".repeat(64),
+              attribution: ["workspace"],
+              hunks:
+                submitted.mode === "patch"
+                  ? [
+                      {
+                        id: "hunk-test",
+                        old: { start: 1, lines: 1 },
+                        new: { start: 1, lines: 1 },
+                        heading: null,
+                        lines: [
+                          { kind: "deletion", old_line: 1, new_line: null, content: "old" },
+                          { kind: "addition", old_line: null, new_line: 1, content: "new" },
+                        ],
+                      },
+                    ]
+                  : [],
+            },
+          ],
+          additions: 1,
+          deletions: 1,
+          partial: false,
+        },
       });
       return;
     }
@@ -572,6 +792,39 @@ test("opens a visible repository as a commit-pinned project", async ({ page }, t
   ).toBeVisible();
   const accessibility = await new AxeBuilder({ page }).withTags(["wcag2a", "wcag2aa"]).analyze();
   expect(accessibility.violations).toEqual([]);
+});
+
+test("restores the native coding workbench from URL-backed state", async ({ page }, testInfo) => {
+  test.skip(testInfo.project.name !== "chromium", "Desktop hosted-workbench behavior");
+  await mockAuthenticatedWorkspace(page, { agentideWorkspace: true });
+  await page.goto(
+    `/projects/${project.id}/sessions/${codingSession.id}?pane=diff&mode=patch&layout=side_by_side`,
+  );
+
+  await expect(page.getByRole("link", { name: project.path_with_namespace })).toBeVisible();
+  await expect(page.getByRole("treeitem", { name: /src\/main.rs/ })).toBeVisible();
+  await expect(page.getByText("3 entries omitted.")).toBeVisible();
+  await expect(page.getByRole("button", { name: "Split" })).toHaveClass(/active/);
+  await expect(page.getByText("new", { exact: true })).toBeVisible();
+  await expect(page.getByText("Interactive terminal refused")).toBeVisible();
+  await expect(page.getByText("Workspace ready; durable coordination is not bound")).toBeVisible();
+
+  await page.getByRole("button", { name: "Bind AgentIDE session" }).click();
+  await expect(page.getByText("AgentIDE ready", { exact: true })).toBeVisible();
+  await expect(page).toHaveURL(/agentide=agentide-session-test/);
+
+  await page.getByRole("button", { name: "Attach hunk" }).click();
+  await page.getByRole("button", { name: "Share reference" }).click();
+  await expect(page.getByText("DiffHunk", { exact: true })).toBeVisible();
+
+  await page.getByRole("button", { name: "agents", exact: true }).click();
+  await page.getByRole("button", { name: "Grant coding edits" }).first().click();
+  await page.getByRole("button", { name: "grants", exact: true }).click();
+  await expect(page.getByText("code_edit, code_create, code_delete, code_rename")).toBeVisible();
+
+  await page.getByRole("button", { name: /Editor/ }).click();
+  await expect(page).toHaveURL(/pane=editor/);
+  await expect(page.locator(".hosted-monaco-editor")).toBeVisible();
 });
 
 test("keeps catalog and connection custody usable on a mobile viewport", async ({

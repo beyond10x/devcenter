@@ -81,7 +81,8 @@ DEV_CENTER_IDENTITY_REDIRECT_URI=https://devcenter.example.test/auth/sso/callbac
 DEV_CENTER_IDENTITY_PROVIDERS='[{"id":"provider-a","display_name":"Provider A"}]' \
 DEV_CENTER_DATABASE_URL=postgresql://... \
 DEV_CENTER_AGENT_PLATFORM_ORIGIN=https://agents.example.test \
-DEV_CENTER_CONNECTORS_API_BASE=https://connectors.example.test/api/connectors/v1
+DEV_CENTER_CONNECTORS_API_BASE=https://connectors.example.test/api/connectors/v1 \
+DEV_CENTER_AGENTIDE_WORKSPACE_ENABLED=false
 ```
 
 The browser receives only an opaque, Secure, HttpOnly session cookie. `Connect Claude` starts a
@@ -94,15 +95,28 @@ operation, connection, description lease, and input, and hands the one-use proof
 Platform. Neither credential reaches the browser. Identity remains provider- and service-agnostic
 throughout.
 
-The generated-services workspace uses the ordinary Connector composition seam twice: Todo
-contributes its generated domain factory, while Service SDK contributes a separate external catalog
-factory containing Todo's exact `service-catalog/1`. Devcenter's BFF reads that catalog, verifies
+The generated-services workspace uses the ordinary Connector composition seam: Todo and AgentIDE
+contribute their generated domain factories, while Service SDK contributes a separate external
+catalog factory containing both exact `service-catalog/1` contracts. Both generated services use
+the composition's existing Eventlog PostgreSQL adapter. Devcenter does not implement a parallel
+AgentIDE database, event bus, or service runtime. Devcenter's BFF reads that catalog, verifies
 every requested operation against it, and keeps Connector descriptions, connection selection,
 ephemeral access tokens, and approval evidence server-side. The browser imports the exact
 `@b10x/service-console-vue` package used by each synthesized service's standalone generated docs;
 only the binding changes from disposable demo mode to the authenticated live endpoint. Tenant and
 user are login facts, the Devcenter realm is absent (`None`), and no realm selector appears in a
 route, request body, header, or browser-client argument.
+
+The native coding workbench is available at `/projects/:projectId/sessions/:sessionId` only when
+`DEV_CENTER_AGENTIDE_WORKSPACE_ENABLED=true`; the public chart defaults it off. Its file tree,
+complete file reads, digest-guarded writes, immutable-base comparison, and canonical diff
+projections all pass through Devcenter's existing authenticated Workspace client. Workspace remains
+the sole authority for project materialization and delegates filesystem execution to Substrate.
+AgentIDE stores only coordination state—session binding, bounded grants, context references and
+digests, and approval checkpoints—through its generated Service SDK/Eventlog service. Unsaved editor
+buffers and selected source bytes remain in the browser until an explicit save or attachment action.
+No host shell fallback exists: without a deployment-declared Substrate terminal profile and an
+explicit grant, the terminal pane renders a refusal.
 
 `DEV_CENTER_IDENTITY_PROVIDERS` contains only opaque Identity-owned IDs and display labels. With
 zero entries, Identity keeps its existing selection behavior; with one, `/auth/sso/start` remains a
@@ -133,9 +147,9 @@ images and deployment-specific values. The public chart alone is not a public pr
 distribution.
 
 The release also publishes the `connectors-<version>` image in the private
-`ghcr.io/beyond10x/devcenter` package. That component composes the generated Todo Connector factory
-and the SDK-owned external service-catalog factory with the ordinary hosted Connectors runtime. A
-deployment chooses the exact operation exposure,
+`ghcr.io/beyond10x/devcenter` package. That component composes the generated Todo and AgentIDE
+Connector factories and the SDK-owned external service-catalog factory with the ordinary hosted
+Connectors runtime. A deployment chooses the exact operation exposure,
 risk, approval posture, and Grants in a strict value-free overlay; the component chooses Eventlog's
 PostgreSQL adapter through a Secret-backed database URL. Domain commands, validation, projections,
 read-your-writes behavior, and Connector dispatch remain generated or SDK-owned rather than being
@@ -150,6 +164,7 @@ authority and an exact service-account-to-tenant grant. Secret values and key by
 chart values or rendered ConfigMaps.
 
 <!-- b10x-docs:start -->
+
 ## Documentation
 
 [Devcenter documentation](https://beyond10x.github.io/docs/devcenter/) · [Start](https://beyond10x.github.io/) · [Ecosystem](https://beyond10x.github.io/ecosystem/) · [Impact](https://beyond10x.github.io/changes/) · [Releases](https://beyond10x.github.io/releases/)

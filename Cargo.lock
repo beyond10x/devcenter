@@ -3831,7 +3831,7 @@ checksum = "1ebf944e87a7c253233ad6766e082e3cd714b5d03812acc24c318f549614536e"
 [[package]]
 name = "workspace-client"
 version = "0.1.5"
-source = "git+ssh://git@github.com/beyond10x/workspace.git?rev=97a58400552673325f0564eae629ba32c855f7e7#97a58400552673325f0564eae629ba32c855f7e7"
+source = "git+ssh://git@github.com/beyond10x/workspace.git?rev=5f77ed38ac3b73f29c43e1eb8483c954ec9d1d46#5f77ed38ac3b73f29c43e1eb8483c954ec9d1d46"
 dependencies = [
  "reqwest 0.13.4",
  "serde",
@@ -3843,7 +3843,7 @@ dependencies = [
 [[package]]
 name = "workspace-core"
 version = "0.1.5"
-source = "git+ssh://git@github.com/beyond10x/workspace.git?rev=97a58400552673325f0564eae629ba32c855f7e7#97a58400552673325f0564eae629ba32c855f7e7"
+source = "git+ssh://git@github.com/beyond10x/workspace.git?rev=5f77ed38ac3b73f29c43e1eb8483c954ec9d1d46#5f77ed38ac3b73f29c43e1eb8483c954ec9d1d46"
 dependencies = [
  "serde",
 ]

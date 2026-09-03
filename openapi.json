@@ -1015,6 +1015,225 @@
         }
       }
     },
+    "/api/projects/{project_id}/sessions": {
+      "get": {
+        "operationId": "listCodingSessions",
+        "parameters": [{ "$ref": "#/components/parameters/ProjectId" }],
+        "security": [{ "browserSession": [] }, { "identityBearer": [] }],
+        "responses": {
+          "200": {
+            "description": "Owned coding sessions backed by Workspace materializations",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "array",
+                  "items": { "$ref": "#/components/schemas/CodingSession" }
+                }
+              }
+            }
+          },
+          "403": { "$ref": "#/components/responses/Problem" },
+          "404": { "$ref": "#/components/responses/Problem" },
+          "503": { "$ref": "#/components/responses/Unavailable" }
+        }
+      },
+      "post": {
+        "operationId": "createCodingSession",
+        "parameters": [{ "$ref": "#/components/parameters/ProjectId" }],
+        "security": [{ "browserSession": [] }, { "identityBearer": [] }],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": { "$ref": "#/components/schemas/CreateCodingSession" }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Exact project revision materialized by Workspace into Substrate",
+            "content": {
+              "application/json": {
+                "schema": { "$ref": "#/components/schemas/CodingSession" }
+              }
+            }
+          },
+          "403": { "$ref": "#/components/responses/Problem" },
+          "404": { "$ref": "#/components/responses/Problem" },
+          "409": { "$ref": "#/components/responses/Problem" },
+          "422": { "$ref": "#/components/responses/Problem" },
+          "503": { "$ref": "#/components/responses/Unavailable" }
+        }
+      }
+    },
+    "/api/project-sessions/{session_id}": {
+      "parameters": [{ "$ref": "#/components/parameters/CodingSessionId" }],
+      "get": {
+        "operationId": "getCodingSession",
+        "security": [{ "browserSession": [] }, { "identityBearer": [] }],
+        "responses": {
+          "200": {
+            "description": "Live-revalidated owned coding session",
+            "content": {
+              "application/json": {
+                "schema": { "$ref": "#/components/schemas/CodingSession" }
+              }
+            }
+          },
+          "403": { "$ref": "#/components/responses/Problem" },
+          "404": { "$ref": "#/components/responses/Problem" },
+          "503": { "$ref": "#/components/responses/Unavailable" }
+        }
+      },
+      "delete": {
+        "operationId": "closeCodingSession",
+        "security": [{ "browserSession": [] }, { "identityBearer": [] }],
+        "responses": {
+          "200": {
+            "description": "Session closed and its Substrate materializations cleaned up",
+            "content": {
+              "application/json": {
+                "schema": { "$ref": "#/components/schemas/CodingSession" }
+              }
+            }
+          },
+          "403": { "$ref": "#/components/responses/Problem" },
+          "404": { "$ref": "#/components/responses/Problem" },
+          "503": { "$ref": "#/components/responses/Unavailable" }
+        }
+      }
+    },
+    "/api/project-sessions/{session_id}/tree": {
+      "get": {
+        "operationId": "getCodingTree",
+        "parameters": [
+          { "$ref": "#/components/parameters/CodingSessionId" },
+          {
+            "name": "query",
+            "in": "query",
+            "schema": { "type": "string", "maxLength": 512 }
+          },
+          {
+            "name": "limit",
+            "in": "query",
+            "schema": {
+              "type": "integer",
+              "minimum": 1,
+              "maximum": 1000,
+              "default": 500
+            }
+          }
+        ],
+        "security": [{ "browserSession": [] }, { "identityBearer": [] }],
+        "responses": {
+          "200": {
+            "description": "Bounded searchable working tree with explicit omitted state",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CodingTreeProjection"
+                }
+              }
+            }
+          },
+          "403": { "$ref": "#/components/responses/Problem" },
+          "404": { "$ref": "#/components/responses/Problem" },
+          "422": { "$ref": "#/components/responses/Problem" },
+          "503": { "$ref": "#/components/responses/Unavailable" }
+        }
+      }
+    },
+    "/api/project-sessions/{session_id}/files/{path}": {
+      "parameters": [
+        { "$ref": "#/components/parameters/CodingSessionId" },
+        {
+          "name": "path",
+          "in": "path",
+          "required": true,
+          "schema": { "type": "string" }
+        }
+      ],
+      "get": {
+        "operationId": "getCodingFile",
+        "security": [{ "browserSession": [] }, { "identityBearer": [] }],
+        "responses": {
+          "200": {
+            "description": "Complete file and Workspace-derived revision identity",
+            "content": {
+              "application/json": {
+                "schema": { "$ref": "#/components/schemas/FileProjection" }
+              }
+            }
+          },
+          "403": { "$ref": "#/components/responses/Problem" },
+          "404": { "$ref": "#/components/responses/Problem" },
+          "503": { "$ref": "#/components/responses/Unavailable" }
+        }
+      },
+      "put": {
+        "operationId": "writeCodingFile",
+        "security": [{ "browserSession": [] }, { "identityBearer": [] }],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": { "$ref": "#/components/schemas/WriteFile" }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Exact compare-and-swap file replacement",
+            "content": {
+              "application/json": {
+                "schema": { "$ref": "#/components/schemas/FileProjection" }
+              }
+            }
+          },
+          "403": { "$ref": "#/components/responses/Problem" },
+          "404": { "$ref": "#/components/responses/Problem" },
+          "409": {
+            "description": "Loaded file digest is stale",
+            "content": {
+              "application/json": {
+                "schema": { "$ref": "#/components/schemas/FileConflict" }
+              }
+            }
+          },
+          "422": { "$ref": "#/components/responses/Problem" },
+          "503": { "$ref": "#/components/responses/Unavailable" }
+        }
+      }
+    },
+    "/api/project-sessions/{session_id}/diff": {
+      "post": {
+        "operationId": "resolveCodingDiff",
+        "parameters": [{ "$ref": "#/components/parameters/CodingSessionId" }],
+        "security": [{ "browserSession": [] }, { "identityBearer": [] }],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": { "$ref": "#/components/schemas/ResolveDiff" }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Canonical server-resolved diff projection",
+            "content": {
+              "application/json": {
+                "schema": { "$ref": "#/components/schemas/DiffProjection" }
+              }
+            }
+          },
+          "403": { "$ref": "#/components/responses/Problem" },
+          "404": { "$ref": "#/components/responses/Problem" },
+          "422": { "$ref": "#/components/responses/Problem" },
+          "503": { "$ref": "#/components/responses/Unavailable" }
+        }
+      }
+    },
     "/api/projects/{project_id}/tree": {
       "get": {
         "operationId": "listProjectTree",
@@ -1334,6 +1553,12 @@
         "required": true,
         "schema": { "type": "string", "maxLength": 128 }
       },
+      "CodingSessionId": {
+        "name": "session_id",
+        "in": "path",
+        "required": true,
+        "schema": { "type": "string", "maxLength": 128 }
+      },
       "ThreadId": {
         "name": "thread_id",
         "in": "path",
@@ -1372,14 +1597,16 @@
           "tenant_id",
           "subject",
           "groups",
-          "connectors_docs_available"
+          "connectors_docs_available",
+          "agentide_workspace_enabled"
         ],
         "properties": {
           "tenant_id": { "type": "string" },
           "subject": { "type": "string" },
           "email": { "type": ["string", "null"] },
           "groups": { "type": "array", "items": { "type": "string" } },
-          "connectors_docs_available": { "type": "boolean" }
+          "connectors_docs_available": { "type": "boolean" },
+          "agentide_workspace_enabled": { "type": "boolean" }
         },
         "additionalProperties": false
       },
@@ -2008,6 +2235,252 @@
           "path": { "type": "string" },
           "kind": { "type": "string", "enum": ["blob", "tree"] },
           "mode": { "type": "string" }
+        },
+        "additionalProperties": false
+      },
+      "CodingSession": {
+        "type": "object",
+        "required": [
+          "id",
+          "project_id",
+          "source_revision",
+          "state",
+          "limits",
+          "created_at_ms",
+          "updated_at_ms"
+        ],
+        "properties": {
+          "id": { "type": "string" },
+          "project_id": { "type": "string" },
+          "source_revision": { "type": "string" },
+          "base_materialization_ref": { "type": ["string", "null"] },
+          "working_materialization_ref": { "type": ["string", "null"] },
+          "manifest_sha256": { "type": ["string", "null"] },
+          "state": {
+            "type": "string",
+            "enum": [
+              "preparing",
+              "ready",
+              "refused",
+              "unknown",
+              "closing",
+              "closed"
+            ]
+          },
+          "failure_code": { "type": ["string", "null"] },
+          "limits": {
+            "type": "object",
+            "required": ["max_files", "max_total_bytes", "max_file_bytes"],
+            "properties": {
+              "max_files": { "type": "integer", "minimum": 0 },
+              "max_total_bytes": { "type": "integer", "minimum": 0 },
+              "max_file_bytes": { "type": "integer", "minimum": 0 }
+            },
+            "additionalProperties": false
+          },
+          "created_at_ms": { "type": "integer", "minimum": 0 },
+          "updated_at_ms": { "type": "integer", "minimum": 0 }
+        },
+        "additionalProperties": false
+      },
+      "CreateCodingSession": {
+        "type": "object",
+        "required": ["source_revision", "idempotency_key"],
+        "properties": {
+          "source_revision": { "type": "string" },
+          "idempotency_key": { "type": "string" }
+        },
+        "additionalProperties": false
+      },
+      "CodingTreeProjection": {
+        "type": "object",
+        "required": ["format", "entries", "truncated"],
+        "properties": {
+          "format": { "type": "string" },
+          "entries": {
+            "type": "array",
+            "items": {
+              "type": "object",
+              "required": ["path", "kind"],
+              "properties": {
+                "path": { "type": "string" },
+                "kind": { "type": "string" },
+                "size": { "type": ["integer", "null"], "minimum": 0 },
+                "sha256": { "type": ["string", "null"] }
+              },
+              "additionalProperties": false
+            }
+          },
+          "truncated": { "type": "boolean" },
+          "omitted": { "type": ["integer", "null"], "minimum": 0 }
+        },
+        "additionalProperties": false
+      },
+      "FileProjection": {
+        "type": "object",
+        "required": ["format", "revision", "binary", "truncated"],
+        "properties": {
+          "format": { "type": "string" },
+          "revision": {
+            "type": "object",
+            "required": ["path", "sha256", "size", "modification"],
+            "properties": {
+              "path": { "type": "string" },
+              "sha256": { "type": "string" },
+              "size": { "type": "integer", "minimum": 0 },
+              "language": { "type": ["string", "null"] },
+              "modification": {
+                "type": "string",
+                "enum": ["unchanged", "added", "modified"]
+              }
+            },
+            "additionalProperties": false
+          },
+          "content": { "type": ["string", "null"] },
+          "binary": { "type": "boolean" },
+          "truncated": { "type": "boolean" }
+        },
+        "additionalProperties": false
+      },
+      "WriteFile": {
+        "type": "object",
+        "required": ["content", "expected", "create_parents", "operation_id"],
+        "properties": {
+          "content": { "type": "string" },
+          "expected": {
+            "oneOf": [
+              {
+                "type": "object",
+                "required": ["state"],
+                "properties": { "state": { "const": "absent" } },
+                "additionalProperties": false
+              },
+              {
+                "type": "object",
+                "required": ["state", "sha256"],
+                "properties": {
+                  "state": { "const": "sha256" },
+                  "sha256": { "type": "string" }
+                },
+                "additionalProperties": false
+              }
+            ]
+          },
+          "create_parents": { "type": "boolean" },
+          "operation_id": { "type": "string" }
+        },
+        "additionalProperties": false
+      },
+      "FileConflict": {
+        "type": "object",
+        "required": ["code", "latest"],
+        "properties": {
+          "code": { "const": "workspace_file_conflict" },
+          "base": {
+            "oneOf": [
+              { "$ref": "#/components/schemas/FileProjection" },
+              { "type": "null" }
+            ]
+          },
+          "latest": { "$ref": "#/components/schemas/FileProjection" }
+        },
+        "additionalProperties": false
+      },
+      "ResolveDiff": {
+        "type": "object",
+        "required": ["selector", "mode"],
+        "properties": {
+          "selector": {
+            "type": "object",
+            "required": ["kind"],
+            "properties": { "kind": { "const": "workspace" } },
+            "additionalProperties": false
+          },
+          "mode": { "type": "string", "enum": ["patch", "stat", "files_only"] }
+        },
+        "additionalProperties": false
+      },
+      "DiffProjection": {
+        "type": "object",
+        "required": [
+          "format",
+          "selector",
+          "mode",
+          "digest",
+          "source_revision",
+          "files",
+          "additions",
+          "deletions",
+          "partial"
+        ],
+        "properties": {
+          "format": { "type": "string" },
+          "selector": { "type": "object" },
+          "mode": { "type": "string", "enum": ["patch", "stat", "files_only"] },
+          "digest": { "type": "string" },
+          "source_revision": { "type": "string" },
+          "files": {
+            "type": "array",
+            "items": {
+              "type": "object",
+              "required": ["status", "hunks", "attribution"],
+              "properties": {
+                "old_path": { "type": ["string", "null"] },
+                "new_path": { "type": ["string", "null"] },
+                "status": { "type": "string" },
+                "additions": { "type": ["integer", "null"], "minimum": 0 },
+                "deletions": { "type": ["integer", "null"], "minimum": 0 },
+                "old_sha256": { "type": ["string", "null"] },
+                "new_sha256": { "type": ["string", "null"] },
+                "attribution": {
+                  "type": "array",
+                  "items": { "type": "string" }
+                },
+                "hunks": {
+                  "type": "array",
+                  "items": {
+                    "type": "object",
+                    "required": ["id", "old", "new", "lines"],
+                    "properties": {
+                      "id": { "type": "string" },
+                      "old": { "$ref": "#/components/schemas/DiffRange" },
+                      "new": { "$ref": "#/components/schemas/DiffRange" },
+                      "heading": { "type": ["string", "null"] },
+                      "lines": {
+                        "type": "array",
+                        "items": { "$ref": "#/components/schemas/DiffLine" }
+                      }
+                    },
+                    "additionalProperties": false
+                  }
+                }
+              },
+              "additionalProperties": false
+            }
+          },
+          "additions": { "type": "integer", "minimum": 0 },
+          "deletions": { "type": "integer", "minimum": 0 },
+          "partial": { "type": "boolean" }
+        },
+        "additionalProperties": false
+      },
+      "DiffRange": {
+        "type": "object",
+        "required": ["start", "lines"],
+        "properties": {
+          "start": { "type": "integer", "minimum": 0 },
+          "lines": { "type": "integer", "minimum": 0 }
+        },
+        "additionalProperties": false
+      },
+      "DiffLine": {
+        "type": "object",
+        "required": ["kind", "content"],
+        "properties": {
+          "kind": { "type": "string" },
+          "old_line": { "type": ["integer", "null"], "minimum": 0 },
+          "new_line": { "type": ["integer", "null"], "minimum": 0 },
+          "content": { "type": "string" }
         },
         "additionalProperties": false
       },

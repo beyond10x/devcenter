@@ -534,6 +534,91 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/projects/{project_id}/sessions": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get: operations["listCodingSessions"];
+        put?: never;
+        post: operations["createCodingSession"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/project-sessions/{session_id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                session_id: components["parameters"]["CodingSessionId"];
+            };
+            cookie?: never;
+        };
+        get: operations["getCodingSession"];
+        put?: never;
+        post?: never;
+        delete: operations["closeCodingSession"];
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/project-sessions/{session_id}/tree": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get: operations["getCodingTree"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/project-sessions/{session_id}/files/{path}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                session_id: components["parameters"]["CodingSessionId"];
+                path: string;
+            };
+            cookie?: never;
+        };
+        get: operations["getCodingFile"];
+        put: operations["writeCodingFile"];
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/project-sessions/{session_id}/diff": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post: operations["resolveCodingDiff"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/projects/{project_id}/tree": {
         parameters: {
             query?: never;
@@ -771,6 +856,7 @@ export interface components {
             email?: string | null;
             groups: string[];
             connectors_docs_available: boolean;
+            agentide_workspace_enabled: boolean;
         };
         IdentityProvider: {
             id: string;
@@ -1042,6 +1128,118 @@ export interface components {
             kind: "blob" | "tree";
             mode: string;
         };
+        CodingSession: {
+            id: string;
+            project_id: string;
+            source_revision: string;
+            base_materialization_ref?: string | null;
+            working_materialization_ref?: string | null;
+            manifest_sha256?: string | null;
+            /** @enum {string} */
+            state: "preparing" | "ready" | "refused" | "unknown" | "closing" | "closed";
+            failure_code?: string | null;
+            limits: {
+                max_files: number;
+                max_total_bytes: number;
+                max_file_bytes: number;
+            };
+            created_at_ms: number;
+            updated_at_ms: number;
+        };
+        CreateCodingSession: {
+            source_revision: string;
+            idempotency_key: string;
+        };
+        CodingTreeProjection: {
+            format: string;
+            entries: {
+                path: string;
+                kind: string;
+                size?: number | null;
+                sha256?: string | null;
+            }[];
+            truncated: boolean;
+            omitted?: number | null;
+        };
+        FileProjection: {
+            format: string;
+            revision: {
+                path: string;
+                sha256: string;
+                size: number;
+                language?: string | null;
+                /** @enum {string} */
+                modification: "unchanged" | "added" | "modified";
+            };
+            content?: string | null;
+            binary: boolean;
+            truncated: boolean;
+        };
+        WriteFile: {
+            content: string;
+            expected: {
+                /** @constant */
+                state: "absent";
+            } | {
+                /** @constant */
+                state: "sha256";
+                sha256: string;
+            };
+            create_parents: boolean;
+            operation_id: string;
+        };
+        FileConflict: {
+            /** @constant */
+            code: "workspace_file_conflict";
+            base?: components["schemas"]["FileProjection"] | null;
+            latest: components["schemas"]["FileProjection"];
+        };
+        ResolveDiff: {
+            selector: {
+                /** @constant */
+                kind: "workspace";
+            };
+            /** @enum {string} */
+            mode: "patch" | "stat" | "files_only";
+        };
+        DiffProjection: {
+            format: string;
+            selector: Record<string, never>;
+            /** @enum {string} */
+            mode: "patch" | "stat" | "files_only";
+            digest: string;
+            source_revision: string;
+            files: {
+                old_path?: string | null;
+                new_path?: string | null;
+                status: string;
+                additions?: number | null;
+                deletions?: number | null;
+                old_sha256?: string | null;
+                new_sha256?: string | null;
+                attribution: string[];
+                hunks: {
+                    id: string;
+                    old: components["schemas"]["DiffRange"];
+                    new: components["schemas"]["DiffRange"];
+                    heading?: string | null;
+                    lines: components["schemas"]["DiffLine"][];
+                }[];
+            }[];
+            additions: number;
+            deletions: number;
+            partial: boolean;
+        };
+        DiffRange: {
+            start: number;
+            lines: number;
+        };
+        DiffLine: {
+            kind: string;
+            old_line?: number | null;
+            new_line?: number | null;
+            content: string;
+        };
         EngineeringArtifact: {
             id: string;
             locator: string;
@@ -1193,6 +1391,7 @@ export interface components {
         TaskApprovalId: string;
         PublicationId: string;
         ProjectId: string;
+        CodingSessionId: string;
         ThreadId: string;
     };
     requestBodies: never;
@@ -2218,6 +2417,237 @@ export interface operations {
                 };
             };
             403: components["responses"]["Problem"];
+        };
+    };
+    listCodingSessions: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                project_id: components["parameters"]["ProjectId"];
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Owned coding sessions backed by Workspace materializations */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["CodingSession"][];
+                };
+            };
+            403: components["responses"]["Problem"];
+            404: components["responses"]["Problem"];
+            503: components["responses"]["Unavailable"];
+        };
+    };
+    createCodingSession: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                project_id: components["parameters"]["ProjectId"];
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["CreateCodingSession"];
+            };
+        };
+        responses: {
+            /** @description Exact project revision materialized by Workspace into Substrate */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["CodingSession"];
+                };
+            };
+            403: components["responses"]["Problem"];
+            404: components["responses"]["Problem"];
+            409: components["responses"]["Problem"];
+            422: components["responses"]["Problem"];
+            503: components["responses"]["Unavailable"];
+        };
+    };
+    getCodingSession: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                session_id: components["parameters"]["CodingSessionId"];
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Live-revalidated owned coding session */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["CodingSession"];
+                };
+            };
+            403: components["responses"]["Problem"];
+            404: components["responses"]["Problem"];
+            503: components["responses"]["Unavailable"];
+        };
+    };
+    closeCodingSession: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                session_id: components["parameters"]["CodingSessionId"];
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Session closed and its Substrate materializations cleaned up */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["CodingSession"];
+                };
+            };
+            403: components["responses"]["Problem"];
+            404: components["responses"]["Problem"];
+            503: components["responses"]["Unavailable"];
+        };
+    };
+    getCodingTree: {
+        parameters: {
+            query?: {
+                query?: string;
+                limit?: number;
+            };
+            header?: never;
+            path: {
+                session_id: components["parameters"]["CodingSessionId"];
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Bounded searchable working tree with explicit omitted state */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["CodingTreeProjection"];
+                };
+            };
+            403: components["responses"]["Problem"];
+            404: components["responses"]["Problem"];
+            422: components["responses"]["Problem"];
+            503: components["responses"]["Unavailable"];
+        };
+    };
+    getCodingFile: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                session_id: components["parameters"]["CodingSessionId"];
+                path: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Complete file and Workspace-derived revision identity */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["FileProjection"];
+                };
+            };
+            403: components["responses"]["Problem"];
+            404: components["responses"]["Problem"];
+            503: components["responses"]["Unavailable"];
+        };
+    };
+    writeCodingFile: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                session_id: components["parameters"]["CodingSessionId"];
+                path: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["WriteFile"];
+            };
+        };
+        responses: {
+            /** @description Exact compare-and-swap file replacement */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["FileProjection"];
+                };
+            };
+            403: components["responses"]["Problem"];
+            404: components["responses"]["Problem"];
+            /** @description Loaded file digest is stale */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["FileConflict"];
+                };
+            };
+            422: components["responses"]["Problem"];
+            503: components["responses"]["Unavailable"];
+        };
+    };
+    resolveCodingDiff: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                session_id: components["parameters"]["CodingSessionId"];
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["ResolveDiff"];
+            };
+        };
+        responses: {
+            /** @description Canonical server-resolved diff projection */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["DiffProjection"];
+                };
+            };
+            403: components["responses"]["Problem"];
+            404: components["responses"]["Problem"];
+            422: components["responses"]["Problem"];
+            503: components["responses"]["Unavailable"];
         };
     };
     listProjectTree: {

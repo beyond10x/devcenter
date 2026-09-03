@@ -164,10 +164,16 @@ async fn compose(
 ) -> Result<connectors_runtime::ServiceBundle> {
     let mut builder = ServiceBundleBuilder::new();
     builder
+        .register(agentide_generated_service::connector_factory(
+            store.clone(),
+        )?)
+        .context("registering the generated AgentIDE coordination service")?;
+    builder
         .register(todo_generated_service::connector_factory(store)?)
         .context("registering the generated Todo service")?;
     builder
         .register(service_catalog::ServiceCatalogFactory::new([
+            agentide_generated_service::service_catalog()?,
             todo_generated_service::service_catalog()?,
         ])?)
         .context("registering the external generated-service catalog")?;
@@ -251,8 +257,12 @@ mod tests {
 
     #[test]
     fn generated_catalog_is_an_external_factory_with_a_separate_overlay() {
-        let catalog = todo_generated_service::service_catalog().unwrap();
-        let factory = service_catalog::ServiceCatalogFactory::new([catalog]).unwrap();
+        let factory = service_catalog::ServiceCatalogFactory::new([
+            agentide_generated_service::service_catalog().unwrap(),
+            todo_generated_service::service_catalog().unwrap(),
+        ])
+        .unwrap();
+        assert!(factory.catalogs().contains_key("service:agentide"));
         assert!(factory.catalogs().contains_key("service:todo"));
 
         let source = concat!(

@@ -3,6 +3,16 @@
 version = 4
 
 [[package]]
+name = "agentide-generated-service"
+version = "0.1.0"
+source = "git+https://github.com/beyond10x/agentide.git?rev=00d63ee1a04c3d2ad954a76273b66cb717673c88#00d63ee1a04c3d2ad954a76273b66cb717673c88"
+dependencies = [
+ "service-catalog",
+ "service-connectors",
+ "service-engine",
+]
+
+[[package]]
 name = "ahash"
 version = "0.8.12"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -773,6 +783,7 @@ dependencies = [
 name = "devcenter-connectors"
 version = "0.8.0"
 dependencies = [
+ "agentide-generated-service",
  "anyhow",
  "clap",
  "connectors-runtime",

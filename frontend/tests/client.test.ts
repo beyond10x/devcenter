@@ -7,4 +7,11 @@ describe("API errors", () => {
       "Your session has expired. Sign in again.",
     );
   });
+
+  it("preserves structured conflict details", () => {
+    const details = { code: "workspace_file_conflict", latest: { revision: { sha256: "new" } } };
+    const error = new ApiError(409, "workspace_file_conflict", details);
+    expect(error.details).toBe(details);
+    expect(errorMessage(error)).toContain("changed after it was loaded");
+  });
 });
