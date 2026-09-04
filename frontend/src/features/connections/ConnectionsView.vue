@@ -34,8 +34,9 @@ const providerConnections = ref<ConnectorConnection[]>([]);
 const providerLoading = ref(false);
 const providerError = ref("");
 const curatedDetails = ref<Record<string, ConnectorProviderDescription>>({});
+const curatedUnavailable = ref<string[]>([]);
 const curatedSessions = ref<Record<string, ConnectSession>>({});
-const curatedStarting = ref("");
+const curatedStarting = ref<Record<string, boolean>>({});
 const curatedError = ref("");
 const curatedProviders = [
   {
@@ -110,6 +111,7 @@ async function revoke() {
 async function loadProviderConnections() {
   providerLoading.value = true;
   providerError.value = "";
+  curatedUnavailable.value = [];
   try {
     const [connections, ...providers] = await Promise.allSettled([
       api.connections(),
@@ -125,6 +127,11 @@ async function loadProviderConnections() {
           : [];
       }),
     );
+    curatedUnavailable.value = providers.flatMap((result, index) => {
+      const provider = curatedProviders[index];
+      return result.status === "rejected" && provider ? [provider.providerRef] : [];
+    });
+    reconcileTerminalCuratedSessions();
     await nextTick();
     if (highlightedConnection.value) {
       document.getElementById(`connection-${highlightedConnection.value}`)?.scrollIntoView({
@@ -138,28 +145,138 @@ async function loadProviderConnections() {
   }
 }
 
+function providerMatches(connection: ConnectorConnection, providerRef: string) {
+  return (
+    connection.integration_ref === providerRef ||
+    connection.integration_ref.endsWith(`:${providerRef}`) ||
+    connection.integration_ref.endsWith(`/${providerRef}`)
+  );
+}
+
 function curatedConnection(providerRef: string) {
-  return providerConnections.value.find(
-    (connection) =>
-      connection.state !== "revoked" &&
-      (connection.integration_ref === providerRef ||
-        connection.integration_ref.endsWith(`:${providerRef}`) ||
-        connection.integration_ref.endsWith(`/${providerRef}`)),
+  const connections = providerConnections.value.filter((connection) =>
+    providerMatches(connection, providerRef),
+  );
+  const profiles = curatedDetails.value[providerRef]?.provider.setup_profiles ?? [];
+  const personProfile = profiles.find((profile) => profile.actor === "person");
+  const preferredProfile = personProfile ?? profiles[0];
+  const eligibleConnections = personProfile
+    ? connections.filter(
+        (connection) =>
+          connection.auth_profile === personProfile.auth_profile || connection.actor === "user",
+      )
+    : connections;
+  const preferredConnections = preferredProfile
+    ? eligibleConnections.filter(
+        (connection) => connection.auth_profile === preferredProfile.auth_profile,
+      )
+    : eligibleConnections;
+  return (
+    preferredConnections.find((connection) => connection.state === "callable") ??
+    preferredConnections.find((connection) => connection.state !== "revoked") ??
+    eligibleConnections.find((connection) => connection.state === "callable") ??
+    eligibleConnections.find((connection) => connection.state !== "revoked") ??
+    preferredConnections[0] ??
+    eligibleConnections[0]
   );
 }
 
 function curatedProfile(providerRef: string): ConnectorSetupProfile | undefined {
   const profiles = curatedDetails.value[providerRef]?.provider.setup_profiles ?? [];
-  return profiles.find((profile) => profile.actor === "person") ?? profiles[0];
+  const authProfile = curatedConnection(providerRef)?.auth_profile;
+  const personProfiles = profiles.filter((profile) => profile.actor === "person");
+  if (personProfiles.length > 0) {
+    return (
+      personProfiles.find((profile) => profile.auth_profile === authProfile) ?? personProfiles[0]
+    );
+  }
+  const existingProfile = profiles.find((profile) => profile.auth_profile === authProfile);
+  if (existingProfile) return existingProfile;
+  return profiles[0];
+}
+
+function curatedStatus(providerRef: string) {
+  const session = curatedSessions.value[providerRef];
+  if (session?.state === "pending") return "Authorization pending";
+  const connection = curatedConnection(providerRef);
+  if (providerLoading.value && !connection) return "Checking";
+  if (!connection) return "Not connected";
+  return connection.state === "callable" ? "Callable" : "Needs attention";
+}
+
+function curatedStatusClass(providerRef: string) {
+  const pending = curatedSessions.value[providerRef]?.state === "pending";
+  const connection = curatedConnection(providerRef);
+  return {
+    running: pending,
+    succeeded: !pending && connection?.state === "callable",
+    failed: !pending && !!connection && connection.state !== "callable",
+  };
+}
+
+function curatedAction(providerRef: string, name: string) {
+  if (curatedStarting.value[providerRef]) return "Starting…";
+  if (curatedSessions.value[providerRef]?.state === "pending") return "Waiting…";
+  const connection = curatedConnection(providerRef);
+  if (!connection) return `Connect ${name}`;
+  return connection.state === "callable" ? "Replace authorization" : `Reconnect ${name}`;
+}
+
+function curatedSessionMessage(providerRef: string) {
+  const state = curatedSessions.value[providerRef]?.state;
+  if (state === "failed") return "Authorization failed. Start another session to try again.";
+  if (state === "expired") return "Authorization expired. Start another session to try again.";
+  return "";
+}
+
+function browserSafeUrl(value: string | null | undefined) {
+  if (!value) return undefined;
+  try {
+    const url = new URL(value);
+    return url.protocol === "https:" || url.protocol === "http:" ? url.href : undefined;
+  } catch {
+    return undefined;
+  }
+}
+
+function curatedCompletionUrl(providerRef: string) {
+  const session = curatedSessions.value[providerRef];
+  return session?.state === "pending" ? browserSafeUrl(session.browser_completion_url) : undefined;
+}
+
+function retainSafeCompletionUrl(session: ConnectSession, previous?: ConnectSession) {
+  const suppliedUrl = browserSafeUrl(session.browser_completion_url);
+  const retainedUrl =
+    session.state === "pending" && previous?.connect_session_ref === session.connect_session_ref
+      ? browserSafeUrl(previous.browser_completion_url)
+      : undefined;
+  return { ...session, browser_completion_url: suppliedUrl ?? retainedUrl };
+}
+
+function reconcileTerminalCuratedSessions() {
+  const sessions = Object.entries(curatedSessions.value);
+  const retained = sessions.filter(
+    ([providerRef, session]) =>
+      curatedUnavailable.value.includes(providerRef) ||
+      (session.state !== "failed" && session.state !== "expired") ||
+      curatedConnection(providerRef)?.state !== "callable",
+  );
+  if (retained.length !== sessions.length) curatedSessions.value = Object.fromEntries(retained);
 }
 
 async function connectCurated(providerRef: string, name: string) {
   const profile = curatedProfile(providerRef);
   if (!profile) return;
-  curatedStarting.value = providerRef;
+  const connection = curatedConnection(providerRef);
+  curatedStarting.value = { ...curatedStarting.value, [providerRef]: true };
   curatedError.value = "";
   try {
-    const session = await api.startConnection(providerRef, `My ${name}`, profile.auth_profile);
+    const started = await api.startConnection(
+      providerRef,
+      connection?.label ?? `My ${name}`,
+      profile.auth_profile,
+    );
+    const session = retainSafeCompletionUrl(started);
     curatedSessions.value = { ...curatedSessions.value, [providerRef]: session };
     if (session.browser_completion_url) {
       window.open(session.browser_completion_url, "_blank", "noopener,noreferrer");
@@ -169,21 +286,36 @@ async function connectCurated(providerRef: string, name: string) {
   } catch (cause) {
     curatedError.value = errorMessage(cause);
   } finally {
-    curatedStarting.value = "";
+    curatedStarting.value = { ...curatedStarting.value, [providerRef]: false };
   }
 }
 
 async function pollCurated(providerRef: string, sessionRef: string, attempt: number) {
-  if (attempt >= 60) return;
+  if (attempt >= 60) {
+    failPendingCuratedSession(providerRef, sessionRef);
+    return;
+  }
   await new Promise((resolve) => window.setTimeout(resolve, 2_000));
   try {
-    const session = await api.connectionSession(sessionRef);
+    const current = curatedSessions.value[providerRef];
+    if (current?.connect_session_ref !== sessionRef) return;
+    const session = retainSafeCompletionUrl(await api.connectionSession(sessionRef), current);
     curatedSessions.value = { ...curatedSessions.value, [providerRef]: session };
     if (session.state === "pending") void pollCurated(providerRef, sessionRef, attempt + 1);
     if (session.state === "completed") await loadProviderConnections();
   } catch (cause) {
+    failPendingCuratedSession(providerRef, sessionRef);
     curatedError.value = errorMessage(cause);
   }
+}
+
+function failPendingCuratedSession(providerRef: string, sessionRef: string) {
+  const session = curatedSessions.value[providerRef];
+  if (session?.connect_session_ref !== sessionRef || session.state !== "pending") return;
+  curatedSessions.value = {
+    ...curatedSessions.value,
+    [providerRef]: { ...session, state: "failed" },
+  };
 }
 
 onMounted(() => void loadProviderConnections());
@@ -414,28 +546,43 @@ onMounted(() => void loadProviderConnections());
           <div>
             <strong>{{ provider.name }}</strong>
             <p>{{ provider.description }}</p>
+            <p v-if="curatedSessionMessage(provider.providerRef)" role="status">
+              {{ curatedSessionMessage(provider.providerRef) }}
+            </p>
+            <a
+              v-if="curatedCompletionUrl(provider.providerRef)"
+              class="text-link"
+              :href="curatedCompletionUrl(provider.providerRef)"
+              target="_blank"
+              rel="noopener noreferrer"
+            >
+              Continue authorization <ArrowUpRight :size="15" />
+            </a>
+            <p v-else-if="curatedUnavailable.includes(provider.providerRef)" role="status">
+              Setup status is unavailable. Refresh before starting or recovering this connection.
+            </p>
+            <p v-else-if="!providerLoading && !curatedProfile(provider.providerRef)">
+              Deployment administrator setup required before this provider can be connected or
+              recovered here.
+            </p>
           </div>
-          <span v-if="curatedConnection(provider.providerRef)" class="status-pill succeeded">
-            Connected
-          </span>
-          <button
-            v-else-if="curatedProfile(provider.providerRef)"
-            class="button small"
-            type="button"
-            :disabled="
-              curatedStarting === provider.providerRef ||
-              curatedSessions[provider.providerRef]?.state === 'pending'
-            "
-            @click="connectCurated(provider.providerRef, provider.name)"
-          >
-            <KeyRound :size="15" />
-            {{
-              curatedSessions[provider.providerRef]?.state === "pending"
-                ? "Waiting…"
-                : `Connect ${provider.name}`
-            }}
-          </button>
-          <span v-else class="status-pill">Deployment managed</span>
+          <div class="oauth-actions">
+            <span class="status-pill" :class="curatedStatusClass(provider.providerRef)">
+              {{ curatedStatus(provider.providerRef) }}
+            </span>
+            <button
+              v-if="curatedProfile(provider.providerRef)"
+              class="button small"
+              type="button"
+              :disabled="
+                curatedStarting[provider.providerRef] ||
+                curatedSessions[provider.providerRef]?.state === 'pending'
+              "
+              @click="connectCurated(provider.providerRef, provider.name)"
+            >
+              <KeyRound :size="15" /> {{ curatedAction(provider.providerRef, provider.name) }}
+            </button>
+          </div>
         </article>
       </div>
     </section>
