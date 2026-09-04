@@ -78,9 +78,21 @@ const workflowLibraryDetail = {
       node_count: 3,
       edge_count: 2,
       nodes: [
-        { node_id: "verify", definition: { kind: "read", value: { operation: "verify" } } },
-        { node_id: "approve", definition: { kind: "judge", value: { rubric: "release" } } },
-        { node_id: "publish", definition: { kind: "invoke", value: { operation: "publish" } } },
+        {
+          node_id: "verify",
+          definition: { kind: "read", value: { connector: "ci", operation: "verify" } },
+        },
+        {
+          node_id: "approve",
+          definition: { kind: "judge", value: { condition: "release_is_approved" } },
+        },
+        {
+          node_id: "publish",
+          definition: {
+            kind: "invoke",
+            value: { agent: "release-steward", instruction: "Publish the approved release." },
+          },
+        },
       ],
       edges: [
         { from_node_id: "verify", to_node_id: "approve" },
@@ -90,6 +102,14 @@ const workflowLibraryDetail = {
   ],
   partial: false,
 };
+const starterWorkflowLibrary = ["Code review", "Security review", "Reverse AEP + ESS"].map(
+  (name, index) => ({
+    id: `starter-workflow-${String(index + 1)}`,
+    name,
+    state: "Active",
+    active_revision_id: `starter-revision-${String(index + 1)}`,
+  }),
+);
 const codingSession = {
   id: "session-test",
   project_id: project.id,
@@ -200,6 +220,7 @@ async function mockAuthenticatedWorkspace(
     agentideWorkspace?: boolean;
     terminalProfile?: boolean;
     staleTerminal?: boolean;
+    emptyWorkflowLibrary?: boolean;
   } = {},
 ) {
   const capabilities = [
@@ -298,6 +319,7 @@ async function mockAuthenticatedWorkspace(
   const codingTasks: Array<Record<string, unknown>> = [];
   let workflowRun: Record<string, unknown> | undefined;
   let workflowPolls = 0;
+  let visibleWorkflowLibrary = options.emptyWorkflowLibrary ? [] : workflowLibrary;
   await page.route(/^https?:\/\/[^/]+\/api\//, async (route) => {
     const request = route.request();
     const path = new URL(request.url()).pathname;
@@ -551,8 +573,13 @@ async function mockAuthenticatedWorkspace(
       await route.fulfill({ json: [] });
       return;
     }
-    if (path === "/api/workflows") {
-      await route.fulfill({ json: { workflows: workflowLibrary, partial: false } });
+    if (path === "/api/workflows" && request.method() === "GET") {
+      await route.fulfill({ json: { workflows: visibleWorkflowLibrary, partial: false } });
+      return;
+    }
+    if (path === "/api/workflows" && request.method() === "POST") {
+      visibleWorkflowLibrary = starterWorkflowLibrary;
+      await route.fulfill({ json: { workflows: visibleWorkflowLibrary, partial: false } });
       return;
     }
     if (path === "/api/workflows/workflow-release") {
@@ -1034,6 +1061,20 @@ test("inspects standalone Workflow definitions separately from project runs", as
     fullPage: true,
     maxDiffPixelRatio: 0.01,
   });
+});
+
+test("installs published starter graphs into an empty Workflow library", async ({
+  page,
+}, testInfo) => {
+  test.skip(testInfo.project.name !== "chromium", "Desktop Workflow library behavior");
+  await mockAuthenticatedWorkspace(page, { emptyWorkflowLibrary: true });
+  await page.goto("/workflows");
+
+  await expect(page.getByRole("button", { name: "Install starter library" })).toBeVisible();
+  await page.getByRole("button", { name: "Install starter library" }).click();
+  await expect(page.getByRole("button", { name: /Code review/ })).toBeVisible();
+  await expect(page.getByRole("button", { name: /Security review/ })).toBeVisible();
+  await expect(page.getByRole("button", { name: /Reverse AEP \+ ESS/ })).toBeVisible();
 });
 
 test("runs the SDK-generated Todo console through the live BFF binding", async ({

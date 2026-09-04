@@ -4,6 +4,7 @@ import {
   Boxes,
   CircleDot,
   GitBranch,
+  LibraryBig,
   RefreshCw,
   Route,
   Workflow as WorkflowIcon,
@@ -25,6 +26,7 @@ const detail = ref<WorkflowLibraryDetail>();
 const loading = ref(false);
 const failure = ref("");
 const partial = ref(false);
+const installing = ref(false);
 
 const selectedId = computed(() =>
   typeof route.params.workflowId === "string" ? route.params.workflowId : "",
@@ -66,6 +68,20 @@ async function loadSelection() {
   }
 }
 
+async function installStarterLibrary() {
+  installing.value = true;
+  failure.value = "";
+  try {
+    const page = await api.installStarterWorkflowLibrary();
+    workflows.value = page.workflows;
+    partial.value = page.partial;
+  } catch (caught) {
+    failure.value = errorMessage(caught);
+  } finally {
+    installing.value = false;
+  }
+}
+
 function chooseWorkflow(event: Event) {
   const id = (event.target as HTMLSelectElement).value;
   void router.push(id ? { name: "workflow", params: { workflowId: id } } : { name: "workflows" });
@@ -82,6 +98,15 @@ function nodeRecord(node: unknown): Record<string, unknown> | undefined {
 function nodeKind(node: unknown): string {
   const definition = nodeRecord(nodeRecord(node)?.definition);
   return typeof definition?.kind === "string" ? definition.kind : "node";
+}
+
+function nodeDetail(node: unknown): string {
+  const definition = nodeRecord(nodeRecord(node)?.definition);
+  const value = nodeRecord(definition?.value);
+  for (const field of ["operation", "instruction", "condition", "event", "result", "expression"]) {
+    if (typeof value?.[field] === "string") return value[field];
+  }
+  return "Configured step";
 }
 
 function nodeId(node: unknown, index: number): string {
@@ -144,9 +169,18 @@ function revisionLabel(revision: WorkflowRevisionSummary): string {
     </div>
 
     <div v-else-if="workflows.length === 0" class="empty-state">
-      <WorkflowIcon :size="32" />
-      <strong>No workflows are visible</strong>
-      <span>Create and publish a definition through a Workflow authoring client.</span>
+      <LibraryBig :size="32" />
+      <strong>Start with the engineering workflow library</strong>
+      <span>Install Code review, Security review, and Reverse AEP + ESS as published graphs.</span>
+      <button
+        class="button primary"
+        type="button"
+        :disabled="installing"
+        @click="installStarterLibrary"
+      >
+        <span v-if="installing" class="spinner"></span>
+        {{ installing ? "Publishing starter graphs…" : "Install starter library" }}
+      </button>
     </div>
 
     <template v-else-if="!selectedId">
@@ -221,6 +255,7 @@ function revisionLabel(revision: WorkflowRevisionSummary): string {
           >
             <span>{{ String(index + 1).padStart(2, "0") }}</span>
             <strong>{{ nodeKind(node) }}</strong>
+            <small>{{ nodeDetail(node) }}</small>
             <code>{{ shortId(nodeId(node, index)) }}</code>
           </article>
         </div>
@@ -520,6 +555,15 @@ function revisionLabel(revision: WorkflowRevisionSummary): string {
 .node-card code {
   overflow: hidden;
   text-overflow: ellipsis;
+}
+
+.node-card small {
+  display: -webkit-box;
+  overflow: hidden;
+  color: var(--muted);
+  font-size: 0.76rem;
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 3;
 }
 
 .active-graph footer {
