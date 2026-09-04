@@ -2,6 +2,14 @@
 
 ## Unreleased
 
+## 0.8.15 - 2026-09-04
+
+- Install Code review, Security review, and Reverse AEP + ESS as validated, published, activated
+  starter graphs from the standalone Workflow library.
+- Separate generated Workflow client consumption from the standalone service host and admit shared
+  tenant library reads without granting mutation ownership.
+- Render the semantic operation or instruction for each node in an immutable published graph.
+
 ## 0.8.14 - 2026-09-03
 
 - Preserve Monaco syntax themes under the production Content Security Policy by issuing a fresh

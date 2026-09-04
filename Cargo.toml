@@ -13,7 +13,7 @@ members = [
 exclude = ["crates/devcenter-connectors"]
 
 [workspace.package]
-version = "0.8.14"
+version = "0.8.15"
 edition = "2024"
 rust-version = "1.98"
 license = "PolyForm-Free-Trial-1.0.0"
@@ -36,8 +36,8 @@ agent-platform-core = { git = "https://github.com/beyond10x/agent-platform.git",
 agentide-contracts = { git = "https://github.com/beyond10x/agentide.git", tag = "0.2.1" }
 connectors-client = { git = "https://github.com/beyond10x/connectors.git", tag = "v0.5.6" }
 connectors-protocol = { package = "protocol", git = "https://github.com/beyond10x/connectors.git", tag = "v0.5.6" }
-service-http = { git = "https://github.com/beyond10x/service-sdk.git", rev = "084defb7bf2960b9888db42feb9f009c1a78d4e4" }
-workflow-generated-service = { git = "https://github.com/beyond10x/workflow.git", rev = "ccff54bcb65555482d8f74639e43e91ec970c3e6" }
+service-http = { git = "https://github.com/beyond10x/service-sdk.git", rev = "2a513d1547376ba02dc16099da00ff3fcce04a84" }
+workflow-generated-service = { git = "https://github.com/beyond10x/workflow.git", rev = "f2bc043b125588c71f1f1dc5a4ef50789466f71a", default-features = false }
 workspace-client = { git = "https://github.com/beyond10x/workspace.git", tag = "0.2.13" }
 workspace-core = { git = "https://github.com/beyond10x/workspace.git", tag = "0.2.13" }
 

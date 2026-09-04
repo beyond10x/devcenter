@@ -495,7 +495,7 @@ export interface paths {
         };
         get: operations["listWorkflowLibrary"];
         put?: never;
-        post?: never;
+        post: operations["installStarterWorkflowLibrary"];
         delete?: never;
         options?: never;
         head?: never;
@@ -2818,6 +2818,30 @@ export interface operations {
                 };
             };
             401: components["responses"]["Problem"];
+            503: components["responses"]["Unavailable"];
+        };
+    };
+    installStarterWorkflowLibrary: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Visible Workflow definitions after idempotently installing the starter library */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["WorkflowLibraryPage"];
+                };
+            };
+            401: components["responses"]["Problem"];
+            403: components["responses"]["Problem"];
+            422: components["responses"]["Problem"];
             503: components["responses"]["Unavailable"];
         };
     };

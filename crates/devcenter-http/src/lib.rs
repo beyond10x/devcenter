@@ -57,8 +57,10 @@ use sha2::{Digest, Sha256};
 use tokio_tungstenite::tungstenite::client::IntoClientRequest as _;
 use url::Url;
 use workflow_generated_service::{
+    ActivateRevisionInput, AddNodeInput, ConnectNodesInput, CreateDraftInput, CreateWorkflowInput,
     GetWorkflowInput, GetWorkflowRow, ListDraftsInput, ListDraftsRow, ListRevisionsInput,
-    ListRevisionsRow, ListWorkflowsInput, ListWorkflowsRow, WorkflowClient,
+    ListRevisionsRow, ListWorkflowsInput, ListWorkflowsRow, PublishDraftInput, ValidateDraftInput,
+    WorkflowClient,
 };
 use workspace_client::{ClientError as WorkspaceError, WorkspaceClient};
 use workspace_core::{
@@ -79,6 +81,7 @@ const CONNECTORS_INVOKE_SCOPE: &str = "connectors.invoke";
 const CONNECTORS_APPROVAL_SCOPE: &str = "connectors.approvals.issue";
 const CONNECTOR_APPROVAL_TTL_SECONDS: u64 = 120;
 const WORKFLOW_READ_SCOPE: &str = "workflows.read";
+const WORKFLOW_MANAGE_SCOPE: &str = "workflows.manage";
 const MCP_APPROVAL_TTL_MILLISECONDS: i64 = 10 * 60 * 1_000;
 const MCP_CLIENT_ID: &str = "identity-public-client";
 const MCP_CLIENT_DISPLAY_NAME: &str = "External MCP client";
@@ -289,7 +292,10 @@ fn service_routes() -> Router<AppState> {
 
 fn workflow_routes() -> Router<AppState> {
     Router::new()
-        .route("/api/workflows", get(list_workflow_library))
+        .route(
+            "/api/workflows",
+            get(list_workflow_library).post(install_starter_workflow_library),
+        )
         .route(
             "/api/workflows/{workflow_id}",
             get(get_workflow_library_item),
@@ -338,6 +344,24 @@ struct WorkflowLibraryDetail {
     partial: bool,
 }
 
+struct StarterWorkflow {
+    slug: &'static str,
+    name: &'static str,
+    nodes: Vec<Value>,
+}
+
+#[derive(Debug)]
+enum StarterInstallError {
+    Client(WorkflowClientError),
+    InvalidReceipt,
+}
+
+impl From<WorkflowClientError> for StarterInstallError {
+    fn from(error: WorkflowClientError) -> Self {
+        Self::Client(error)
+    }
+}
+
 async fn list_workflow_library(State(state): State<AppState>, headers: HeaderMap) -> Response {
     let authenticated = match authenticate(&state, &headers, false).await {
         Ok(authenticated) => authenticated,
@@ -360,25 +384,291 @@ async fn list_workflow_library(State(state): State<AppState>, headers: HeaderMap
     else {
         return unavailable("identity_access_unavailable");
     };
-    let page = match workflow
-        .list_workflows(&access.credential, &ListWorkflowsInput {}, workflow_page())
-        .await
-    {
-        Ok(page) => page,
-        Err(error) => return workflow_error(&error),
+    match read_workflow_library(workflow, &access.credential).await {
+        Ok(page) => confidential_json(page),
+        Err(response) => response,
+    }
+}
+
+async fn install_starter_workflow_library(
+    State(state): State<AppState>,
+    headers: HeaderMap,
+) -> Response {
+    let authenticated = match authenticate(&state, &headers, false).await {
+        Ok(authenticated) => authenticated,
+        Err(response) => return response,
     };
+    let Some(workflow) = state.workflow.as_ref() else {
+        return unavailable("workflow_not_configured");
+    };
+    let identity = match state.config.authentication.identity_client() {
+        Ok(identity) => identity,
+        Err(error) => return authentication_problem(error),
+    };
+    let Ok(read_access) = identity
+        .issue_access_token(
+            authenticated.authorization.as_str(),
+            workflow_generated_service::HTTP_AUDIENCE,
+            WORKFLOW_READ_SCOPE,
+        )
+        .await
+    else {
+        return unavailable("identity_access_unavailable");
+    };
+    let existing = match read_workflow_library(workflow, &read_access.credential).await {
+        Ok(page) => page,
+        Err(response) => return response,
+    };
+    let starters = starter_workflows();
+    let missing = starters
+        .iter()
+        .filter(|starter| {
+            !existing
+                .workflows
+                .iter()
+                .any(|workflow| workflow.name == starter.name)
+        })
+        .collect::<Vec<_>>();
+    if missing.is_empty() {
+        return confidential_json(existing);
+    }
+    let Ok(manage_access) = identity
+        .issue_access_token(
+            authenticated.authorization.as_str(),
+            workflow_generated_service::HTTP_AUDIENCE,
+            WORKFLOW_MANAGE_SCOPE,
+        )
+        .await
+    else {
+        return unavailable("identity_access_unavailable");
+    };
+    for starter in missing {
+        if let Err(error) =
+            install_starter_workflow(workflow, &manage_access.credential, starter).await
+        {
+            return match error {
+                StarterInstallError::Client(error) => workflow_error(&error),
+                StarterInstallError::InvalidReceipt => unavailable("workflow_invalid_response"),
+            };
+        }
+    }
+    match read_workflow_library(workflow, &read_access.credential).await {
+        Ok(page) => confidential_json(page),
+        Err(response) => response,
+    }
+}
+
+async fn read_workflow_library(
+    workflow: &WorkflowClient,
+    credential: &service_http::AccessCredential,
+) -> Result<WorkflowLibraryPage, Response> {
+    let page = workflow
+        .list_workflows(credential, &ListWorkflowsInput {}, workflow_page())
+        .await
+        .map_err(|error| workflow_error(&error))?;
     let Ok(workflows) = page
         .items
         .into_iter()
         .map(workflow_summary_from_list)
         .collect::<Result<Vec<_>, _>>()
     else {
-        return unavailable("workflow_invalid_response");
+        return Err(unavailable("workflow_invalid_response"));
     };
-    confidential_json(WorkflowLibraryPage {
+    Ok(WorkflowLibraryPage {
         workflows,
         partial: page.partial || page.next_cursor.is_some(),
     })
+}
+
+async fn install_starter_workflow(
+    workflow: &WorkflowClient,
+    credential: &service_http::AccessCredential,
+    starter: &StarterWorkflow,
+) -> Result<(), StarterInstallError> {
+    let create = workflow
+        .create_workflow(
+            credential,
+            &CreateWorkflowInput {
+                idempotency_key: starter_key(starter.slug, "create"),
+                name: starter.name.to_owned(),
+                scopes: json!({ "principal": null, "team": null, "project": null }),
+            },
+        )
+        .await?;
+    let workflow_id = mutation_field(
+        &create,
+        "workflow.definition.WorkflowCreated",
+        "workflow_id",
+    )?;
+    let draft = workflow
+        .create_draft(
+            credential,
+            &CreateDraftInput {
+                based_on_revision_id: None,
+                expected_version: mutation_version(&create)?,
+                idempotency_key: starter_key(starter.slug, "draft"),
+                name: format!("{} starter graph", starter.name),
+                workflow_id: workflow_id.clone(),
+            },
+        )
+        .await?;
+    let draft_id = mutation_field(&draft, "workflow.definition.DraftCreated", "draft_id")?;
+    let through_version = populate_starter_draft(
+        workflow,
+        credential,
+        starter,
+        &workflow_id,
+        &draft_id,
+        mutation_version(&draft)?,
+    )
+    .await?;
+    let validated = workflow
+        .validate_draft(
+            credential,
+            &ValidateDraftInput {
+                draft_id: draft_id.clone(),
+                expected_version: through_version,
+                idempotency_key: starter_key(starter.slug, "validate"),
+                workflow_id: workflow_id.clone(),
+            },
+        )
+        .await?;
+    let published = workflow
+        .publish_draft(
+            credential,
+            &PublishDraftInput {
+                draft_id,
+                expected_version: mutation_version(&validated)?,
+                idempotency_key: starter_key(starter.slug, "publish"),
+                workflow_id: workflow_id.clone(),
+            },
+        )
+        .await?;
+    let revision_id = mutation_field(
+        &published,
+        "workflow.definition.RevisionPublished",
+        "revision_id",
+    )?;
+    workflow
+        .activate_revision(
+            credential,
+            &ActivateRevisionInput {
+                expected_version: mutation_version(&published)?,
+                idempotency_key: starter_key(starter.slug, "activate"),
+                revision_id,
+                workflow_id,
+            },
+        )
+        .await?;
+    Ok(())
+}
+
+async fn populate_starter_draft(
+    workflow: &WorkflowClient,
+    credential: &service_http::AccessCredential,
+    starter: &StarterWorkflow,
+    workflow_id: &Value,
+    draft_id: &Value,
+    mut through_version: i64,
+) -> Result<i64, StarterInstallError> {
+    let mut node_ids = Vec::with_capacity(starter.nodes.len());
+    for (index, definition) in starter.nodes.iter().enumerate() {
+        let node = workflow
+            .add_node(
+                credential,
+                &AddNodeInput {
+                    definition: definition.clone(),
+                    draft_id: draft_id.clone(),
+                    expected_version: through_version,
+                    idempotency_key: starter_key(starter.slug, &format!("node-{index}")),
+                    workflow_id: workflow_id.clone(),
+                },
+            )
+            .await?;
+        node_ids.push(mutation_field(
+            &node,
+            "workflow.definition.NodeAdded",
+            "node_id",
+        )?);
+        through_version = mutation_version(&node)?;
+    }
+    for (index, pair) in node_ids.windows(2).enumerate() {
+        let edge = workflow
+            .connect_nodes(
+                credential,
+                &ConnectNodesInput {
+                    draft_id: draft_id.clone(),
+                    expected_version: through_version,
+                    idempotency_key: starter_key(starter.slug, &format!("edge-{index}")),
+                    source_node_id: pair[0].clone(),
+                    target_node_id: pair[1].clone(),
+                    workflow_id: workflow_id.clone(),
+                },
+            )
+            .await?;
+        through_version = mutation_version(&edge)?;
+    }
+    Ok(through_version)
+}
+
+fn mutation_field(
+    receipt: &service_http::MutationReceipt,
+    event_name: &str,
+    field: &str,
+) -> Result<Value, StarterInstallError> {
+    receipt
+        .events
+        .iter()
+        .find(|event| event.name == event_name)
+        .and_then(|event| event.fields.get(field))
+        .cloned()
+        .ok_or(StarterInstallError::InvalidReceipt)
+}
+
+fn mutation_version(receipt: &service_http::MutationReceipt) -> Result<i64, StarterInstallError> {
+    receipt
+        .through_version
+        .try_into()
+        .map_err(|_| StarterInstallError::InvalidReceipt)
+}
+
+fn starter_key(slug: &str, step: &str) -> String {
+    format!("devcenter-starter-{slug}-v1-{step}")
+}
+
+fn starter_workflows() -> [StarterWorkflow; 3] {
+    [
+        StarterWorkflow {
+            slug: "code-review",
+            name: "Code review",
+            nodes: vec![
+                json!({ "kind": "read", "value": { "connector": "git", "operation": "repository.snapshot" } }),
+                json!({ "kind": "invoke", "value": { "agent": "code-reviewer", "instruction": "Review the change for correctness, maintainability, and regression risk." } }),
+                json!({ "kind": "emit", "value": { "event": "review.code.completed" } }),
+                json!({ "kind": "complete", "value": { "result": "code_review_report" } }),
+            ],
+        },
+        StarterWorkflow {
+            slug: "security-review",
+            name: "Security review",
+            nodes: vec![
+                json!({ "kind": "read", "value": { "connector": "git", "operation": "repository.snapshot" } }),
+                json!({ "kind": "invoke", "value": { "agent": "security-reviewer", "instruction": "Assess trust boundaries, credential handling, injection paths, and dependency risk." } }),
+                json!({ "kind": "judge", "value": { "condition": "no_unresolved_critical_findings" } }),
+                json!({ "kind": "complete", "value": { "result": "security_review_report" } }),
+            ],
+        },
+        StarterWorkflow {
+            slug: "reverse-aep-ess",
+            name: "Reverse AEP + ESS",
+            nodes: vec![
+                json!({ "kind": "read", "value": { "connector": "git", "operation": "repository.snapshot" } }),
+                json!({ "kind": "invoke", "value": { "agent": "system-analyst", "instruction": "Recover governed AEP artifacts and an executable system specification from the current system." } }),
+                json!({ "kind": "emit", "value": { "event": "reverse.aep_ess.generated" } }),
+                json!({ "kind": "complete", "value": { "result": "aep_ess_draft" } }),
+            ],
+        },
+    ]
 }
 
 async fn get_workflow_library_item(
@@ -5766,6 +6056,15 @@ mod tests {
         assert!(contract["paths"]["/.well-known/oauth-protected-resource"].is_object());
     }
 
+    #[test]
+    fn openapi_exposes_explicit_starter_library_installation() {
+        let contract: Value = serde_json::from_str(devcenter_web_assets::OPENAPI).unwrap();
+        assert_eq!(
+            contract["paths"]["/api/workflows"]["post"]["operationId"],
+            "installStarterWorkflowLibrary"
+        );
+    }
+
     #[tokio::test]
     async fn legacy_connections_route_redirects_to_the_generic_surface() {
         let response = test_router(devcenter_auth::Authentication::Unconfigured)
@@ -5864,6 +6163,11 @@ mod tests {
                 .unwrap();
             assert_eq!(response.status(), StatusCode::UNAUTHORIZED);
         }
+        let install_workflows = test_router(devcenter_auth::Authentication::Unconfigured)
+            .oneshot(Request::post("/api/workflows").body(Body::empty()).unwrap())
+            .await
+            .unwrap();
+        assert_eq!(install_workflows.status(), StatusCode::UNAUTHORIZED);
         let start = test_router(devcenter_auth::Authentication::Unconfigured)
             .oneshot(
                 Request::post("/api/connectors/claude-code/oauth/start")
@@ -5901,6 +6205,48 @@ mod tests {
         assert_eq!(response.status(), StatusCode::SERVICE_UNAVAILABLE);
         let body = response.into_body().collect().await.unwrap().to_bytes();
         assert_eq!(body, r#"{"code":"workflow_not_configured"}"#);
+    }
+
+    #[test]
+    fn starter_workflow_bundle_has_stable_names_and_complete_linear_graphs() {
+        let starters = starter_workflows();
+        assert_eq!(
+            starters.map(|starter| starter.name),
+            ["Code review", "Security review", "Reverse AEP + ESS"]
+        );
+        for starter in starter_workflows() {
+            assert_eq!(starter.nodes.len(), 4);
+            assert_eq!(starter.nodes[0]["kind"], "read");
+            assert_eq!(starter.nodes[3]["kind"], "complete");
+            assert!(starter_key(starter.slug, "create").starts_with("devcenter-starter-"));
+        }
+    }
+
+    #[test]
+    fn starter_install_reads_generated_identifiers_and_versions_from_receipts() {
+        let receipt: service_http::MutationReceipt = serde_json::from_value(json!({
+            "outcome": "created",
+            "events": [{
+                "name": "workflow.definition.WorkflowCreated",
+                "fields": { "workflow_id": "workflow-1" }
+            }],
+            "through_version": 1,
+            "replayed": false
+        }))
+        .unwrap();
+        assert_eq!(
+            mutation_field(
+                &receipt,
+                "workflow.definition.WorkflowCreated",
+                "workflow_id"
+            )
+            .unwrap(),
+            json!("workflow-1")
+        );
+        assert_eq!(mutation_version(&receipt).unwrap(), 1);
+        assert!(
+            mutation_field(&receipt, "workflow.definition.WorkflowCreated", "draft_id").is_err()
+        );
     }
 
     #[tokio::test]

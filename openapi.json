@@ -2,7 +2,7 @@
   "openapi": "3.1.0",
   "info": {
     "title": "Devcenter API",
-    "version": "0.8.14",
+    "version": "0.8.15",
     "description": "Authenticated browser/BFF surface for identity, connector custody, agents, workflows, and tasks."
   },
   "paths": {
@@ -968,6 +968,24 @@
             }
           },
           "401": { "$ref": "#/components/responses/Problem" },
+          "503": { "$ref": "#/components/responses/Unavailable" }
+        }
+      },
+      "post": {
+        "operationId": "installStarterWorkflowLibrary",
+        "security": [{ "browserSession": [] }, { "identityBearer": [] }],
+        "responses": {
+          "200": {
+            "description": "Visible Workflow definitions after idempotently installing the starter library",
+            "content": {
+              "application/json": {
+                "schema": { "$ref": "#/components/schemas/WorkflowLibraryPage" }
+              }
+            }
+          },
+          "401": { "$ref": "#/components/responses/Problem" },
+          "403": { "$ref": "#/components/responses/Problem" },
+          "422": { "$ref": "#/components/responses/Problem" },
           "503": { "$ref": "#/components/responses/Unavailable" }
         }
       }

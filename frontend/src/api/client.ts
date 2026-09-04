@@ -406,6 +406,8 @@ async function request<T>(path: string, init: RequestInit = {}): Promise<T> {
 
 export const api = {
   workflowLibrary: () => request<WorkflowLibraryPage>("/api/workflows"),
+  installStarterWorkflowLibrary: () =>
+    request<WorkflowLibraryPage>("/api/workflows", { method: "POST" }),
   workflowLibraryItem: (workflowId: string) =>
     request<WorkflowLibraryDetail>(`/api/workflows/${encodeURIComponent(workflowId)}`),
   session: () => request<Session>("/api/session"),
