@@ -16,17 +16,17 @@ name = "devcenter-connectors"
 path = "src/main.rs"
 
 [dependencies]
-agentide-generated-service = { git = "https://github.com/beyond10x/agentide.git", rev = "efe595b07a430e0757e991be6eef60c02439b4f4" }
+agentide-generated-service = { git = "https://github.com/beyond10x/agentide.git", rev = "981be21e2cdc75fa81c8d6cc5593b429da5ef133" }
 anyhow = "1"
 clap = { version = "4.6", features = ["derive", "env"] }
-connectors-runtime = { git = "https://github.com/beyond10x/connectors.git", rev = "e162cbf4fa45f5938545798fc667cea9f21de85f", default-features = false }
-connectors-service = { package = "service", git = "https://github.com/beyond10x/connectors.git", rev = "e162cbf4fa45f5938545798fc667cea9f21de85f" }
+connectors-runtime = { git = "https://github.com/beyond10x/connectors.git", rev = "c4e8ea44cd760c5469c01cccaf87d7835d5e0cc0", default-features = false }
+connectors-service = { package = "service", git = "https://github.com/beyond10x/connectors.git", rev = "c4e8ea44cd760c5469c01cccaf87d7835d5e0cc0" }
 eventlog-postgres = { git = "https://github.com/beyond10x/eventlog.git", rev = "b7e8f0d87b01c403415546d311952cb155caf16f" }
 serde = { version = "1", features = ["derive"] }
 serde_yaml = "0.9"
-service-catalog = { git = "https://github.com/beyond10x/service-sdk.git", rev = "084defb7bf2960b9888db42feb9f009c1a78d4e4" }
-service-connectors = { git = "https://github.com/beyond10x/service-sdk.git", rev = "084defb7bf2960b9888db42feb9f009c1a78d4e4" }
-todo-generated-service = { git = "https://github.com/beyond10x/todo.git", rev = "d5d23da432bae9d4ad953338fa84219dc8111e8e" }
+service-catalog = { git = "https://github.com/beyond10x/service-sdk.git", rev = "68618abac0ddc4f9363fec8315bd2d9c87113b88" }
+service-connectors = { git = "https://github.com/beyond10x/service-sdk.git", rev = "68618abac0ddc4f9363fec8315bd2d9c87113b88" }
+todo-generated-service = { git = "https://github.com/beyond10x/todo.git", rev = "a3fab7c56bc91adde57d20bf665baa7803622f61" }
 tokio = { version = "1", features = ["macros", "rt-multi-thread", "signal"] }
 
 [workspace.lints.rust]
