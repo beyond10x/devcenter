@@ -225,6 +225,24 @@ connectorsCatalogBundle:
   sourcePath: /bundle
   mountPath: /var/lib/connectors/catalog
 
+# Private, TLS-only Git byte plane from Connectors to Substrate. Enabling this does not configure
+# GitLab itself: the deployment-owned hosted Connectors config still selects GitLab and its grant.
+# The chart supplies Connectors' secret-free Git fetch listener overrides using these service
+# coordinates and mounted certificate paths. The internal route is never added to Ingress.
+connectorsGitFetch:
+  enabled: false
+  sourceName: gitlab
+  port: 8443
+  tls:
+    existingSecret: ""
+    certificateKey: tls.crt
+    privateKeyKey: tls.key
+  # CA bundle used by Substrate to verify the Connectors service certificate. When private roots
+  # are used, include every trust anchor Substrate also needs rather than replacing them narrowly.
+  trustRoots:
+    existingSecret: ""
+    key: ca.crt
+
 # Optional, namespace-exact in-cluster read authority for the hosted Kubernetes Connector.
 # This deliberately excludes Secrets, ConfigMaps, writes, rollout restarts, and cluster-scoped
 # resources. Connector policy must separately admit the same namespaces for the caller.

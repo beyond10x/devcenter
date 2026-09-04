@@ -63,8 +63,12 @@ spec:
           {{- with $component.args }}
           args: {{ toYaml . | nindent 12 }}
           {{- end }}
-          ports: [{name: http, containerPort: {{ $component.port }}, protocol: TCP}]
-          {{- if or $component.env $component.envValueFrom (eq $name "secrets") (eq $name "workspace") (eq $name "workflow") (eq $name "agent-platform") (eq $name "aep-service") }}
+          ports:
+            - {name: http, containerPort: {{ $component.port }}, protocol: TCP}
+            {{- if and (eq $name "connectors") $.Values.connectorsGitFetch.enabled }}
+            - {name: git-fetch-tls, containerPort: {{ $.Values.connectorsGitFetch.port }}, protocol: TCP}
+            {{- end }}
+          {{- if or $component.env $component.envValueFrom (eq $name "secrets") (eq $name "workspace") (eq $name "workflow") (eq $name "agent-platform") (eq $name "aep-service") (and (eq $name "connectors") $.Values.connectorsGitFetch.enabled) }}
           env:
             {{- range $key, $value := $component.env }}
             - name: {{ $key }}
@@ -73,6 +77,16 @@ spec:
             {{- range $key, $valueFrom := $component.envValueFrom }}
             - name: {{ $key }}
               valueFrom: {{ toYaml $valueFrom | nindent 16 }}
+            {{- end }}
+            {{- if and (eq $name "connectors") $.Values.connectorsGitFetch.enabled }}
+            - name: CONNECTORS_GIT_FETCH_ORIGIN
+              value: {{ printf "https://%s-connectors.%s.svc.cluster.local:%v" (include "devcenter.fullname" $) $.Release.Namespace $.Values.connectorsGitFetch.port | quote }}
+            - name: CONNECTORS_GIT_FETCH_TLS_LISTEN
+              value: {{ printf "0.0.0.0:%v" $.Values.connectorsGitFetch.port | quote }}
+            - name: CONNECTORS_GIT_FETCH_TLS_CERTIFICATE_FILE
+              value: /etc/connectors/git-fetch/tls.crt
+            - name: CONNECTORS_GIT_FETCH_TLS_PRIVATE_KEY_FILE
+              value: /etc/connectors/git-fetch/tls.key
             {{- end }}
             {{- if eq $name "secrets" }}
             - name: SECRETS_DATABASE_URL
@@ -152,7 +166,7 @@ spec:
           {{- with $component.envFrom }}
           envFrom: {{ toYaml . | nindent 12 }}
           {{- end }}
-          {{- if or $component.configFiles $component.persistence.enabled $component.volumeMounts (and (eq $name "connectors") $.Values.connectorsCatalogBundle.enabled) (and (eq $name "connectors") (index $.Values.components "secrets").enabled) (eq $name "secrets") (and (eq $name "workspace") $.Values.substrate.enabled $.Values.substrate.client.trustRoots.existingSecret) }}
+          {{- if or $component.configFiles $component.persistence.enabled $component.volumeMounts (and (eq $name "connectors") $.Values.connectorsCatalogBundle.enabled) (and (eq $name "connectors") (index $.Values.components "secrets").enabled) (and (eq $name "connectors") $.Values.connectorsGitFetch.enabled) (eq $name "secrets") (and (eq $name "workspace") $.Values.substrate.enabled $.Values.substrate.client.trustRoots.existingSecret) }}
           volumeMounts:
             {{- if $component.configFiles }}
             {{- range $path, $_ := $component.configFiles }}
@@ -170,6 +184,11 @@ spec:
             {{- if and (eq $name "connectors") (index $.Values.components "secrets").enabled }}
             - name: secrets-workload-token
               mountPath: /var/run/secrets/tokens
+              readOnly: true
+            {{- end }}
+            {{- if and (eq $name "connectors") $.Values.connectorsGitFetch.enabled }}
+            - name: connectors-git-fetch-tls
+              mountPath: /etc/connectors/git-fetch
               readOnly: true
             {{- end }}
             {{- if eq $name "secrets" }}
@@ -197,7 +216,7 @@ spec:
           readinessProbe: {{ toYaml $component.readinessProbe | nindent 12 }}
           livenessProbe: {{ toYaml $component.livenessProbe | nindent 12 }}
           resources: {{ toYaml $component.resources | nindent 12 }}
-      {{- if or $component.configFiles $component.persistence.enabled $component.volumes (and (eq $name "connectors") $.Values.connectorsCatalogBundle.enabled) (and (eq $name "connectors") (index $.Values.components "secrets").enabled) (eq $name "secrets") (and (eq $name "workspace") $.Values.substrate.enabled $.Values.substrate.client.trustRoots.existingSecret) }}
+      {{- if or $component.configFiles $component.persistence.enabled $component.volumes (and (eq $name "connectors") $.Values.connectorsCatalogBundle.enabled) (and (eq $name "connectors") (index $.Values.components "secrets").enabled) (and (eq $name "connectors") $.Values.connectorsGitFetch.enabled) (eq $name "secrets") (and (eq $name "workspace") $.Values.substrate.enabled $.Values.substrate.client.trustRoots.existingSecret) }}
       volumes:
         {{- if $component.configFiles }}
         - name: component-config
@@ -215,6 +234,14 @@ spec:
                   path: token
                   audience: {{ $.Values.secrets.workloadAudience | quote }}
                   expirationSeconds: 3600
+        {{- end }}
+        {{- if and (eq $name "connectors") $.Values.connectorsGitFetch.enabled }}
+        - name: connectors-git-fetch-tls
+          secret:
+            secretName: {{ required "connectorsGitFetch.tls.existingSecret is required" $.Values.connectorsGitFetch.tls.existingSecret }}
+            items:
+              - {key: {{ $.Values.connectorsGitFetch.tls.certificateKey }}, path: tls.crt}
+              - {key: {{ $.Values.connectorsGitFetch.tls.privateKeyKey }}, path: tls.key}
         {{- end }}
         {{- if eq $name "secrets" }}
         - name: secrets-keyring
@@ -283,6 +310,10 @@ spec:
   selector:
     app.kubernetes.io/instance: {{ $.Release.Name }}
     app.kubernetes.io/component: {{ $name }}
-  ports: [{name: http, port: {{ $component.port }}, targetPort: http}]
+  ports:
+    - {name: http, port: {{ $component.port }}, targetPort: http}
+    {{- if and (eq $name "connectors") $.Values.connectorsGitFetch.enabled }}
+    - {name: git-fetch-tls, port: {{ $.Values.connectorsGitFetch.port }}, targetPort: git-fetch-tls}
+    {{- end }}
 {{- end }}
 {{- end }}

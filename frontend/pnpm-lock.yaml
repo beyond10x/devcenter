@@ -8,8 +8,8 @@ importers:
   .:
     dependencies:
       "@b10x/agentide-ui":
-        specifier: git+https://github.com/beyond10x/agentide.git#efe595b07a430e0757e991be6eef60c02439b4f4
-        version: https://codeload.github.com/beyond10x/agentide/tar.gz/efe595b07a430e0757e991be6eef60c02439b4f4(vue@3.5.42(typescript@5.9.3))
+        specifier: git+https://github.com/beyond10x/agentide.git#6ae129950348344b4fc3ea54c44d0167038ff31e
+        version: https://codeload.github.com/beyond10x/agentide/tar.gz/6ae129950348344b4fc3ea54c44d0167038ff31e(vue@3.5.42(typescript@5.9.3))
       "@b10x/service-console-vue":
         specifier: git+https://github.com/beyond10x/service-sdk.git#084defb7bf2960b9888db42feb9f009c1a78d4e4
         version: https://codeload.github.com/beyond10x/service-sdk/tar.gz/084defb7bf2960b9888db42feb9f009c1a78d4e4(typescript@5.9.3)
@@ -135,14 +135,14 @@ packages:
     peerDependencies:
       playwright-core: ">= 1.0.0"
 
-  "@b10x/agentide-ui@https://codeload.github.com/beyond10x/agentide/tar.gz/efe595b07a430e0757e991be6eef60c02439b4f4":
+  "@b10x/agentide-ui@https://codeload.github.com/beyond10x/agentide/tar.gz/6ae129950348344b4fc3ea54c44d0167038ff31e":
     resolution:
       {
         gitHosted: true,
-        integrity: sha512-/YRnIy4a+l7OgcTdf6lBdeFZ+WEU4tmbbGU3teOlPtzNQ9ieQHsicClvMHvQfqTZqfVXC+NE4rnXRl0FZfbDPw==,
-        tarball: https://codeload.github.com/beyond10x/agentide/tar.gz/efe595b07a430e0757e991be6eef60c02439b4f4,
+        integrity: sha512-WVbT7YKvAYziPHCgjYeo5QwS71nWC0fDUUxOZEBn5Kxp0XO/TAQ24UOtFrmicyUPHuYB1ltp414IeiukjdbfEA==,
+        tarball: https://codeload.github.com/beyond10x/agentide/tar.gz/6ae129950348344b4fc3ea54c44d0167038ff31e,
       }
-    version: 0.3.0
+    version: 0.3.4
     peerDependencies:
       vue: ^3.5.0
 
@@ -3252,7 +3252,7 @@ snapshots:
       axe-core: 4.13.0
       playwright-core: 1.62.1
 
-  "@b10x/agentide-ui@https://codeload.github.com/beyond10x/agentide/tar.gz/efe595b07a430e0757e991be6eef60c02439b4f4(vue@3.5.42(typescript@5.9.3))":
+  "@b10x/agentide-ui@https://codeload.github.com/beyond10x/agentide/tar.gz/6ae129950348344b4fc3ea54c44d0167038ff31e(vue@3.5.42(typescript@5.9.3))":
     dependencies:
       vue: 3.5.42(typescript@5.9.3)
 

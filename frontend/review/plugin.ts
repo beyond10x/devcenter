@@ -187,8 +187,7 @@ const reviewCodingSession = {
   id: "workspace-session-review",
   project_id: reviewProject.id,
   source_revision: reviewProject.pinned_commit,
-  base_materialization_ref: "substrate:base:review",
-  working_materialization_ref: "substrate:working:review",
+  materialization_ref: "substrate:git:review",
   manifest_sha256: "a".repeat(64),
   state: "ready",
   failure_code: null,
@@ -892,7 +891,8 @@ export function reviewApi(): Plugin {
           }
           if (path === `/api/project-sessions/${reviewCodingSession.id}/tree` && method === "GET") {
             sendJson(response, 200, {
-              format: "workspace.tree/1",
+              format: "workspace.tree/2",
+              root: "",
               entries: [
                 { path: "src", kind: "directory", size: null, sha256: null },
                 {
@@ -904,6 +904,7 @@ export function reviewApi(): Plugin {
                 { path: "Cargo.toml", kind: "file", size: 162, sha256: "c".repeat(64) },
                 { path: "README.md", kind: "file", size: 940, sha256: "d".repeat(64) },
               ],
+              next_cursor: null,
               truncated: true,
               omitted: 27,
             });

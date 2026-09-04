@@ -114,8 +114,7 @@ const codingSession = {
   id: "session-test",
   project_id: project.id,
   source_revision: project.pinned_commit,
-  base_materialization_ref: "substrate:base:test",
-  working_materialization_ref: "substrate:working:test",
+  materialization_ref: "substrate:git:test",
   manifest_sha256: "a".repeat(64),
   state: "ready",
   failure_code: null,
@@ -219,7 +218,9 @@ async function mockAuthenticatedWorkspace(
   options: {
     agentideWorkspace?: boolean;
     terminalProfile?: boolean;
+    existingTerminal?: boolean;
     staleTerminal?: boolean;
+    refuseCodingSession?: boolean;
     emptyWorkflowLibrary?: boolean;
   } = {},
 ) {
@@ -315,11 +316,22 @@ async function mockAuthenticatedWorkspace(
     checkpoints: [],
   });
   let currentTerminal: Record<string, unknown> = { ...terminalSession };
+  let terminalCreated = options.existingTerminal ?? false;
   let terminalInventoryReads = 0;
   const codingTasks: Array<Record<string, unknown>> = [];
+  let codingSource = 'fn main() {\n    println!("hello");\n}\n';
   let workflowRun: Record<string, unknown> | undefined;
   let workflowPolls = 0;
   let visibleWorkflowLibrary = options.emptyWorkflowLibrary ? [] : workflowLibrary;
+  let workbenchView:
+    | {
+        session_id: string;
+        through_version: number;
+        panes: Array<Record<string, unknown>>;
+        focused_pane: string | null;
+        open_files: string[];
+      }
+    | undefined;
   await page.route(/^https?:\/\/[^/]+\/api\//, async (route) => {
     const request = route.request();
     const path = new URL(request.url()).pathname;
@@ -608,14 +620,10 @@ async function mockAuthenticatedWorkspace(
       };
       expect(codingTurnMatch[1]).toBe(codingSession.id);
       expect(submitted).not.toHaveProperty("agentide_session_id");
-      expect(submitted.focused_selections[0]).toMatchObject({
-        format: "agentide.context-selection-draft/1",
-        kind: "diff_hunk",
-        truncated: false,
-      });
+      expect(submitted.focused_selections).toEqual([]);
       expect(submitted.open_files[0]).toMatchObject({
         path: "src/main.rs",
-        sha256: "b".repeat(64),
+        sha256: "e".repeat(64),
         dirty: false,
       });
       expect(submitted.open_files[0]).not.toHaveProperty("content");
@@ -638,6 +646,11 @@ async function mockAuthenticatedWorkspace(
       return;
     }
     if (/^\/api\/tasks\/[^/]+\/events$/.test(path) && request.method() === "GET") {
+      Object.assign(codingTasks[0] ?? {}, {
+        status: "succeeded",
+        output: "The saved Workspace content was inspected with the current AgentIDE tools.",
+        completed_at_ms: Date.now(),
+      });
       const events = [
         { event: { kind: "accepted" } },
         { event: { kind: "running" } },
@@ -816,6 +829,34 @@ async function mockAuthenticatedWorkspace(
       });
       return;
     }
+    if (path === `/api/project-sessions/${codingSession.id}/workbench`) {
+      if (request.method() === "GET") {
+        if (!workbenchView) {
+          await route.fulfill({ status: 404, json: { code: "agentide_workbench_not_found" } });
+          return;
+        }
+        await route.fulfill({ json: workbenchView });
+        return;
+      }
+      const submitted = request.postDataJSON() as {
+        action: { kind: string };
+        panes: Array<Record<string, unknown>>;
+        focused_pane?: string | null;
+        open_files: string[];
+        idempotency_key: string;
+      };
+      expect(submitted.idempotency_key).not.toBe("");
+      expect(submitted.action.kind).not.toBe("");
+      workbenchView = {
+        session_id: codingSession.id,
+        through_version: (workbenchView?.through_version ?? 0) + 1,
+        panes: submitted.panes,
+        focused_pane: submitted.focused_pane ?? null,
+        open_files: submitted.open_files,
+      };
+      await route.fulfill({ json: workbenchView });
+      return;
+    }
     if (path === `/api/project-sessions/${codingSession.id}/coordination`) {
       await route.fulfill({ json: coordinationView() });
       return;
@@ -858,35 +899,54 @@ async function mockAuthenticatedWorkspace(
       return;
     }
     if (path === `/api/project-sessions/${codingSession.id}`) {
+      if (options.refuseCodingSession) {
+        await route.fulfill({ status: 403, json: { code: "workspace_access_refused" } });
+        return;
+      }
       await route.fulfill({ json: codingSession });
       return;
     }
     if (path === `/api/project-sessions/${codingSession.id}/tree`) {
       await route.fulfill({
         json: {
-          format: "workspace.tree/1",
+          format: "workspace.tree/2",
+          root: "",
           entries: [
             { path: "src", kind: "directory", size: null, sha256: null },
             { path: "src/main.rs", kind: "file", size: 32, sha256: "b".repeat(64) },
           ],
-          truncated: true,
-          omitted: 3,
+          next_cursor: null,
+          truncated: false,
+          omitted: 0,
         },
       });
       return;
     }
     if (path === `/api/project-sessions/${codingSession.id}/files/src/main.rs`) {
+      const submitted =
+        request.method() === "PUT"
+          ? (request.postDataJSON() as {
+              content: string;
+              expected: { state: string; sha256: string };
+            })
+          : undefined;
+      if (submitted) {
+        expect(submitted.expected).toEqual({ state: "sha256", sha256: "b".repeat(64) });
+        expect(submitted.content).not.toBe('fn main() {\n    println!("hello");\n}\n');
+        expect(submitted.content).toContain("println!");
+        codingSource = submitted.content;
+      }
       await route.fulfill({
         json: {
           format: "workspace.file/1",
           revision: {
             path: "src/main.rs",
-            sha256: "b".repeat(64),
-            size: 32,
+            sha256: submitted ? "e".repeat(64) : "b".repeat(64),
+            size: Buffer.byteLength(codingSource),
             language: "rust",
             modification: "modified",
           },
-          content: 'fn main() {\n    println!("hello");\n}\n',
+          content: codingSource,
           binary: false,
           truncated: false,
         },
@@ -941,10 +1001,17 @@ async function mockAuthenticatedWorkspace(
       return;
     }
     if (path === `/api/project-sessions/${codingSession.id}/terminals`) {
+      if (request.method() === "POST") {
+        terminalCreated = true;
+        await route.fulfill({ json: currentTerminal });
+        return;
+      }
       terminalInventoryReads += 1;
       await route.fulfill({
         json:
-          options.terminalProfile && (!options.staleTerminal || terminalInventoryReads === 1)
+          options.terminalProfile &&
+          terminalCreated &&
+          (!options.staleTerminal || terminalInventoryReads === 1)
             ? [currentTerminal]
             : [],
       });
@@ -1215,7 +1282,9 @@ test("advances an accepted workflow and preserves its rendered report", async ({
   await expect(page.getByRole("heading", { name: "Review complete" })).toBeVisible();
 });
 
-test("restores the native coding workbench from URL-backed state", async ({ page }, testInfo) => {
+test("drives the AgentIDE v2 workbench over the Devcenter host port", async ({
+  page,
+}, testInfo) => {
   test.skip(testInfo.project.name !== "chromium", "Desktop hosted-workbench behavior");
   await page.route("**/*", async (route) => {
     if (route.request().resourceType() !== "document") {
@@ -1233,52 +1302,26 @@ test("restores the native coding workbench from URL-backed state", async ({ page
     });
   });
   await mockAuthenticatedWorkspace(page, { agentideWorkspace: true });
-  await page.goto(
-    `/projects/${project.id}/sessions/${codingSession.id}?pane=diff&mode=patch&layout=side_by_side`,
-  );
+  await page.goto(`/projects/${project.id}/sessions/${codingSession.id}`);
 
   await expect(page.locator("[data-agentide-renderer='vue']")).toHaveAttribute(
     "data-agentide-renderer-protocol",
-    "agentide.renderer-target/1",
+    "agentide.renderer-target/2",
   );
-  await expect(page.getByRole("link", { name: project.path_with_namespace })).toBeVisible();
-  await expect(page.getByRole("treeitem", { name: /main.rs/ })).toBeVisible();
-  await expect(page.getByText("3 entries omitted.")).toBeVisible();
-  await expect(page.getByRole("button", { name: "Split" })).toHaveClass(/active/);
-  await expect(page.getByText("new", { exact: true })).toBeVisible();
-  await expect(page.getByText("AgentIDE ready", { exact: true })).toBeVisible();
-  await expect(page).not.toHaveURL(/agentide=/);
+  await expect(page.getByRole("navigation", { name: "Session views" })).toBeVisible();
+  await expect(page.getByRole("button", { name: "main.rs" })).toBeVisible();
+
   await page.getByRole("button", { name: "Terminal", exact: true }).click();
-  await expect(page.getByText("Interactive terminal refused")).toBeVisible();
+  await expect(page.getByRole("status")).toContainText(
+    "No deployment-admitted terminal profile is available.",
+  );
 
-  await page.getByRole("button", { name: "Attach hunk" }).click();
-  await page.getByRole("button", { name: "Pin for session" }).click();
-  await expect(page.getByText("DiffHunk", { exact: true })).toBeVisible();
-
-  await page.getByRole("button", { name: "agents", exact: true }).click();
-  await page.getByRole("button", { name: "Grant coding edits" }).first().click();
-  await page.getByRole("button", { name: "grants", exact: true }).click();
-  await expect(page.getByText("code_edit, code_create, code_delete, code_rename")).toBeVisible();
-
-  await page.getByRole("button", { name: /Diff/ }).click();
-  await page.getByRole("button", { name: "Attach hunk" }).click();
-  await page.getByRole("button", { name: /Agent/ }).click();
-  await page.getByLabel("Coding agent prompt").fill("Review and improve the saved change.");
-  await page.getByRole("button", { name: "Send turn" }).click();
-  await expect(page.getByText("Review and improve the saved change.")).toBeVisible();
-  await expect(
-    page.getByText("The saved Workspace content was inspected with the current AgentIDE tools."),
-  ).toBeVisible();
-  await expect(page.getByText("context context-tes")).toBeVisible();
-  await expect(page.getByText("code_read, code_changes, code_edit")).toBeVisible();
-
-  await page.getByRole("button", { name: /Editor/ }).click();
-  await expect(page).toHaveURL(/pane=editor/);
-  await expect(page.locator(".hosted-monaco-editor")).toBeVisible();
+  await page.getByRole("button", { name: "main.rs" }).click();
+  await expect(page.locator(".editor-leaf .monaco-editor")).toBeVisible();
   await expect
     .poll(() =>
       page
-        .locator(".hosted-monaco-editor .view-line")
+        .locator(".editor-leaf .view-line")
         .first()
         .evaluate((line) => {
           const target = line as unknown as {
@@ -1294,7 +1337,7 @@ test("restores the native coding workbench from URL-backed state", async ({ page
     .toContain("JetBrains Mono Variable");
   await expect
     .poll(() =>
-      page.locator(".hosted-monaco-editor .view-lines span[class*='mtk']").evaluateAll((tokens) => {
+      page.locator(".editor-leaf .view-lines span[class*='mtk']").evaluateAll((tokens) => {
         return new Set(
           tokens.map((token) => {
             const target = token as unknown as {
@@ -1310,6 +1353,37 @@ test("restores the native coding workbench from URL-backed state", async ({ page
       }),
     )
     .toBeGreaterThanOrEqual(3);
+
+  await page.locator(".editor-leaf .monaco-editor").click();
+  await page.keyboard.press("ControlOrMeta+A");
+  await page.keyboard.type('fn main() { println!("agentide"); }');
+  await expect(page.getByLabel("Unsaved changes")).toBeVisible();
+  await page.keyboard.press("ControlOrMeta+S");
+  await expect(page.getByLabel("Unsaved changes")).toHaveCount(0);
+
+  await page.getByRole("button", { name: "Workspace changes" }).click();
+  await expect(page.getByText("modified", { exact: true })).toBeVisible();
+  await expect(page.locator(".change-list article")).toContainText("src/main.rs");
+  await expect(page.locator(".change-list article pre")).toContainText("+new");
+
+  await page.getByRole("button", { name: "Agent chat" }).click();
+  await page.getByLabel("Message the agent").fill("Review the saved AgentIDE change.");
+  await page.getByRole("button", { name: "Send", exact: true }).click();
+  await expect(
+    page.getByRole("paragraph").filter({ hasText: "Review the saved AgentIDE change." }),
+  ).toBeVisible();
+  await expect(
+    page.getByText("The saved Workspace content was inspected with the current AgentIDE tools."),
+  ).toBeVisible();
+
+  await page.reload();
+  await expect(page.locator("[data-agentide-renderer='vue']")).toHaveAttribute(
+    "data-agentide-renderer-protocol",
+    "agentide.renderer-target/2",
+  );
+  await expect(
+    page.getByRole("paragraph").filter({ hasText: "Review the saved AgentIDE change." }),
+  ).toBeVisible();
   await expect(page.locator("style")).not.toHaveCount(0);
   await expect
     .poll(() =>
@@ -1323,7 +1397,27 @@ test("restores the native coding workbench from URL-backed state", async ({ page
     .toBe(0);
 });
 
-test("drives the hosted terminal byte channel, recovers partial replay, and keeps kill explicit", async ({
+test("refuses an actor-private coding session before mounting AgentIDE", async ({
+  page,
+}, testInfo) => {
+  test.skip(testInfo.project.name !== "chromium", "Desktop hosted-workbench behavior");
+  await mockAuthenticatedWorkspace(page, {
+    agentideWorkspace: true,
+    refuseCodingSession: true,
+  });
+
+  await page.goto(`/projects/${project.id}/sessions/${codingSession.id}`);
+
+  await expect(
+    page.getByText("Hosted coding workspace unavailable", { exact: true }),
+  ).toBeVisible();
+  await expect(
+    page.getByText("Your current GitLab grant does not admit this repository.", { exact: true }),
+  ).toBeVisible();
+  await expect(page.locator("[data-agentide-renderer='vue']")).toHaveCount(0);
+});
+
+test("opens, resumes, and tears down the AgentIDE terminal byte channel", async ({
   page,
 }, testInfo) => {
   test.skip(testInfo.project.name !== "chromium", "Desktop hosted-terminal behavior");
@@ -1335,7 +1429,6 @@ test("drives the hosted terminal byte channel, recovers partial replay, and keep
     `**/api/project-terminals/${terminalSession.id}/attach*`,
     (webSocket) => {
       connections += 1;
-      const connection = connections;
       let sequence = 0n;
       const sendOutput = (content: string | Buffer) => {
         sequence += 1n;
@@ -1351,7 +1444,6 @@ test("drives the hosted terminal byte channel, recovers partial replay, and keep
         input += chunk.toString("utf8");
         sendOutput(chunk);
         if (chunk.includes(13)) {
-          if (connection === 1) sequence += 1n;
           sendOutput("\r\n/workspace\r\n$ ");
         }
       });
@@ -1361,21 +1453,20 @@ test("drives the hosted terminal byte channel, recovers partial replay, and keep
           replay: { complete: true, oldest_sequence: 0, newest_sequence: 0 },
         }),
       );
-      if (connection > 1) {
-        sendOutput(
-          `${Array.from({ length: 80 }, (_, index) => `retained line ${String(index)}`).join("\r\n")}\r\nterminal-search-marker\r\n`,
-        );
-      }
       sendOutput("\u001b[32mactor-1@substrate\u001b[0m:\u001b[34m/workspace\u001b[0m$ ");
     },
   );
   await mockAuthenticatedWorkspace(page, { agentideWorkspace: true, terminalProfile: true });
-  await page.goto(`/projects/${project.id}/sessions/${codingSession.id}?terminal=terminal-test`);
+  await page.goto(`/projects/${project.id}/sessions/${codingSession.id}`);
 
-  await expect(page.locator(".terminal-connection.running")).toBeVisible();
+  await page.getByRole("button", { name: "Terminal", exact: true }).click();
+  await expect(page.locator(".terminal-leaf")).toHaveAttribute(
+    "data-terminal-id",
+    terminalSession.id,
+  );
   await expect
     .poll(() =>
-      page.locator(".ghostty-host canvas").evaluate((canvas) => {
+      page.locator(".terminal-leaf canvas").evaluate((canvas) => {
         const context = (
           canvas as unknown as {
             getContext(kind: "2d"): { font: string } | null;
@@ -1385,84 +1476,29 @@ test("drives the hosted terminal byte channel, recovers partial replay, and keep
       }),
     )
     .toContain("JetBrains Mono Variable");
-  const renderedPalette = async () =>
-    page.locator(".ghostty-host canvas").evaluate((canvas) => {
-      const context = (
-        canvas as unknown as {
-          getContext(kind: "2d"): {
-            canvas: { width: number; height: number };
-            getImageData(
-              x: number,
-              y: number,
-              width: number,
-              height: number,
-            ): { data: Uint8ClampedArray };
-          } | null;
-        }
-      ).getContext("2d");
-      if (!context) return { green: 0, blue: 0, monokaiBackground: 0 };
-      const pixels = context.getImageData(0, 0, context.canvas.width, context.canvas.height).data;
-      const result = { green: 0, blue: 0, monokaiBackground: 0 };
-      for (let index = 0; index < pixels.length; index += 4) {
-        const red = pixels[index];
-        const green = pixels[index + 1];
-        const blue = pixels[index + 2];
-        if (red === 88 && green === 211 && blue === 176) result.green += 1;
-        if (red === 102 && green === 217 && blue === 239) result.blue += 1;
-        if (red === 30 && green === 31 && blue === 28) result.monokaiBackground += 1;
-      }
-      return result;
-    });
-  await expect
-    .poll(async () => {
-      const palette = await renderedPalette();
-      return palette.green > 0 && palette.blue > 0;
-    })
-    .toBe(true);
-  await page.locator(".ghostty-host").click();
+  await page.locator(".terminal-leaf").click();
   await page.keyboard.type("pwd");
   await page.keyboard.press("Enter");
   await expect.poll(() => input).toContain("pwd");
-  await expect(page.locator(".terminal-connection.partial")).toBeVisible();
-  await page.getByRole("button", { name: "Reload retained output" }).click();
-  await expect(page.locator(".terminal-connection.running")).toBeVisible();
-  await expect.poll(() => connections).toBe(2);
-  await page.getByLabel("Search terminal scrollback").fill("terminal-search-marker");
-  await page.getByLabel("Search terminal scrollback").press("Enter");
   await expect.poll(() => pageErrors).toEqual([]);
 
-  const connectionsBeforeThemeChange = connections;
-  await page.evaluate('document.documentElement.dataset.theme = "monokai"');
-  await expect.poll(() => connections).toBeGreaterThan(connectionsBeforeThemeChange);
-  await expect.poll(async () => (await renderedPalette()).monokaiBackground).toBeGreaterThan(0);
-  await expect(page.locator(".terminal-connection.running")).toBeVisible();
+  await page.reload();
+  await expect(
+    page.getByRole("button", { name: "Focus Rust stable · confined", exact: true }),
+  ).toBeVisible();
+  await page.getByRole("button", { name: "Terminal", exact: true }).click();
+  await expect(page.locator(".terminal-leaf")).toHaveAttribute(
+    "data-terminal-id",
+    terminalSession.id,
+  );
+  await expect.poll(() => connections).toBeGreaterThanOrEqual(2);
 
-  const panel = page.locator(".workbench-terminal");
-  const before = await panel.boundingBox();
-  await page.getByRole("separator", { name: "Resize terminal panel" }).press("ArrowUp");
-  await expect
-    .poll(async () => (await panel.boundingBox())?.height ?? 0)
-    .toBeGreaterThan(before?.height ?? 0);
-
-  await page.getByRole("button", { name: "Kill", exact: false }).click();
-  await expect(page.locator(".terminal-refused strong")).toHaveText("Terminal terminated");
-  await expect(page.getByText("SIGKILL", { exact: true })).toBeVisible();
-});
-
-test("drops a stale terminal id instead of reconnecting forever", async ({ page }, testInfo) => {
-  test.skip(testInfo.project.name !== "chromium", "Desktop hosted-terminal behavior");
-  await mockAuthenticatedWorkspace(page, {
-    agentideWorkspace: true,
-    terminalProfile: true,
-    staleTerminal: true,
-  });
-
-  await page.goto(`/projects/${project.id}/sessions/${codingSession.id}?terminal=terminal-test`);
-
-  await expect(page.getByText("No attached terminals", { exact: true })).toBeVisible();
-  await expect(page.locator(".terminal-connection.connecting")).toHaveCount(0);
-  await expect(page.getByRole("button", { name: "Open terminal", exact: true })).toBeEnabled();
-  await expect.poll(() => new URL(page.url()).searchParams.get("terminal")).toBeNull();
+  await page.getByRole("button", { name: /Close Rust stable · confined/ }).click();
+  await expect(page.locator(".terminal-leaf")).toHaveCount(0);
+  const connectionsAfterClose = connections;
+  await page.waitForTimeout(750);
+  expect(connections).toBe(connectionsAfterClose);
+  await expect.poll(() => pageErrors).toEqual([]);
 });
 
 test("keeps catalog and connection custody usable on a mobile viewport", async ({

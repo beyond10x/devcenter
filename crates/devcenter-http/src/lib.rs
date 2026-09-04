@@ -958,6 +958,10 @@ fn coding_coordination_routes() -> Router<AppState> {
             "/api/project-sessions/{session_id}/coordination/checkpoints/{checkpoint_id}",
             post(decide_coding_checkpoint),
         )
+        .route(
+            "/api/project-sessions/{session_id}/workbench",
+            get(get_coding_workbench).post(mutate_coding_workbench),
+        )
 }
 
 async fn app() -> Response {
@@ -2181,6 +2185,101 @@ struct CodingCoordinationView {
     checkpoints: Vec<Value>,
 }
 
+#[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
+#[serde(rename_all = "PascalCase")]
+enum CodingWorkbenchPaneKind {
+    Editor,
+    Diff,
+    Terminal,
+    Chat,
+    Timeline,
+    Agents,
+    Approvals,
+    Evidence,
+}
+
+#[derive(Clone, Debug, Deserialize, Serialize)]
+struct CodingWorkbenchPane {
+    id: String,
+    kind: CodingWorkbenchPaneKind,
+    title: String,
+    path: Option<String>,
+    line: Option<u64>,
+    column: Option<u64>,
+}
+
+#[derive(Clone, Debug, Deserialize)]
+struct CodingWorkbenchProjection {
+    session_id: String,
+    coding_session_id: String,
+    panes: Vec<CodingWorkbenchPane>,
+    focused_pane: Option<String>,
+    open_files: Vec<String>,
+}
+
+#[derive(Clone, Debug, Serialize)]
+struct CodingWorkbenchView {
+    session_id: String,
+    panes: Vec<CodingWorkbenchPane>,
+    focused_pane: Option<String>,
+    open_files: Vec<String>,
+    through_version: u64,
+}
+
+#[derive(Debug, Deserialize)]
+#[serde(tag = "kind", rename_all = "snake_case", deny_unknown_fields)]
+enum CodingWorkbenchAction {
+    Initialize,
+    OpenFile {
+        path: String,
+        line: Option<u64>,
+        pane_id: Option<String>,
+    },
+    CloseFile {
+        path: String,
+    },
+    OpenPane {
+        pane_id: String,
+        #[serde(rename = "pane_kind")]
+        kind: CodingWorkbenchPaneKind,
+        split: Option<CodingWorkbenchSplitDirection>,
+    },
+    ClosePane {
+        pane_id: String,
+    },
+    FocusPane {
+        pane_id: String,
+    },
+    MoveCursor {
+        pane_id: String,
+        path: String,
+        line: u64,
+        column: u64,
+    },
+    ShowDiff {
+        pane_id: Option<String>,
+        path: Option<String>,
+        base: Option<String>,
+    },
+}
+
+#[derive(Clone, Copy, Debug, Deserialize, Serialize)]
+#[serde(rename_all = "PascalCase")]
+enum CodingWorkbenchSplitDirection {
+    Horizontal,
+    Vertical,
+}
+
+#[derive(Debug, Deserialize)]
+#[serde(deny_unknown_fields)]
+struct MutateCodingWorkbench {
+    action: CodingWorkbenchAction,
+    panes: Vec<CodingWorkbenchPane>,
+    focused_pane: Option<String>,
+    open_files: Vec<String>,
+    idempotency_key: String,
+}
+
 #[derive(Clone, Copy, Debug)]
 struct CoordinationIssue {
     code: &'static str,
@@ -2307,8 +2406,8 @@ async fn ensure_coordination(
             .ok_or(CoordinationIssue::INVALID);
     }
 
-    let working_materialization_ref = workspace
-        .working_materialization_ref
+    let materialization_ref = workspace
+        .materialization_ref
         .as_deref()
         .ok_or(CoordinationIssue::INVALID)?;
     let manifest_digest = workspace
@@ -2321,7 +2420,7 @@ async fn ensure_coordination(
         "agentide.ensure_hosted_session",
         json!({
             "session_id": workspace.id,
-            "workspace_root": working_materialization_ref,
+            "workspace_root": materialization_ref,
             "workspace_session_id": workspace.id,
             "objective": format!("Work on project {}", workspace.project_id),
             "project_id": workspace.project_id,
@@ -2507,6 +2606,300 @@ async fn get_coding_coordination(
         Ok(view) => confidential_json(view),
         Err(issue) => issue.response(),
     }
+}
+
+async fn get_coding_workbench(
+    State(state): State<AppState>,
+    headers: HeaderMap,
+    Path(session_id): Path<String>,
+) -> Response {
+    let workspace_client = match require_coding_workbench(&state) {
+        Ok(workspace) => workspace,
+        Err(refusal) => return refusal.response(),
+    };
+    let authenticated = match authenticate(&state, &headers, false).await {
+        Ok(authenticated) => authenticated,
+        Err(response) => return response,
+    };
+    let workspace = match workspace_client
+        .coding_session(authenticated.authorization.as_str(), &session_id)
+        .await
+    {
+        Ok(session) if session.state == CodingSessionState::Ready => session,
+        Ok(_) => return problem(StatusCode::CONFLICT, "coding_session_not_ready"),
+        Err(error) => return workspace_error(&error),
+    };
+    match query_coding_workbench(&state, &authenticated, &workspace).await {
+        Ok(Some(view)) => confidential_json(view),
+        Ok(None) => problem(StatusCode::NOT_FOUND, "agentide_workbench_not_found"),
+        Err(issue) => issue.response(),
+    }
+}
+
+async fn query_coding_workbench(
+    state: &AppState,
+    authenticated: &AuthenticatedSession,
+    workspace: &CodingSession,
+) -> Result<Option<CodingWorkbenchView>, CoordinationIssue> {
+    let (items, through_version) = query_coordination(
+        state,
+        authenticated,
+        "agentide.get_workbench",
+        &workspace.id,
+    )
+    .await?;
+    match items.as_slice() {
+        [] => Ok(None),
+        [item] => {
+            let projection: CodingWorkbenchProjection =
+                serde_json::from_value(item.clone()).map_err(|_| CoordinationIssue::INVALID)?;
+            if projection.session_id != workspace.id || projection.coding_session_id != workspace.id
+            {
+                return Err(CoordinationIssue::IDENTITY_MISMATCH);
+            }
+            Ok(Some(CodingWorkbenchView {
+                session_id: projection.session_id,
+                panes: projection.panes,
+                focused_pane: projection.focused_pane,
+                open_files: projection.open_files,
+                through_version: through_version.ok_or(CoordinationIssue::INVALID)?,
+            }))
+        }
+        _ => Err(CoordinationIssue::INVALID),
+    }
+}
+
+async fn mutate_coding_workbench(
+    State(state): State<AppState>,
+    headers: HeaderMap,
+    Path(session_id): Path<String>,
+    Json(request): Json<MutateCodingWorkbench>,
+) -> Response {
+    let workspace_client = match require_coding_workbench(&state) {
+        Ok(workspace) => workspace,
+        Err(refusal) => return refusal.response(),
+    };
+    let authenticated = match authenticate(&state, &headers, true).await {
+        Ok(authenticated) => authenticated,
+        Err(response) => return response,
+    };
+    if !valid_coding_workbench_mutation(&request) {
+        return problem(
+            StatusCode::UNPROCESSABLE_ENTITY,
+            "agentide_workbench_invalid",
+        );
+    }
+    let workspace = match workspace_client
+        .coding_session(authenticated.authorization.as_str(), &session_id)
+        .await
+    {
+        Ok(session) if session.state == CodingSessionState::Ready => session,
+        Ok(_) => return problem(StatusCode::CONFLICT, "coding_session_not_ready"),
+        Err(error) => return workspace_error(&error),
+    };
+    let current = match query_coding_workbench(&state, &authenticated, &workspace).await {
+        Ok(current) => current,
+        Err(issue) => return issue.response(),
+    };
+    let initialize = matches!(&request.action, CodingWorkbenchAction::Initialize);
+    let expected_version = if initialize {
+        if current.is_some() {
+            return problem(StatusCode::CONFLICT, "agentide_workbench_exists");
+        }
+        match current_coordination_version(&state, &authenticated, &workspace).await {
+            Ok(version) => version,
+            Err(issue) => return issue.response(),
+        }
+    } else {
+        let Some(current) = current else {
+            return problem(StatusCode::NOT_FOUND, "agentide_workbench_not_found");
+        };
+        current.through_version
+    };
+    let (operation, mut fields) = coding_workbench_operation(&request.action);
+    let Some(fields) = fields.as_object_mut() else {
+        return CoordinationIssue::INVALID.response();
+    };
+    fields.insert("session_id".to_owned(), json!(workspace.id));
+    fields.insert(
+        "request_id".to_owned(),
+        json!(format!("request:{}", request.idempotency_key)),
+    );
+    fields.insert("panes".to_owned(), json!(request.panes));
+    fields.insert("focused_pane".to_owned(), json!(request.focused_pane));
+    fields.insert("open_files".to_owned(), json!(request.open_files));
+    fields.insert("expected_version".to_owned(), json!(expected_version));
+    fields.insert("idempotency_key".to_owned(), json!(request.idempotency_key));
+    if let Err(response) = invoke_connector_operation(
+        &state,
+        &authenticated,
+        operation,
+        Value::Object(fields.clone()),
+        true,
+    )
+    .await
+    {
+        return if response.status() == StatusCode::CONFLICT {
+            CoordinationIssue::CONFLICT.response()
+        } else {
+            CoordinationIssue::UNAVAILABLE.response()
+        };
+    }
+    match query_coding_workbench(&state, &authenticated, &workspace).await {
+        Ok(Some(view)) => confidential_json(view),
+        Ok(None) => CoordinationIssue::INVALID.response(),
+        Err(issue) => issue.response(),
+    }
+}
+
+fn coding_workbench_operation(action: &CodingWorkbenchAction) -> (&'static str, Value) {
+    match action {
+        CodingWorkbenchAction::Initialize => ("agentide.snapshot_surface", json!({})),
+        CodingWorkbenchAction::OpenFile {
+            path,
+            line,
+            pane_id,
+        } => (
+            "agentide.open_file",
+            json!({"path": path, "line": line, "pane_id": pane_id}),
+        ),
+        CodingWorkbenchAction::CloseFile { path } => ("agentide.close_file", json!({"path": path})),
+        CodingWorkbenchAction::OpenPane {
+            pane_id,
+            kind,
+            split,
+        } => (
+            "agentide.open_pane",
+            json!({"pane_id": pane_id, "kind": kind, "split": split}),
+        ),
+        CodingWorkbenchAction::ClosePane { pane_id } => {
+            ("agentide.close_pane", json!({"pane_id": pane_id}))
+        }
+        CodingWorkbenchAction::FocusPane { pane_id } => {
+            ("agentide.focus_pane", json!({"pane_id": pane_id}))
+        }
+        CodingWorkbenchAction::MoveCursor {
+            pane_id,
+            path,
+            line,
+            column,
+        } => (
+            "agentide.move_cursor",
+            json!({"pane_id": pane_id, "path": path, "line": line, "column": column}),
+        ),
+        CodingWorkbenchAction::ShowDiff {
+            pane_id,
+            path,
+            base,
+        } => (
+            "agentide.show_diff",
+            json!({"pane_id": pane_id, "path": path, "base": base}),
+        ),
+    }
+}
+
+fn valid_coding_workbench_mutation(request: &MutateCodingWorkbench) -> bool {
+    if !valid_opaque_id(&request.idempotency_key)
+        || request.panes.len() > 64
+        || request.open_files.len() > MAX_CODING_OPEN_FILES
+    {
+        return false;
+    }
+    let mut pane_ids = std::collections::BTreeSet::new();
+    for pane in &request.panes {
+        if !valid_workbench_pane_id(&pane.id)
+            || pane.title.is_empty()
+            || pane.title.len() > 512
+            || !pane_ids.insert(pane.id.as_str())
+            || pane
+                .path
+                .as_deref()
+                .is_some_and(|path| !valid_workspace_path(path))
+            || pane.line.is_some_and(|line| line == 0 || line > 10_000_000)
+            || pane
+                .column
+                .is_some_and(|column| column == 0 || column > 10_000_000)
+        {
+            return false;
+        }
+    }
+    if request
+        .focused_pane
+        .as_deref()
+        .is_some_and(|focused| !pane_ids.contains(focused))
+    {
+        return false;
+    }
+    let mut open_files = std::collections::BTreeSet::new();
+    if request
+        .open_files
+        .iter()
+        .any(|path| !valid_workspace_path(path) || !open_files.insert(path.as_str()))
+    {
+        return false;
+    }
+    match &request.action {
+        CodingWorkbenchAction::Initialize => true,
+        CodingWorkbenchAction::OpenFile { path, pane_id, .. } => {
+            valid_workspace_path(path)
+                && open_files.contains(path.as_str())
+                && pane_id.as_deref().is_none_or(|id| {
+                    request
+                        .panes
+                        .iter()
+                        .any(|pane| pane.id == id && pane.path.as_deref() == Some(path))
+                })
+        }
+        CodingWorkbenchAction::CloseFile { path } => {
+            valid_workspace_path(path) && !open_files.contains(path.as_str())
+        }
+        CodingWorkbenchAction::OpenPane { pane_id, kind, .. } => request
+            .panes
+            .iter()
+            .any(|pane| pane.id == *pane_id && pane.kind == *kind),
+        CodingWorkbenchAction::ClosePane { pane_id } => !pane_ids.contains(pane_id.as_str()),
+        CodingWorkbenchAction::FocusPane { pane_id } => {
+            request.focused_pane.as_deref() == Some(pane_id.as_str())
+        }
+        CodingWorkbenchAction::MoveCursor {
+            pane_id,
+            path,
+            line,
+            column,
+        } => {
+            valid_workspace_path(path)
+                && *line > 0
+                && *column > 0
+                && request.panes.iter().any(|pane| {
+                    pane.id == *pane_id
+                        && pane.path.as_deref() == Some(path.as_str())
+                        && pane.line == Some(*line)
+                        && pane.column == Some(*column)
+                })
+        }
+        CodingWorkbenchAction::ShowDiff { pane_id, path, .. } => {
+            path.as_deref().is_none_or(valid_workspace_path)
+                && pane_id.as_deref().is_none_or(|id| {
+                    request.panes.iter().any(|pane| {
+                        pane.id == id && matches!(pane.kind, CodingWorkbenchPaneKind::Diff)
+                    })
+                })
+        }
+    }
+}
+
+fn valid_workbench_pane_id(value: &str) -> bool {
+    !value.is_empty() && value.len() <= 512 && value.bytes().all(|byte| byte.is_ascii_graphic())
+}
+
+fn valid_workspace_path(path: &str) -> bool {
+    !path.is_empty()
+        && path.len() <= 4_096
+        && !path.starts_with('/')
+        && !path.contains('\\')
+        && path
+            .split('/')
+            .all(|segment| !segment.is_empty() && segment != "." && segment != "..")
 }
 
 fn intent_through_version(output: &Value) -> Option<u64> {
@@ -2842,14 +3235,16 @@ async fn close_coding_session(
 #[derive(Deserialize)]
 #[serde(default, deny_unknown_fields)]
 struct CodingTreeQuery {
-    query: String,
+    path: String,
+    cursor: Option<String>,
     limit: u32,
 }
 
 impl Default for CodingTreeQuery {
     fn default() -> Self {
         Self {
-            query: String::new(),
+            path: String::new(),
+            cursor: None,
             limit: 500,
         }
     }
@@ -2867,7 +3262,13 @@ async fn get_coding_tree(
             "workspace_tree_query_invalid",
         );
     };
-    if query.query.len() > 512 || !(1..=1_000).contains(&query.limit) {
+    if query.path.len() > 1_024
+        || query
+            .cursor
+            .as_ref()
+            .is_some_and(|cursor| cursor.len() > 1_024)
+        || !(1..=1_000).contains(&query.limit)
+    {
         return problem(
             StatusCode::UNPROCESSABLE_ENTITY,
             "workspace_tree_query_invalid",
@@ -2882,10 +3283,11 @@ async fn get_coding_tree(
         Err(response) => return response,
     };
     match workspace
-        .coding_tree(
+        .coding_tree_page(
             authenticated.authorization.as_str(),
             &session_id,
-            query.query.trim(),
+            query.path.trim(),
+            query.cursor.as_deref(),
             query.limit,
         )
         .await

@@ -72,12 +72,19 @@ spec:
             - /var/lib/substrate/workspaces
             - --deployment
             - {{ .Values.substrate.deployment | quote }}
+            {{- if .Values.connectorsGitFetch.enabled }}
+            - --git-source
+            - {{ printf "%s=https://%s-connectors.%s.svc.cluster.local:%v/internal/git-fetch/" .Values.connectorsGitFetch.sourceName (include "devcenter.fullname" .) .Release.Namespace .Values.connectorsGitFetch.port | quote }}
+            {{- end }}
           env:
             - {name: SUBSTRATE_TLS_LISTEN, value: {{ printf "0.0.0.0:%v" .Values.substrate.port | quote }}}
             - {name: SUBSTRATE_TLS_CERTIFICATE_CHAIN, value: /etc/substrate/tls/tls.crt}
             - {name: SUBSTRATE_TLS_PRIVATE_KEY, value: /etc/substrate/tls/tls.key}
             - {name: SUBSTRATE_HOSTED_IDENTITY_ORIGIN, value: {{ .Values.substrate.hostedIdentity.origin | quote }}}
             - {name: SUBSTRATE_HOSTED_IDENTITY_CA_BUNDLE, value: {{ ternary "/etc/substrate/identity/ca.crt" .Values.substrate.hostedIdentity.caBundle.path (not (empty .Values.substrate.hostedIdentity.caBundle.existingSecret)) | quote }}}
+            {{- if .Values.connectorsGitFetch.enabled }}
+            - {name: SUBSTRATE_CA_BUNDLE, value: /etc/substrate/git-fetch/ca.crt}
+            {{- end }}
           ports: [{name: https, containerPort: {{ .Values.substrate.port }}}]
           volumeMounts:
             - {name: state, mountPath: /var/lib/substrate}
@@ -85,6 +92,9 @@ spec:
             - {name: tls, mountPath: /etc/substrate/tls, readOnly: true}
             {{- if .Values.substrate.hostedIdentity.caBundle.existingSecret }}
             - {name: identity-ca, mountPath: /etc/substrate/identity, readOnly: true}
+            {{- end }}
+            {{- if .Values.connectorsGitFetch.enabled }}
+            - {name: connectors-git-fetch-ca, mountPath: /etc/substrate/git-fetch, readOnly: true}
             {{- end }}
           readinessProbe: {tcpSocket: {port: https}}
           livenessProbe: {tcpSocket: {port: https}}
@@ -110,6 +120,12 @@ spec:
           secret:
             secretName: {{ .Values.substrate.hostedIdentity.caBundle.existingSecret }}
             items: [{key: {{ .Values.substrate.hostedIdentity.caBundle.key }}, path: ca.crt}]
+        {{- end }}
+        {{- if .Values.connectorsGitFetch.enabled }}
+        - name: connectors-git-fetch-ca
+          secret:
+            secretName: {{ required "connectorsGitFetch.trustRoots.existingSecret is required" .Values.connectorsGitFetch.trustRoots.existingSecret }}
+            items: [{key: {{ .Values.connectorsGitFetch.trustRoots.key }}, path: ca.crt}]
         {{- end }}
   volumeClaimTemplates:
     - metadata: {name: state}

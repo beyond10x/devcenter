@@ -28,7 +28,7 @@ export interface TerminalTheme {
   brightWhite: string;
 }
 
-interface SyntaxColors {
+export interface SyntaxColors {
   keyword: string;
   type: string;
   string: string;
