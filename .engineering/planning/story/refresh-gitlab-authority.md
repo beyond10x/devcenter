@@ -14,30 +14,34 @@ scope:
   path: crates/devcenter-connectors/Cargo.lock
 - confidence: cited
   path: crates/devcenter-connectors/Cargo.toml
-revision: 6
+- confidence: cited
+  path: crates/devcenter-http
+- confidence: cited
+  path: frontend/e2e
+- confidence: cited
+  path: frontend/src/features/connections
+- confidence: cited
+  path: frontend/src/features/projects
+revision: 9
 ---
-# Story: Refresh GitLab authority without rebuilding Devcenter
-
 ## Outcome
 
-An engineer's GitLab repository grant continues to authorize project and file reads after OAuth access-token expiry, and operators can promote that fix as only the Devcenter Connectors runtime.
+An engineer can understand and repair a GitLab connection from Devcenter, and its refreshed grant keeps repository discovery and file reads working without rebuilding unrelated components.
 
 ## Context
 
-GitLab may omit an unchanged `scope` field from a valid refresh response. Connectors 0.5.11 accepts that response and still verifies refreshed authority before committing rotation. The generated AgentIDE and Todo factories must share its exact factory graph through Service SDK 0.5.6.
+The live curated card treats any non-revoked GitLab connection as “Connected,” including degraded or unusable authority, and offers no replace, reconnect, revoke, or access-check action. A stored connection can therefore block the only visible recovery path while Projects fails elsewhere.
 
 ## Acceptance
 
-- `crates/devcenter-connectors` pins the merged Connectors 0.5.11, Service SDK 0.5.6, AgentIDE 0.3.2, and Todo 0.3.3 commits.
-- The nested lock resolves one Connector factory graph and its fmt, clippy, and tests pass.
-- A default-branch-only promotion publishes and signs only the Connectors multi-platform image.
-- The promotion emits an immutable manifest containing the source commit and image digest, without rebuilding the Devcenter server, deployment CLI, or chart.
-- After the one necessary GitLab reconnect, live project listing and repository files succeed; later token refresh retains access.
+An authenticated engineer can see whether the GitLab connection is callable or needs attention, replace or revoke it through Connections, complete OAuth again, and immediately list projects and read the selected repository's default branch; a later OAuth refresh preserves the admitted repository scope and deploys as only the affected Connectors/Devcenter units.
 
 ## Out of Scope
 
-Changing GitLab repository visibility, accepting upstream tokens as Devcenter bearers, or widening a user's grant.
+Changing repository visibility, accepting the upstream GitLab token as a Devcenter bearer, widening the engineer's upstream grant, or assuming a branch named `main`.
 
-## Open Questions
+## Scope
 
-None.
+The confirmed Devcenter unit changed `frontend/src/api/client.ts`, `frontend/src/features/connections/ConnectionsView.vue`, and `frontend/tests/connections.test.ts`.
+
+It delivers provider-generic authority status, reconnect/replace through the released connect-session contract, provider-local in-flight state, failed-session recovery, safe retained OAuth continuation links, and provider-detail degradation without hiding the rest of Connections. Contrary to the inferred scope, it did not change Connectors, BFF routes, project views, promotion automation, or deployment configuration. Generic revoke and stable-reference replacement remain withheld by `dependency-blocker:connector-lifecycle-revocation`.

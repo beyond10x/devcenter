@@ -2,13 +2,13 @@
 format: aep.planning-md/1
 id: release-plan:devcenter-0-8-15
 kind: release-plan
-status: active
+status: superseded
 title: Release DevCenter 0.8.15
 summary: Publish and deploy the reusable starter Workflow library as DevCenter 0.8.15.
 relations:
 - delivers: story:starter-workflow-library
 - supersedes: release-plan:devcenter-0-8-14
-revision: 2
+revision: 3
 ---
 ## Scope
 
