@@ -348,24 +348,8 @@ export interface CapabilityProfile {
   created_at_ms: number;
   updated_at_ms: number;
 }
-export interface ConnectorConnection {
-  connection_ref: string;
-  integration_ref: string;
-  label: string;
-  state: "created" | "authorized" | "callable" | "degraded" | "revoked";
-  scope?: "tenant" | "principal";
-  actor?: "app" | "user";
-  auth_profile?: string;
-}
-export interface ConnectSession {
-  connect_session_ref: string;
-  integration_ref: string;
-  state: "pending" | "completed" | "expired" | "failed";
-  expires_at_unix_ms: number;
-  completion_endpoint?: string;
-  browser_completion_url?: string;
-  connection_ref?: string;
-}
+export type ConnectorConnection = components["schemas"]["ConnectorConnection"];
+export type ConnectSession = components["schemas"]["ConnectSession"];
 
 export class ApiError extends Error {
   constructor(
