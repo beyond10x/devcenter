@@ -784,7 +784,7 @@ dependencies = [
 
 [[package]]
 name = "devcenter-connectors"
-version = "0.8.15"
+version = "0.8.16"
 dependencies = [
  "agentide-generated-service",
  "anyhow",

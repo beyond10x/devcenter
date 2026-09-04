@@ -867,7 +867,7 @@ dependencies = [
 
 [[package]]
 name = "devcenter-app"
-version = "0.8.15"
+version = "0.8.16"
 dependencies = [
  "anyhow",
  "axum",
@@ -881,7 +881,7 @@ dependencies = [
 
 [[package]]
 name = "devcenter-auth"
-version = "0.8.15"
+version = "0.8.16"
 dependencies = [
  "identity-client 0.5.6 (git+https://github.com/beyond10x/identity.git?rev=e3231bc34eb65695ba0486e1bbe3a0f1ec5b2a23)",
  "tokio",
@@ -890,7 +890,7 @@ dependencies = [
 
 [[package]]
 name = "devcenter-core"
-version = "0.8.15"
+version = "0.8.16"
 dependencies = [
  "devcenter-auth",
  "serde",
@@ -898,7 +898,7 @@ dependencies = [
 
 [[package]]
 name = "devcenter-http"
-version = "0.8.15"
+version = "0.8.16"
 dependencies = [
  "agent-platform-client",
  "agent-platform-core",
@@ -935,7 +935,7 @@ dependencies = [
 
 [[package]]
 name = "devcenter-mcp"
-version = "0.8.15"
+version = "0.8.16"
 dependencies = [
  "serde",
  "serde_json",
@@ -944,7 +944,7 @@ dependencies = [
 
 [[package]]
 name = "devcenter-store"
-version = "0.8.15"
+version = "0.8.16"
 dependencies = [
  "devcenter-mcp",
  "serde",
@@ -957,7 +957,7 @@ dependencies = [
 
 [[package]]
 name = "devcenter-web-assets"
-version = "0.8.15"
+version = "0.8.16"
 dependencies = [
  "mime_guess",
  "rust-embed",
@@ -965,7 +965,7 @@ dependencies = [
 
 [[package]]
 name = "devcenterctl"
-version = "0.8.15"
+version = "0.8.16"
 dependencies = [
  "anyhow",
  "clap",
@@ -3071,8 +3071,8 @@ dependencies = [
 
 [[package]]
 name = "service-catalog"
-version = "0.5.7"
-source = "git+https://github.com/beyond10x/service-sdk.git?rev=2a513d1547376ba02dc16099da00ff3fcce04a84#2a513d1547376ba02dc16099da00ff3fcce04a84"
+version = "0.5.8"
+source = "git+https://github.com/beyond10x/service-sdk.git?rev=f57255a2886cae3ace2a3a35935e8f1fd91a5fd4#f57255a2886cae3ace2a3a35935e8f1fd91a5fd4"
 dependencies = [
  "async-trait",
  "hex",
@@ -3086,8 +3086,8 @@ dependencies = [
 
 [[package]]
 name = "service-connectors"
-version = "0.5.7"
-source = "git+https://github.com/beyond10x/service-sdk.git?rev=2a513d1547376ba02dc16099da00ff3fcce04a84#2a513d1547376ba02dc16099da00ff3fcce04a84"
+version = "0.5.8"
+source = "git+https://github.com/beyond10x/service-sdk.git?rev=f57255a2886cae3ace2a3a35935e8f1fd91a5fd4#f57255a2886cae3ace2a3a35935e8f1fd91a5fd4"
 dependencies = [
  "async-trait",
  "eventlog-core",
@@ -3105,8 +3105,8 @@ dependencies = [
 
 [[package]]
 name = "service-engine"
-version = "0.5.7"
-source = "git+https://github.com/beyond10x/service-sdk.git?rev=2a513d1547376ba02dc16099da00ff3fcce04a84#2a513d1547376ba02dc16099da00ff3fcce04a84"
+version = "0.5.8"
+source = "git+https://github.com/beyond10x/service-sdk.git?rev=f57255a2886cae3ace2a3a35935e8f1fd91a5fd4#f57255a2886cae3ace2a3a35935e8f1fd91a5fd4"
 dependencies = [
  "hex",
  "serde",
@@ -3119,8 +3119,8 @@ dependencies = [
 
 [[package]]
 name = "service-eventlog"
-version = "0.5.7"
-source = "git+https://github.com/beyond10x/service-sdk.git?rev=2a513d1547376ba02dc16099da00ff3fcce04a84#2a513d1547376ba02dc16099da00ff3fcce04a84"
+version = "0.5.8"
+source = "git+https://github.com/beyond10x/service-sdk.git?rev=f57255a2886cae3ace2a3a35935e8f1fd91a5fd4#f57255a2886cae3ace2a3a35935e8f1fd91a5fd4"
 dependencies = [
  "eventlog-core",
  "hex",
@@ -3136,8 +3136,8 @@ dependencies = [
 
 [[package]]
 name = "service-http"
-version = "0.5.7"
-source = "git+https://github.com/beyond10x/service-sdk.git?rev=2a513d1547376ba02dc16099da00ff3fcce04a84#2a513d1547376ba02dc16099da00ff3fcce04a84"
+version = "0.5.8"
+source = "git+https://github.com/beyond10x/service-sdk.git?rev=f57255a2886cae3ace2a3a35935e8f1fd91a5fd4#f57255a2886cae3ace2a3a35935e8f1fd91a5fd4"
 dependencies = [
  "axum",
  "bytes",
@@ -3154,8 +3154,8 @@ dependencies = [
 
 [[package]]
 name = "service-runtime"
-version = "0.5.7"
-source = "git+https://github.com/beyond10x/service-sdk.git?rev=2a513d1547376ba02dc16099da00ff3fcce04a84#2a513d1547376ba02dc16099da00ff3fcce04a84"
+version = "0.5.8"
+source = "git+https://github.com/beyond10x/service-sdk.git?rev=f57255a2886cae3ace2a3a35935e8f1fd91a5fd4#f57255a2886cae3ace2a3a35935e8f1fd91a5fd4"
 dependencies = [
  "serde",
  "serde_json",
@@ -4408,7 +4408,7 @@ checksum = "1ebf944e87a7c253233ad6766e082e3cd714b5d03812acc24c318f549614536e"
 [[package]]
 name = "workflow-generated-service"
 version = "0.1.0"
-source = "git+https://github.com/beyond10x/workflow.git?rev=f2bc043b125588c71f1f1dc5a4ef50789466f71a#f2bc043b125588c71f1f1dc5a4ef50789466f71a"
+source = "git+https://github.com/beyond10x/workflow.git?rev=77c204b4d7a913cdc26e7d3445229571bad84f9a#77c204b4d7a913cdc26e7d3445229571bad84f9a"
 dependencies = [
  "serde",
  "serde_json",
@@ -4420,8 +4420,8 @@ dependencies = [
 
 [[package]]
 name = "workspace-client"
-version = "0.2.13"
-source = "git+https://github.com/beyond10x/workspace.git?tag=0.2.13#7e0ca31caed7e7286db2004fcb40b64011712ac0"
+version = "0.2.15"
+source = "git+https://github.com/beyond10x/workspace.git?tag=0.2.15#9ec16c442867121c2add71ce2922af1223e57969"
 dependencies = [
  "agentide-contracts 0.3.1",
  "reqwest 0.13.4",
@@ -4433,8 +4433,8 @@ dependencies = [
 
 [[package]]
 name = "workspace-core"
-version = "0.2.13"
-source = "git+https://github.com/beyond10x/workspace.git?tag=0.2.13#7e0ca31caed7e7286db2004fcb40b64011712ac0"
+version = "0.2.15"
+source = "git+https://github.com/beyond10x/workspace.git?tag=0.2.15#9ec16c442867121c2add71ce2922af1223e57969"
 dependencies = [
  "serde",
  "serde_json",

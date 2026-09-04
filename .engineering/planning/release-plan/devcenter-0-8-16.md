@@ -13,7 +13,7 @@ relations:
 - delivers: story:restore-hosted-slack-connection
 - delivers: story:deploy-engineer-journey
 - supersedes: release-plan:devcenter-0-8-15
-revision: 2
+revision: 3
 ---
 ## Release rule
 
@@ -39,3 +39,7 @@ Each owning repository releases its affected component independently. The privat
 ## Deferred functionality
 
 After this gate, the next slices are capability-profile lifecycle and connection testing, usable MCP publication/client onboarding, deployment-managed Grafana/Prometheus access, and Workflow/AEP composition. None of them may mask or postpone the recovery gate.
+
+## Execution
+
+The operator authorized the full release and deployment chain on 2026-09-04 and required every wave worktree to be integrated into main and retired. Devcenter 0.8.16 consumes Service SDK 0.5.8 at f57255a2886cae3ace2a3a35935e8f1fd91a5fd4, Workflow 0.3.6 at 77c204b4d7a913cdc26e7d3445229571bad84f9a, and Workspace 0.2.15 at 9ec16c442867121c2add71ce2922af1223e57969. Promotion remains contingent on immutable release artifacts, repository gates, downstream render validation, and authenticated live qualification.

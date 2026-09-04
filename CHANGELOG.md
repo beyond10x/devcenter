@@ -2,6 +2,15 @@
 
 ## Unreleased
 
+## 0.8.16 - 2026-09-04
+
+- Make curated GitLab, Slack, and model connections show their live authority state and offer the
+  matching connect, reauthorize, replace, or administrator-setup action without exposing secrets.
+- Refresh GitLab project authority immediately after OAuth completion and after repair, so project
+  discovery and default-branch file access no longer depend on stale browser state.
+- Consume Workflow 0.3.6, Workspace 0.2.15, and Service SDK 0.5.8 so reusable workflows remain
+  listable before activation and accepted project runs can be observed through terminal completion.
+
 ## 0.8.15 - 2026-09-04
 
 - Install Code review, Security review, and Reverse AEP + ESS as validated, published, activated
