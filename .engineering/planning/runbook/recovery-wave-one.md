@@ -2,7 +2,7 @@
 format: aep.planning-md/1
 id: runbook:recovery-wave-one
 kind: runbook
-status: active
+status: implemented
 title: Run recovery wave one
 summary: Coordinate Workflow, generic connection recovery, and project-run completion across isolated owning repositories.
 relations:
@@ -10,7 +10,7 @@ relations:
 - decides: story:restore-workflow-library
 - decides: story:refresh-gitlab-authority
 - decides: story:complete-project-workflow-runs
-revision: 2
+revision: 14
 ---
 ## Authority
 
@@ -760,12 +760,63 @@ The store computed every selected Devcenter story into a different wave because 
 
 ## Unit records
 
-| Unit | Branch | Base | Managed tree | Build directory | Scratch | Stage |
+| Unit | Branch | Base | Managed tree | Build directory | Scratch | Final wave state |
 |---|---|---|---|---|---|---|
-| restore-workflow-library | `impl/restore-workflow-library` | pending remote Workflow head | pending | `target/` in tree | assigned under wave scratch | planned |
-| refresh-gitlab-authority | `impl/refresh-gitlab-authority` | pending opening Devcenter commit | pending | `target/` in tree | assigned under wave scratch | planned |
-| complete-project-workflow-runs | `impl/complete-project-workflow-runs` | pending remote Workspace head | pending | `target/` in tree | assigned under wave scratch | planned |
+| starter Workflow resource bundle | `impl/restore-workflow-library` | `f2bc043b` | `workflow-restore-library` | `target/` in tree | XDG cache `b10x-waves/devcenter-0.8.16/wave-one/restore-workflow-library/scratch` | blocked without product-source change: Service SDK has no immutable resource/pre-readiness reconciliation contract; planning record awaits its bot commit |
+| populated Workflow library refusal | `impl/workflow-refusal-diagnosis` | `a2a408c9` | `devcenter-workflow-refusal` | `target/` in tree | XDG cache `b10x-waves/devcenter-0.8.16/wave-one/workflow-refusal-diagnosis/scratch` | exact defect proven; speculative Devcenter pagination change reverted; no source commit |
+| Service SDK optional projection fields | `impl/optional-projection-fields` | `7c0655f1` | `service-sdk-optional-projection` | `target/` in tree | XDG cache `b10x-waves/devcenter-0.8.16/wave-one/optional-projection-fields/scratch` | green, bot commit `2cb6b103507d843b6aecb0eb1e936f8a4587f866` |
+| generic connection authority recovery | `impl/refresh-gitlab-authority` | `a2a408c9` | `devcenter-recovery-connections` | `target/` in tree | XDG cache `b10x-waves/devcenter-0.8.16/wave-one/refresh-gitlab-authority/scratch` | green, bot commit `e5220bdba45c6285a3cdd9429c78e87a55848f8b`, integration merge `a72924613d9b9401c09bdf2106601d2561286985`; generic revoke remains contract-blocked |
+| durable project Workflow runs | `impl/complete-project-workflow-runs` | `d8bf3931` | `workspace-complete-workflow-runs` | `target/` in tree | XDG cache `b10x-waves/devcenter-0.8.16/wave-one/complete-project-workflow-runs/scratch` | green, bot commit `04d34872dad5ecaf02ce152789a78ef09e9e630b`; downstream Devcenter pin awaits the Workspace release |
 
 ## Commit authorization
 
 Approval authorizes one implementation commit per unit, the integration merges, one closing planning-store commit, and the merge into the local base branch; it authorizes nothing else.
+
+## Coordinator findings
+
+- The reported Workflow library refusal is not caused by Devcenter's requested page size. Adversarial verification established that released Service SDK 0.5.7 admits `1..=1000`, generated Workflow OpenAPI declares maximum `1000`, and invalid pagination would return HTTP 400 `invalid_page`. The speculative `1000` to `100` correction and literal test were removed before commit; the recorded review outcome is fixed.
+- Exact real-image reproduction found the defect: Workflow 0.3.5 returns 200 against an empty store, then returns HTTP 500 `service_contract` after one successful `create_workflow`, including across 0.3.4-to-0.3.5 store reuse. `active_revision_id` is optional and absent; Service SDK materialization omits it while validation requires every view field, producing `InvalidProjection`. `dependency-blocker:service-sdk-optional-projection-fields` records the downstream release chain.
+- The Service SDK repair was added to this wave because it is the smallest owner change that satisfies the operator-approved Workflow recovery item; no Devcenter mask, direct DB mutation, or deployment skew workaround was added.
+- Automatic starter-library reconciliation is independently blocked: Workflow's focused manifest probe proved that released Service SDK 0.5.7 rejects a `resources` field and offers neither immutable resource IR nor a pre-readiness reconciler. The probe was reverted; `dependency-blocker:service-sdk-resource-reconciliation` records the required upstream contract.
+- Workflow diagnosis temporarily wrote `/tmp/devcenter-workflow-*` container state outside the assigned scratch directory and removed it before return. This is recorded as an agent-boundary deviation; no repository or persistent external state was changed.
+- The first Connections adversary brief omitted the required fenced findings instruction. Its immutable prose-only result was archived and a normalized replacement was recorded; the store retains a validation warning for the archived record rather than rewriting history.
+
+## Gate results
+
+The complete Devcenter gate was run once on integration commit `a72924613d9b9401c09bdf2106601d2561286985`, one command at a time with its own exit status and output inspected:
+
+- `pnpm --dir frontend install --frozen-lockfile`: exit 0.
+- `pnpm --dir frontend check`: exit 0; 9 test files and 31 tests passed, then the production build passed.
+- `pnpm --dir frontend exec playwright install chromium`: exit 0; Chromium installed, with host-package fallback warnings.
+- `pnpm --dir frontend test:e2e`: exit 0; 17 passed and 13 intentional environment-dependent skips.
+- `cargo fmt --all --check`: exit 0.
+- `cargo clippy --workspace --all-targets --locked -- -D warnings`: exit 0.
+- `cargo test --workspace --locked`: exit 0; all executed workspace suites passed.
+- nested `crates/devcenter-connectors` fmt: exit 0.
+- nested `crates/devcenter-connectors` clippy: exit 0.
+- nested `crates/devcenter-connectors` tests: exit 0; 3 passed.
+- version consistency: exit 0.
+- Helm lint: exit 0; informational icon recommendation only.
+- chart rollout check: exit 0.
+- leak check: exit 0; no denied material found.
+
+The Workspace unit's full gate passed 33 tests plus formatting, clippy, and diff checks. The Service SDK unit's full `task check` passed, including 86 tests plus documentation, web, AEP, release, and diff checks. Workflow's unchanged source passed formatting, clippy, tests, and deterministic generated-output checks.
+
+## Review value and execution cost
+
+`aep artifact review-value --since 2026-09-04 --format json` reports four Devcenter review records by `wave-adversary`, seven findings, two no-op outcomes, three fixed outcomes, zero escalations, and unknown recorded cost. The archived malformed first Connections review accounts for the discrepancy between review records and enumerable findings.
+
+The collaboration harness retained no token, tool-call, or wall-duration counters for the completed implementor and adversary runs, so each is recorded as unknown rather than zero. Executed focused cases: Connections 9/9 green after two adversarial passes; Workspace 9/9 focused and 33/33 full tests green after two passes; Service SDK 22/22 relevant engine/builder cases green after two passes and the full gate.
+
+## Release boundary
+
+The wave is implementation and local integration, not release. No branch, tag, image, chart, or deployment was pushed or published.
+
+The exact downstream order is:
+
+1. publish and release Service SDK commit `2cb6b103507d843b6aecb0eb1e936f8a4587f866`;
+2. update Workflow to that SDK release, regenerate realization format `service-realization-plan/3`, prove the populated library reads successfully, then publish and release Workflow;
+3. publish and release Workspace commit `04d34872dad5ecaf02ce152789a78ef09e9e630b`;
+4. update Devcenter's immutable Workflow and Workspace references, include the merged Connections change, run the affected qualification, then cut and deploy the Devcenter release.
+
+Automatic starter-library materialization remains blocked on a separate Service SDK resource-reconciliation contract. Connector revoke/stable-reference replacement remains blocked on the in-flight Connector ESS lifecycle contract.

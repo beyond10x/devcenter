@@ -22,7 +22,7 @@ scope:
   path: frontend/src/features/connections
 - confidence: cited
   path: frontend/src/features/projects
-revision: 8
+revision: 9
 ---
 ## Outcome
 
@@ -42,4 +42,6 @@ Changing repository visibility, accepting the upstream GitLab token as a Devcent
 
 ## Scope
 
-The hosted Connector lifecycle API, Devcenter's allowlisted connection routes, the curated and generic Connections UI, Projects recovery guidance, independent Connectors promotion, and authenticated repository smoke checks.
+The confirmed Devcenter unit changed `frontend/src/api/client.ts`, `frontend/src/features/connections/ConnectionsView.vue`, and `frontend/tests/connections.test.ts`.
+
+It delivers provider-generic authority status, reconnect/replace through the released connect-session contract, provider-local in-flight state, failed-session recovery, safe retained OAuth continuation links, and provider-detail degradation without hiding the rest of Connections. Contrary to the inferred scope, it did not change Connectors, BFF routes, project views, promotion automation, or deployment configuration. Generic revoke and stable-reference replacement remain withheld by `dependency-blocker:connector-lifecycle-revocation`.

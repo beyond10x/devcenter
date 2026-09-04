@@ -22,7 +22,7 @@ scope:
   path: frontend/e2e
 - confidence: cited
   path: frontend/src/features/workflows
-revision: 4
+revision: 5
 ---
 ## Context
 
@@ -34,4 +34,6 @@ After a fresh deployment, an authenticated engineer opens Workflow and can list 
 
 ## Scope
 
-Consume and promote the released Workflow-owned bundle, preserve the exact downstream refusal in safe diagnostics, remove the user-side bootstrap requirement, and verify the authenticated read path.
+The confirmed diagnosis changed no Devcenter product source. The live refusal was reproduced against Workflow 0.3.5 and traced to Service SDK projection validation of an absent optional `active_revision_id`. The repair lives in Service SDK's realization builder and engine; Workflow must consume that release and regenerate its realization plan before Devcenter updates its immutable Workflow reference.
+
+The starter bundle is a distinct remaining scope. Workflow's manifest probe was reverted because Service SDK 0.5.7 rejects `resources` and has no service-owned reconciliation lifecycle. `dependency-blocker:service-sdk-resource-reconciliation` records that contract rather than hiding a database seed in Devcenter.

@@ -23,7 +23,7 @@ scope:
   path: frontend/src/features/projects
 - confidence: cited
   path: frontend/src/stores/workspace.ts
-revision: 4
+revision: 5
 ---
 ## Context
 
@@ -35,4 +35,6 @@ Starting any pre-built workflow from an admitted repository moves visibly throug
 
 ## Scope
 
-The released Workspace and Agent Platform execution contracts, Devcenter component pins and allowlisted BFF routes, the project Workflow progress UI, and disruption-based authenticated qualification.
+The confirmed upstream unit changed `crates/workspace-service/src/main.rs` and `crates/workspace-service/src/store.rs` in Workspace. It persists and owner-binds the Agent Platform task reference, resumes observation on authenticated reads or idempotent replay, suppresses duplicate observers, and records exactly one named terminal result. No Devcenter source, chart, frontend, lockfile, or BFF route changed in this unit.
+
+The remaining downstream scope is to release Workspace, update Devcenter's immutable Workspace reference, and qualify the authenticated project workflow path.
