@@ -2,14 +2,14 @@
 format: aep.planning-md/1
 id: dependency-blocker:service-sdk-optional-projection-fields
 kind: dependency-blocker
-status: open
+status: cleared
 title: Service SDK rejects absent optional projection fields
 summary: A populated Workflow library returns service_contract until Service SDK preserves optional view fields.
 owner: service-sdk
 relations:
 - blocks: story:restore-workflow-library
 withholds: test_result
-revision: 1
+revision: 2
 ---
 ## Proven failure
 
