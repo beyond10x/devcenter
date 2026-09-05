@@ -181,6 +181,10 @@ another verified writer stop, synchronized files and state, and proof that every
 contract remains enforced. The mount change does not retrofit quotas onto old resources whose
 recorded storage limit is absent.
 
+Chart 0.8.25 initializes nested workspace mounts before returning the private state directory to
+UID/GID 65532. Initialization keeps directory mode 0700, uses only CHOWN and FOWNER capabilities,
+and preserves TLS certificate/key modes 0644/0600 on both initial and repeated startup.
+
 When the chart enables the sibling Identity, Connectors, Workspace, and Agent Platform components,
 it supplies their private service origins to Agent Platform through explicit `AGENT_PLATFORM_*`
 inputs. Enabling Agent Platform persistence also supplies its state path inside the mounted volume,

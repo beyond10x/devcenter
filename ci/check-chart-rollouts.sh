@@ -219,14 +219,15 @@ grep -q 'value: "/var/lib/agent-platform/state.json"' "$rendered"
 grep -q 'path: /api/connectors/v1/readyz' "$rendered"
 grep -q 'path: /api/connectors/v1/livez' "$rendered"
 grep -q 'name: volume-permissions' "$rendered"
-grep -q 'chown 0:0 /var/run/substrate-tls' "$rendered"
+grep -Fq 'chown 0:0 /var/lib/substrate /var/run/substrate-tls &&' "$rendered"
 grep -q 'chmod 0700 /var/lib/substrate /var/run/substrate /var/run/substrate-tls' "$rendered"
 grep -q 'rm -f /var/run/substrate-tls/tls.crt /var/run/substrate-tls/tls.key' "$rendered"
 grep -q 'cp /var/run/substrate-tls-source/tls.crt /var/run/substrate-tls/tls.crt' "$rendered"
 grep -q 'cp /var/run/substrate-tls-source/tls.key /var/run/substrate-tls/tls.key' "$rendered"
 grep -q 'chmod 0600 /var/run/substrate-tls/tls.key' "$rendered"
 grep -q 'chown 65532:65532 /var/run/substrate-tls/tls.crt /var/run/substrate-tls/tls.key' "$rendered"
-grep -q 'chown 65532:65532 /var/lib/substrate /var/run/substrate /var/run/substrate-tls' "$rendered"
+grep -Fq 'chown 65532:65532 /var/run/substrate /var/run/substrate-tls &&' "$rendered"
+grep -Fxq '              chown 65532:65532 /var/lib/substrate' "$rendered"
 grep -q 'name: tls-source' "$rendered"
 grep -q 'DEV_CENTER_CONNECTORS_DOCS_AVAILABLE: "false"' "$rendered"
 grep -q 'DEV_CENTER_AGENTIDE_WORKSPACE_ENABLED: "true"' "$rendered"
@@ -410,3 +411,5 @@ then
   exit 1
 fi
 grep -q "ingress.connectorClientApi.enabled requires components.connectors.enabled" "$invalid_connector_client_error"
+
+bash ci/check-substrate-volume-permissions.sh
