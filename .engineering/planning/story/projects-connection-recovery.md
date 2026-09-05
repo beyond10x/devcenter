@@ -38,7 +38,7 @@ scope:
   path: frontend/src/features/projects/ProjectsView.vue
 - confidence: cited
   path: openapi.json
-revision: 22
+revision: 23
 ---
 ## Outcome
 
@@ -46,7 +46,7 @@ Restore the Projects repository listing when current GitLab authority admits no 
 
 ## Evidence and scope
 
-The authenticated repository endpoint returned 502 while session and agent requests succeeded. In the released implementation, GitLab Describe returns NotFound when no connection supports gitlab-project-list; Workspace maps that refusal to 502; the BFF uses a generic Workspace refusal code whose browser text incorrectly names an engineering plan. This code path is verified; whether it is the exact hosted cause remains under investigation.
+The authenticated repository endpoint returned 502 while session and agent requests succeeded. In the released implementation, GitLab Describe returns NotFound when no connection supports gitlab-project-list; Workspace maps that refusal to 502; the BFF uses a generic Workspace refusal code whose browser text incorrectly names an engineering plan. This code path was confirmed as the hosted cause; a normal OAuth reconnect restored an admitted connection, without editing grant or credential records.
 
 - cited: frontend/src/features/projects/ProjectsView.vue, frontend/src/api/client.ts and frontend/e2e/devcenter.spec.ts.
 - inferred: an upstream Workspace repository-search correction and a released client/runtime pin if required.
@@ -93,12 +93,20 @@ Honor an explicit zero for composed workload replicas, and expose Substrate repl
 
 The maintenance regression fails against the predecessor because an explicitly stopped Workspace still renders one replica. The corrected chart passes the full rollout checks: Workspace and Substrate render zero while their controllers, services, workspace claim and Substrate state claim template remain; ordinary values retain one and invalid Substrate replica counts are refused. Helm 3.19 lint, version consistency and diff checks pass. The independent read-only review found nothing and is recorded verbatim in review-result:projects-quota-cutover-pass-1.
 
-This prepares chart 0.8.24 with unchanged application images. The downstream first-stage successful Helm revision must select the new disk/image/command with both writers stopped. Only the second stage restores writers, after verifying that exact rollback target and no overlapping deployment. Hosted publication and the two-stage migration remain pending.
+Chart 0.8.24 introduced stopped replicas without changing application images. The final chart 0.8.25 was subsequently deployed through two successful upgrades: the first selected the new disk/image/command with both writers stopped, and the second restored writers after verifying that rollback target and absence of competing deployment.
 
 ## Nested volume initialization
 
-Executing the rendered chart 0.8.24 volume-permissions command with production-equivalent CHOWN and FOWNER capabilities reproduces permission denied for an existing owner-private state volume and nested workspace mount. The root initializer cannot traverse a mode-0700 parent already owned by the non-root daemon. Temporarily own the state parent while initializing nested mounts, then hand the parent back last. Preserve permissions, the capability allowlist, TLS file ownership and repeatable initialization. Add execution-level checks for initial and repeated startup and publish chart 0.8.25 without rebuilding the application. Production cutover remains pending until this correction is independently reviewed and released.
+Executing the rendered chart 0.8.24 volume-permissions command with production-equivalent CHOWN and FOWNER capabilities reproduces permission denied for an existing owner-private state volume and nested workspace mount. The root initializer cannot traverse a mode-0700 parent already owned by the non-root daemon. Temporarily own the state parent while initializing nested mounts, then hand the parent back last. Preserve permissions, the capability allowlist, TLS file ownership and repeatable initialization. Add execution-level checks for initial and repeated startup and publish chart 0.8.25 without rebuilding the application. The correction was independently reviewed, published and included in the completed two-stage storage deployment.
 
 ## Nested initializer validation
 
-The execution regression runs the chart-rendered initializer with CHOWN/FOWNER only, no privilege escalation, a read-only root and private state/runtime/TLS mounts. The predecessor passes four shared-layout cases and fails all four separate-mount cases. The corrected chart passes all eight initial/repeated cases, preserving existing state and hidden workspace bytes plus directory and TLS ownership/modes. The full chart rollout checks, Helm 3.19 lint, version consistency against application 0.8.21, shell syntax and diff checks pass. All disposable fixture containers were removed. Independent read-only review found nothing and is recorded verbatim in review-result:projects-quota-init-order-pass-1. Chart 0.8.25 publication, the final hosted image/initializer proof and the staged data cutover remain pending.
+The execution regression runs the chart-rendered initializer with CHOWN/FOWNER only, no privilege escalation, a read-only root and private state/runtime/TLS mounts. The predecessor passes four shared-layout cases and fails all four separate-mount cases. The corrected chart passes all eight initial/repeated cases, preserving existing state and hidden workspace bytes plus directory and TLS ownership/modes. The full chart rollout checks, Helm 3.19 lint, version consistency against application 0.8.21, shell syntax and diff checks pass. All disposable fixture containers were removed. Independent read-only review found nothing and is recorded verbatim in review-result:projects-quota-init-order-pass-1. Chart 0.8.25 is published at sha256:46d746c45d6cf08ec46dfed3ac5e8fc6372631bbe0477d3f02eecc8cee7d54b0 from source 33f132d81772ac70d822e2119ac28dc5a7e75842; CI33994003285 and release33994505584 succeeded. The final published Substrate0.7.5 image passed byte/inode enforcement, current usage, isolation, destruction and identifier-reuse checks on the hosted filesystem before migration. The two deployment stages completed and all original workspace records were preserved.
+
+## Deployed verification and remaining browser checks
+
+Server 0.8.21 was published from source 003f038301d5448d0771342b52868dd268026f8b at sha256:659625a01169d1e89adceaac801fe165baed2351f70a1b2e61a690f5d1ec6971. Source CI33982745739 and release33983503147 succeeded. The final local application gate passed 46 frontend unit cases, 29 browser cases with 15 existing platform skips, and 67 root plus four nested Rust cases. The chart-only repairs reuse this application image and all other unaffected service images.
+
+Earlier authenticated post-release verification confirmed repository search, project detail, branch listing and default-branch selection. For the same 18-branch repository, branch loading fell from 12048 ms to 1009 ms and selection succeeded in 1310 ms. These timings measure branch discovery and selection, not an editable workspace. The then-observed file-preparation refusal led to the separately released quota repair and verified two-stage storage deployment; workload readiness and public HTTP checks now pass.
+
+The operator requires all further UI verification to use a headless browser. The final headless diagnostic returns AUTH_REQUIRED before project data is available, so an existing sign-in method is still required. A real file tree, read/edit/restore/close, both repository-chat and coding-Agent interactions, and end-to-end startup timing remain pending in the downstream coordination story. This source story remains active; readiness and the isolated quota proof are not substituted for those browser acceptance checks. The runtime's separate terminal execution profile remains unserved.
