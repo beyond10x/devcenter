@@ -9,6 +9,10 @@ relations:
 - decomposes: epic:independent-component-delivery
 scope:
 - confidence: cited
+  path: ../website/data/bootstrap
+- confidence: cited
+  path: ../website/sources.lock.json
+- confidence: cited
   path: ../workspace/.github/workflows/release.yml
 - confidence: cited
   path: ../workspace/Dockerfile
@@ -22,7 +26,9 @@ scope:
   path: ../workspace/ci/release_adversary.rs
 - confidence: cited
   path: .github/workflows/promote-workspace.yml
-revision: 8
+- confidence: cited
+  path: docs/ess-deployment-model.md
+revision: 9
 ---
 ## Outcome
 

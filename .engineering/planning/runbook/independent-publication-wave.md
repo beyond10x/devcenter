@@ -2,12 +2,12 @@
 format: aep.planning-md/1
 id: runbook:independent-publication-wave
 kind: runbook
-status: draft
+status: active
 title: Complete independent artifact publication
 relations:
 - decides: story:selective-artifact-publication
 - decides: story:independent-workspace-publication
-revision: 5
+revision: 7
 ---
 ## Authorization and selection
 
@@ -65,4 +65,8 @@ Installed AEP validation reports the four new review records as lacking findings
 
 ## Documentation delivery verification
 
-The clean managed Atlas checkout at remote main a8fb936ddcb35c8971311610e5c63cc86d612fab ran docs reconcile --check with explicit managed source overrides. The initial stale primary Docs System collector rejected v4; retrying with the current managed Docs System checkout progressed to: `refused: documentation surface aep/docs differs from its repository manifest`. This organization catalog mismatch is outside the two publication stories. Website source-lock refresh and delivery gate results are recorded separately as they complete.
+The clean managed Atlas checkout at remote main a8fb936ddcb35c8971311610e5c63cc86d612fab ran docs reconcile --check with explicit managed source overrides. The initial stale primary Docs System collector rejected v4; retrying with the current managed Docs System checkout progressed to: `refused: documentation surface aep/docs differs from its repository manifest`. This organization catalog mismatch is outside the two publication stories. The mismatch is recorded as dependency-blocker:publication-docs-catalog-convergence; AEP's primary source checkout is stale, so this is a local workspace/catalog verification gap rather than evidence against the owner release. The required read-only portal check passed: 23 locked public sources, 24 surfaces, 50 delivery records.
+
+Website c646f09 refreshes the deterministic source lock after the published source commits; a527a94 records the bot-observed Atlas snapshot including Workspace 0.2.18. Both commits are published on Website main. Its complete remote-source gate passes: 98 tests, source and bootstrap validation, critical dependency audit, production build, search, navigation, link crawl and provenance verification (347 routes, 1300 files). A long scratch path initially truncated a Unix socket test fixture; rerunning with a shorter cache TMPDIR passed without source changes.
+
+Devcenter integration f581438 preserves newer main work. The frontend frozen install, formatting, lint, generated checks, types and build passed; 36 unit tests passed and browser coverage passed 17 with 13 existing project-specific exclusions. A temporary-directory quota error in the first unit run was resolved by using cache TMPDIR. Workflow actionlint and Git diff checks pass. Live provider read-only checks confirm the published Workspace target remains private and repository-linked, and the downloaded metadata matches the provider asset hash.
