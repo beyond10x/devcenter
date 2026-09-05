@@ -74,7 +74,15 @@
         "connectorDocs": { "$ref": "#/$defs/routeToggle" }
       }
     },
-    "components": { "type": "object" },
+    "components": {
+      "type": "object",
+      "additionalProperties": {
+        "type": "object",
+        "properties": {
+          "replicas": { "type": "integer", "minimum": 0 }
+        }
+      }
+    },
     "connectorsCatalogBundle": { "type": "object" },
     "connectorsGitFetch": {
       "type": "object",
@@ -137,6 +145,7 @@
     "substrate": {
       "type": "object",
       "properties": {
+        "replicas": { "type": "integer", "minimum": 0, "maximum": 1 },
         "workspaceStorage": {
           "type": "object",
           "additionalProperties": false,

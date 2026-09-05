@@ -10,7 +10,7 @@ metadata:
     {{- include "devcenter.labels" $ | nindent 4 }}
     app.kubernetes.io/component: {{ $name }}
 spec:
-  replicas: {{ default 1 $component.replicas }}
+  replicas: {{ dig "replicas" 1 $component }}
   strategy: {type: Recreate}
   selector:
     matchLabels:
