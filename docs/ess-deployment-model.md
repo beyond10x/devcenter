@@ -189,8 +189,10 @@ composition may therefore contain artifacts from several releases without claimi
 all rebuilt from the composition's commit. Reusing an artifact is an explicit identity-preserving
 operation; a missing or invalid publication record cannot be treated as proof of reuse.
 
-Workspace owns its runtime image publication in the Workspace repository. Its build, image smoke
-checks, signature, and durable release metadata do not require a Devcenter server or chart release.
+Workspace's owner pipeline defines its runtime image publication in the Workspace repository. Its
+build, image smoke checks, signature, and durable release metadata do not require a Devcenter server
+or chart release. Publication requires an already verified private registry target; creating that
+target is an administrative prerequisite, not a CI assumption about initial package visibility.
 Workflow, AEP Service, and Substrate follow the same repository ownership boundary. Publishing one
 of these components makes an artifact available; changing an environment still requires advancing
 the downstream selection.

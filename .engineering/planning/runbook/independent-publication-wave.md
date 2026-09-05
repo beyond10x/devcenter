@@ -7,7 +7,7 @@ title: Complete independent artifact publication
 relations:
 - decides: story:selective-artifact-publication
 - decides: story:independent-workspace-publication
-revision: 3
+revision: 5
 ---
 ## Authorization and selection
 
@@ -52,8 +52,17 @@ The coordinator provisioned Workspace's image repository variable through reposi
 
 Integrated root cargo fmt, clippy and test commands all exited 0: 66 tests, including the actual PostgreSQL contract. Nested Connectors fmt, clippy and test commands all exited 0: 3 tests. Publication impact fixtures, version consistency, ESS generation, chart lint/rollouts, workflow actionlint and leak checks all exited 0. The dedicated PostgreSQL gate container was stopped after the gate.
 
-Remote CLI-only publication run 33935069359 is in progress. Local planning against the real 0.8.17 manifest selected deployment-cli only; server, Connectors and chart retain their exact original versions, source and digests. No chart or unrelated application publication is requested.
+Remote CLI-only publication run 33935069359 succeeded. Real release metadata was downloaded and compared with 0.8.17: only devcenterctl changed, to sha256:49aa2c5af0a6bcbdf0eb92c905c3039fcd8ee6deef9bbfad0333585514eae9ad. Server, Connectors and chart retain their exact original versions, source and digests. Chart job was skipped. Finalization initially hit protected tag creation rules; the coordinator created that exact source tag as bot and reran only the failed final job, without rebuilding images. Source correction 6304349 scopes the bot token to future final release writes. Its additional regression brings deployment-CLI tests to 31, all green; correction and evidence are on the default branch through 1d16549.
 
-Workspace initial owner release run 33934695619 refused before build because repository-scoped GitHub credentials cannot enumerate organization packages to prove first-package absence. Existing administrator read-only access confirmed the configured target is absent. This is an operational bootstrap correction under review, not authority to assume a 404 means absence or to change package visibility. The old Devcenter Workspace publisher remains until the owner publication has been verified.
+Workspace initial owner release run 33934695619 refused before build because repository-scoped GitHub credentials cannot enumerate organization packages to prove first-package absence. Existing administrator read-only access confirmed the configured target was absent. A scoped exact image/source bootstrap correction was tested and published through f947bfc. Recovery run 33935389058 built and health/readiness-smoked ARM64 successfully, but its first push produced a PUBLIC package; strict post-push privacy verification refused publication. The reason for the platform's initial public visibility is not established. The coordinator cancelled the remaining run, removed the one-use bootstrap variable, deleted only the newly created unused package, and confirmed target absence. No existing deployment, source repository visibility, or released image was changed. The deleted registry object is recoverable through provider package restoration, but must not be restored into public service.
+
+The initial-publication allowance was removed in Workspace 53051b4, published through 5a4981a: owner CI verifies an already private target before allocating image builds. An administrator initialized a distinct target with an empty scratch marker and confirmed private visibility and repository access; no application bytes were included in that setup. Owner release run 33935985625 then succeeded for both native architectures, runtime smoke, private publication, signature verification and durable metadata. Downloaded metadata binds version 0.2.18 to source 2cb2d07c73e6bebe7623aaeb84d143089d392e9f and index sha256:128b78076ba9833f955a32a9e2238ba48f8f5e96658e99fd4fef4f851e479c96. Same-source retry 33936402567 succeeded with images and publish jobs skipped. The duplicate Devcenter promote-workspace.yml publisher is removed after that verification. Both selected stories are implemented; deployment selection remains downstream.
+
+Managed selective-artifact-publication was finished and GC-removed after its source was published. Generated nested Connectors and Workspace test outputs and the local smoke image were cleaned; the integration and owner worktrees will be finished after the completion evidence is published. Unrelated newer Devcenter default-branch work is preserved during integration.
 
 Installed AEP validation reports the four new review records as lacking findings blocks despite their verbatim empty findings blocks. This is an observed parser diagnostic, not missing reviewer returns. Existing unrelated diagnostics remain three proposed stories with no scope and one legacy review without a findings block; store validation exits 0.
+
+
+## Documentation delivery verification
+
+The clean managed Atlas checkout at remote main a8fb936ddcb35c8971311610e5c63cc86d612fab ran docs reconcile --check with explicit managed source overrides. The initial stale primary Docs System collector rejected v4; retrying with the current managed Docs System checkout progressed to: `refused: documentation surface aep/docs differs from its repository manifest`. This organization catalog mismatch is outside the two publication stories. Website source-lock refresh and delivery gate results are recorded separately as they complete.

@@ -2,7 +2,7 @@
 format: aep.planning-md/1
 id: story:independent-workspace-publication
 kind: story
-status: active
+status: implemented
 title: Publish Workspace independently
 summary: Workspace publishes its service image and deployable component from its own repository.
 relations:
@@ -22,7 +22,7 @@ scope:
   path: ../workspace/ci/release_adversary.rs
 - confidence: cited
   path: .github/workflows/promote-workspace.yml
-revision: 7
+revision: 8
 ---
 ## Outcome
 
