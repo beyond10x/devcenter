@@ -23,6 +23,7 @@
   },
   "dependencies": {
     "@b10x/agentide-ui": "git+https://github.com/beyond10x/agentide.git#efe595b07a430e0757e991be6eef60c02439b4f4",
+    "@b10x/phone-widget": "file:../../widgets/widgets/phone/widget",
     "@b10x/service-console-vue": "git+https://github.com/beyond10x/service-sdk.git#084defb7bf2960b9888db42feb9f009c1a78d4e4",
     "@fontsource-variable/jetbrains-mono": "5.3.0",
     "@fontsource-variable/manrope": "5.3.0",

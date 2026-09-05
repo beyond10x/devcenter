@@ -10,6 +10,9 @@ importers:
       "@b10x/agentide-ui":
         specifier: git+https://github.com/beyond10x/agentide.git#efe595b07a430e0757e991be6eef60c02439b4f4
         version: https://codeload.github.com/beyond10x/agentide/tar.gz/efe595b07a430e0757e991be6eef60c02439b4f4(vue@3.5.42(typescript@5.9.3))
+      "@b10x/phone-widget":
+        specifier: file:../../widgets/widgets/phone/widget
+        version: file:../../widgets/widgets/phone/widget(vue@3.5.42(typescript@5.9.3))
       "@b10x/service-console-vue":
         specifier: git+https://github.com/beyond10x/service-sdk.git#084defb7bf2960b9888db42feb9f009c1a78d4e4
         version: https://codeload.github.com/beyond10x/service-sdk/tar.gz/084defb7bf2960b9888db42feb9f009c1a78d4e4(typescript@5.9.3)
@@ -143,6 +146,12 @@ packages:
         tarball: https://codeload.github.com/beyond10x/agentide/tar.gz/efe595b07a430e0757e991be6eef60c02439b4f4,
       }
     version: 0.3.0
+    peerDependencies:
+      vue: ^3.5.0
+
+  "@b10x/phone-widget@file:../../widgets/widgets/phone/widget":
+    resolution: { directory: ../../widgets/widgets/phone/widget, type: directory }
+    engines: { node: ">=22.0.0" }
     peerDependencies:
       vue: ^3.5.0
 
@@ -3253,6 +3262,10 @@ snapshots:
       playwright-core: 1.62.1
 
   "@b10x/agentide-ui@https://codeload.github.com/beyond10x/agentide/tar.gz/efe595b07a430e0757e991be6eef60c02439b4f4(vue@3.5.42(typescript@5.9.3))":
+    dependencies:
+      vue: 3.5.42(typescript@5.9.3)
+
+  "@b10x/phone-widget@file:../../widgets/widgets/phone/widget(vue@3.5.42(typescript@5.9.3))":
     dependencies:
       vue: 3.5.42(typescript@5.9.3)
 
