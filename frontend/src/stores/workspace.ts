@@ -70,8 +70,8 @@ export const useWorkspaceStore = defineStore("workspace", () => {
     sessionError.value = "";
     try {
       session.value = await api.session();
-      sessionState.value = "ready";
       await Promise.allSettled([loadAgents(), loadCapabilityProfiles(), loadConnection()]);
+      sessionState.value = "ready";
     } catch (error) {
       if (error instanceof ApiError && error.status === 401) {
         sessionState.value = "idle";

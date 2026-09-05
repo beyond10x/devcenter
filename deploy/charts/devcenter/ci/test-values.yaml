@@ -83,6 +83,13 @@ components:
       WORKSPACE_PROJECT_AGENT_MODEL: "default"
       WORKSPACE_AEP_REALM: "engineering"
       WORKSPACE_AEP_WORKSPACE: "central"
+connectorsGitFetch:
+  enabled: true
+  sourceName: gitlab
+  tls:
+    existingSecret: example-connectors-git-fetch-tls
+  trustRoots:
+    existingSecret: example-connectors-git-fetch-ca
 substrate:
   enabled: true
   image:

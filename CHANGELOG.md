@@ -2,6 +2,17 @@
 
 ## Unreleased
 
+## 0.8.17 - 2026-09-05
+
+- Replace the product-local coding surface with AgentIDE's released Vue workbench while preserving
+  Devcenter's authenticated file, save, diff, terminal, approval, and agent-turn host boundaries.
+- Persist actor-private workbench panes, open files, focus, cursor, and diff state through the
+  generated AgentIDE service so browser reloads resume the same coding session.
+- Materialize the repository provider's default branch at an exact commit through Workspace,
+  Substrate, and Connectors' short-lived TLS Git byte plane, with generic chart NetworkPolicy and
+  trust-root configuration.
+- Align the composed AgentIDE and Todo services through Service SDK 0.5.9 and Connectors 0.6.2.
+
 ## 0.8.16 - 2026-09-04
 
 - Make curated GitLab, Slack, and model connections show their live authority state and offer the

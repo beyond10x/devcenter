@@ -2,3 +2,4 @@
 
 pub mod deployment;
 pub mod leak;
+pub mod publication;

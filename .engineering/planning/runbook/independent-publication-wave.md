@@ -1,0 +1,59 @@
+---
+format: aep.planning-md/1
+id: runbook:independent-publication-wave
+kind: runbook
+status: draft
+title: Complete independent artifact publication
+relations:
+- decides: story:selective-artifact-publication
+- decides: story:independent-workspace-publication
+revision: 3
+---
+## Authorization and selection
+
+Interactive run, pre-approved by the operator's request to complete this with aep-planning and adp:wave, following standing instructions to integrate to main and clean managed trees. Skill version 0.7.0. Two source commits, integration merges, opening and closing store commits, publication to main and cleanup are authorized by that instruction.
+
+Wave: story:independent-workspace-publication and story:selective-artifact-publication; both serve O4 in AGENTS.md. Existing ESS release outputs are already modeled in ess/build.yaml. No new domain semantics are introduced.
+
+The computed waves command (proposed stories) returns:
+
+- waves: [story:independent-workspace-publication, story:selective-artifact-publication]
+- collisions: []
+- unassessed: [story:durable-task-recovery, story:governed-run-record, story:workflow-aep-composition]
+- cycles: []
+
+Unassessed entries are pre-existing unrelated backlog; they are excluded from this authorized publication wave. Cited source paths and inferred new paths are recorded on both stories.
+
+## Execution
+
+Integration branch wave/independent-publication at fec766248afb34660db1b2e12a6370c83a504649. Managed checkout id independent-publication-wave.
+
+- Devcenter unit: impl/selective-artifact-publication, managed checkout id selective-artifact-publication. Build directory target within that tree.
+- Workspace unit: impl/independent-runtime-publication, managed checkout id independent-workspace-publication in Workspace, base 442add4f591348aa5737a5158045252ca6d90d34. Build directory target within that tree.
+- Scratch root: agent cache independent-publication-wave.e1Bll4; per-unit subdirectories publication and workspace. Absolute machine paths remain outside committed public records; worktree ids resolve them.
+
+Coordinator owns all AEP mutations, docs/ess-deployment-model.md, and retirement/redirection of promote-workspace.yml. Implementation agents own source and tests only. Managed worktree CLI owns cleanup.
+
+Use aep-drive:implementor and aep-drive:adversary charters through the available generic subagent transport, which cannot select plugin subagent_type. Four independent aep-plan critic perspectives ran in two scheduling batches because three child slots are available; no critic saw another verdict. All four approved, recorded separately.
+
+## Preflight
+
+84 GiB free at start, 20 GiB floor. Two implementors maximum, with one slot reserved for review. Existing measured Rust output: Substrate 833 MiB, Connectors 1.3 GiB. Existing classifier gate takes 0.025 s. Compiler cache sccache is installed and will be set for this wave. Each build stays in its own target directory.
+
+Primary checkouts contain unrelated changes and are preserved. Devcenter: frontend/package.json, frontend/pnpm-lock.yaml, frontend/src/env.d.ts, frontend/src/router/index.ts and frontend/src/features/phone/. Workspace: AGENTS.md, README.md, .github/, b10x.docs.yaml. Wave branches originate from fetched origin/main through managed trees, per standing user instruction.
+
+Five previous completed worktrees were GC-reviewed and removed using exact ids: git-fetch-sessions, git-workspace-materialization, hosted-browser-workbench, real-agentide-workspace, single-git-materialization. Their heads remain recoverable from published branches/tags.
+
+## Gate and status
+
+Plan review complete. Both implementation units passed independent adversarial review. Devcenter source commit 738b3b6 was merged as 2f4bfd6 and published to the default branch through 0eed3b4. Workspace source and release evidence are published through 2cb2d07, tagged 0.2.18. Devcenter frontend tree is unchanged by the units: frozen install exit 0; frontend check exit 0, 36 Vitest cases; browser gate exit 0, 17 passed and 13 existing project-specific exclusions. ESS 0.9.2 generation, chart lint and chart rollout checks exit 0. Source inspection confirms each browser exclusion targets the other desktop/mobile project.
+
+The coordinator provisioned Workspace's image repository variable through repository administration; existing bot secrets were already present. No credentials or deployment coordinates are recorded here.
+
+Integrated root cargo fmt, clippy and test commands all exited 0: 66 tests, including the actual PostgreSQL contract. Nested Connectors fmt, clippy and test commands all exited 0: 3 tests. Publication impact fixtures, version consistency, ESS generation, chart lint/rollouts, workflow actionlint and leak checks all exited 0. The dedicated PostgreSQL gate container was stopped after the gate.
+
+Remote CLI-only publication run 33935069359 is in progress. Local planning against the real 0.8.17 manifest selected deployment-cli only; server, Connectors and chart retain their exact original versions, source and digests. No chart or unrelated application publication is requested.
+
+Workspace initial owner release run 33934695619 refused before build because repository-scoped GitHub credentials cannot enumerate organization packages to prove first-package absence. Existing administrator read-only access confirmed the configured target is absent. This is an operational bootstrap correction under review, not authority to assume a 404 means absence or to change package visibility. The old Devcenter Workspace publisher remains until the owner publication has been verified.
+
+Installed AEP validation reports the four new review records as lacking findings blocks despite their verbatim empty findings blocks. This is an observed parser diagnostic, not missing reviewer returns. Existing unrelated diagnostics remain three proposed stories with no scope and one legacy review without a findings block; store validation exits 0.

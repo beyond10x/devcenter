@@ -23,26 +23,7 @@ spec:
       app.kubernetes.io/instance: {{ .Release.Name }}
     matchExpressions:
       - {key: app.kubernetes.io/component, operator: NotIn, values: [secrets-postgresql]}
-  policyTypes: [Ingress, Egress]
-  ingress:
-    - from:
-        - podSelector:
-            matchLabels:
-              app.kubernetes.io/instance: {{ .Release.Name }}
-    {{- if .Values.ingress.enabled }}
-    {{- if not .Values.networkPolicy.ingressNamespaceSelector }}
-    {{- fail "networkPolicy.ingressNamespaceSelector is required when ingress is enabled" }}
-    {{- end }}
-    - from:
-        - namespaceSelector:
-            matchLabels: {{ toYaml .Values.networkPolicy.ingressNamespaceSelector | nindent 14 }}
-          {{- with .Values.networkPolicy.ingressPodSelector }}
-          podSelector:
-            matchLabels: {{ toYaml . | nindent 14 }}
-          {{- end }}
-      ports:
-        - {protocol: TCP, port: 8080}
-    {{- end }}
+  policyTypes: [Egress]
   egress:
     - to:
         - podSelector:
@@ -69,6 +50,81 @@ spec:
     {{- with .Values.networkPolicy.extraEgress }}
 {{ toYaml . | nindent 4 }}
     {{- end }}
+---
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: {{ include "devcenter.fullname" . }}-internal-ingress
+  labels:
+    {{- include "devcenter.labels" . | nindent 4 }}
+spec:
+  podSelector:
+    matchLabels:
+      app.kubernetes.io/instance: {{ .Release.Name }}
+    matchExpressions:
+      - {key: app.kubernetes.io/component, operator: NotIn, values: [connectors, secrets-postgresql]}
+  policyTypes: [Ingress]
+  ingress:
+    - from:
+        - podSelector:
+            matchLabels:
+              app.kubernetes.io/instance: {{ .Release.Name }}
+    {{- if .Values.ingress.enabled }}
+    {{- if not .Values.networkPolicy.ingressNamespaceSelector }}
+    {{- fail "networkPolicy.ingressNamespaceSelector is required when ingress is enabled" }}
+    {{- end }}
+    - from:
+        - namespaceSelector:
+            matchLabels: {{ toYaml .Values.networkPolicy.ingressNamespaceSelector | nindent 14 }}
+          {{- with .Values.networkPolicy.ingressPodSelector }}
+          podSelector:
+            matchLabels: {{ toYaml . | nindent 14 }}
+          {{- end }}
+      ports:
+        - {protocol: TCP, port: 8080}
+    {{- end }}
+{{- if (index .Values.components "connectors").enabled }}
+---
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: {{ include "devcenter.fullname" . }}-connectors-ingress
+  labels:
+    {{- include "devcenter.labels" . | nindent 4 }}
+spec:
+  podSelector:
+    matchLabels:
+      app.kubernetes.io/instance: {{ .Release.Name }}
+      app.kubernetes.io/component: connectors
+  policyTypes: [Ingress]
+  ingress:
+    - from:
+        - podSelector:
+            matchLabels:
+              app.kubernetes.io/instance: {{ .Release.Name }}
+      ports:
+        - {protocol: TCP, port: {{ (index .Values.components "connectors").port }}}
+    {{- if .Values.connectorsGitFetch.enabled }}
+    - from:
+        - podSelector:
+            matchLabels:
+              app.kubernetes.io/instance: {{ .Release.Name }}
+              app.kubernetes.io/component: substrate
+      ports:
+        - {protocol: TCP, port: {{ .Values.connectorsGitFetch.port }}}
+    {{- end }}
+    {{- if .Values.ingress.enabled }}
+    - from:
+        - namespaceSelector:
+            matchLabels: {{ toYaml .Values.networkPolicy.ingressNamespaceSelector | nindent 14 }}
+          {{- with .Values.networkPolicy.ingressPodSelector }}
+          podSelector:
+            matchLabels: {{ toYaml . | nindent 14 }}
+          {{- end }}
+      ports:
+        - {protocol: TCP, port: {{ (index .Values.components "connectors").port }}}
+    {{- end }}
+{{- end }}
 {{- end }}
 {{- if and .Values.networkPolicy.enabled .Values.connectorsKubernetesAccess.enabled }}
 {{- if not .Values.connectorsKubernetesAccess.apiServerCidrs }}

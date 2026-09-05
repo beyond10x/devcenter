@@ -19,6 +19,9 @@ assert_targets 'server' frontend/src/App.vue
 assert_targets 'server' crates/devcenter-http/src/lib.rs
 assert_targets 'connectors' crates/devcenter-connectors/src/main.rs
 assert_targets 'deployment-cli' crates/devcenterctl/src/main.rs
+assert_targets '' deploy/charts/devcenter/templates/deployment.yaml
+chart_selected=$(printf '%s\0' deploy/charts/devcenter/templates/deployment.yaml | "$classifier" | sed -n 's/^chart=//p')
+test "$chart_selected" = true
 assert_targets 'server deployment-cli' Cargo.lock
 assert_targets 'server connectors deployment-cli' ess/build.yaml
 assert_targets 'server connectors deployment-cli' an-unclassified-runtime-surface/new.file

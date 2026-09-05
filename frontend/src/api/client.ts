@@ -117,8 +117,7 @@ export interface CodingSession {
   id: string;
   project_id: string;
   source_revision: string;
-  base_materialization_ref?: string | null;
-  working_materialization_ref?: string | null;
+  materialization_ref?: string | null;
   manifest_sha256?: string | null;
   state: CodingSessionState;
   failure_code?: string | null;
@@ -174,6 +173,43 @@ export interface CodingCoordinationView {
   pins: AgentIdeContextPinSnapshot[];
   checkpoints: AgentIdeCheckpointSnapshot[];
 }
+export type AgentIdeWorkbenchPaneKind =
+  "Editor" | "Diff" | "Terminal" | "Chat" | "Timeline" | "Agents" | "Approvals" | "Evidence";
+export interface AgentIdeWorkbenchPane {
+  id: string;
+  kind: AgentIdeWorkbenchPaneKind;
+  title: string;
+  path?: string | null;
+  line?: number | null;
+  column?: number | null;
+}
+export interface AgentIdeWorkbenchState {
+  panes: AgentIdeWorkbenchPane[];
+  focused_pane?: string | null;
+  open_files: string[];
+}
+export interface AgentIdeWorkbenchView extends AgentIdeWorkbenchState {
+  session_id: string;
+  through_version: number;
+}
+export type AgentIdeWorkbenchAction =
+  | { kind: "initialize" }
+  | { kind: "open_file"; path: string; line?: number | null; pane_id?: string | null }
+  | { kind: "close_file"; path: string }
+  | {
+      kind: "open_pane";
+      pane_id: string;
+      pane_kind: AgentIdeWorkbenchPaneKind;
+      split?: "Horizontal" | "Vertical" | null;
+    }
+  | { kind: "close_pane"; pane_id: string }
+  | { kind: "focus_pane"; pane_id: string }
+  | { kind: "move_cursor"; pane_id: string; path: string; line: number; column: number }
+  | { kind: "show_diff"; pane_id?: string | null; path?: string | null; base?: string | null };
+export interface MutateAgentIdeWorkbench extends AgentIdeWorkbenchState {
+  action: AgentIdeWorkbenchAction;
+  idempotency_key: string;
+}
 export interface CodingTreeEntry {
   path: string;
   kind: string;
@@ -182,7 +218,9 @@ export interface CodingTreeEntry {
 }
 export interface CodingTreeProjection {
   format: string;
+  root: string;
   entries: CodingTreeEntry[];
+  next_cursor?: string | null;
   truncated: boolean;
   omitted?: number | null;
 }
@@ -477,6 +515,15 @@ export const api = {
     request<CodingCoordinationView>(
       `/api/project-sessions/${encodeURIComponent(sessionId)}/coordination`,
     ),
+  codingWorkbench: (sessionId: string) =>
+    request<AgentIdeWorkbenchView>(
+      `/api/project-sessions/${encodeURIComponent(sessionId)}/workbench`,
+    ),
+  mutateCodingWorkbench: (sessionId: string, input: MutateAgentIdeWorkbench) =>
+    request<AgentIdeWorkbenchView>(
+      `/api/project-sessions/${encodeURIComponent(sessionId)}/workbench`,
+      { method: "POST", body: JSON.stringify(input) },
+    ),
   pinCodingContext: (
     sessionId: string,
     input: {
@@ -518,8 +565,9 @@ export const api = {
         body: JSON.stringify({ decision, idempotency_key: crypto.randomUUID() }),
       },
     ),
-  codingTree: (sessionId: string, query = "", limit = 500) => {
-    const parameters = new URLSearchParams({ query, limit: String(limit) });
+  codingTree: (sessionId: string, path = "", cursor?: string, limit = 500) => {
+    const parameters = new URLSearchParams({ path, limit: String(limit) });
+    if (cursor) parameters.set("cursor", cursor);
     return request<CodingTreeProjection>(
       `/api/project-sessions/${encodeURIComponent(sessionId)}/tree?${parameters.toString()}`,
     );

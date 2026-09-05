@@ -34,23 +34,6 @@ jobs:
         with:
           fetch-depth: 0
           persist-credentials: false
-      - name: Select affected OCI release units
-        id: release-unit-impact
-        env:
-          EVENT_NAME: ${{ github.event_name }}
-          BEFORE_SHA: ${{ github.event.before }}
-          BASE_SHA: ${{ github.event.pull_request.base.sha }}
-          HEAD_SHA: ${{ github.event.pull_request.head.sha || github.sha }}
-        run: |
-          if [ "$EVENT_NAME" = pull_request ]; then
-            git diff --name-only -z "$BASE_SHA...$HEAD_SHA" | bash ci/release-unit-impact.sh >> "$GITHUB_OUTPUT"
-          elif [ "$EVENT_NAME" = push ] && [ -n "$BEFORE_SHA" ] && ! printf '%s' "$BEFORE_SHA" | grep --quiet '^0\{40\}$'; then
-            git diff --name-only -z "$BEFORE_SHA..$HEAD_SHA" | bash ci/release-unit-impact.sh >> "$GITHUB_OUTPUT"
-          else
-            bash ci/release-unit-impact.sh --all >> "$GITHUB_OUTPUT"
-          fi
-      - name: Check release-unit impact classifier
-        run: bash ci/check-release-unit-impact.sh
       - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4
         with:
           node-version: 22.23.1
@@ -114,6 +97,23 @@ jobs:
       - run: cargo fmt --all --check
       - run: cargo clippy --workspace --all-targets --locked -- -D warnings
       - run: cargo test --workspace --locked
+      - name: Select affected OCI release units
+        id: release-unit-impact
+        env:
+          EVENT_NAME: ${{ github.event_name }}
+          BEFORE_SHA: ${{ github.event.before }}
+          BASE_SHA: ${{ github.event.pull_request.base.sha }}
+          HEAD_SHA: ${{ github.event.pull_request.head.sha || github.sha }}
+        run: |
+          if [ "$EVENT_NAME" = pull_request ]; then
+            git diff --name-only -z "$BASE_SHA...$HEAD_SHA" | bash ci/release-unit-impact.sh >> "$GITHUB_OUTPUT"
+          elif [ "$EVENT_NAME" = push ] && [ -n "$BEFORE_SHA" ] && ! printf '%s' "$BEFORE_SHA" | grep --quiet '^0\{40\}$'; then
+            git diff --name-only -z "$BEFORE_SHA..$HEAD_SHA" | bash ci/release-unit-impact.sh >> "$GITHUB_OUTPUT"
+          else
+            bash ci/release-unit-impact.sh --all >> "$GITHUB_OUTPUT"
+          fi
+      - name: Check release-unit impact classifier
+        run: bash ci/check-release-unit-impact.sh
       - name: Gate composed Connectors workspace
         run: |
           cargo fmt --manifest-path crates/devcenter-connectors/Cargo.toml --all --check

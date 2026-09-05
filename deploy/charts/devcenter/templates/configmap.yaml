@@ -7,6 +7,14 @@
 {{- if not (index .Values.components "workspace").enabled }}{{ fail "the AgentIDE workspace requires components.workspace.enabled" }}{{ end -}}
 {{- if not .Values.substrate.enabled }}{{ fail "the AgentIDE workspace requires substrate.enabled" }}{{ end -}}
 {{- end -}}
+{{- if .Values.connectorsGitFetch.enabled -}}
+{{- if not (index .Values.components "connectors").enabled }}{{ fail "connectorsGitFetch requires components.connectors.enabled" }}{{ end -}}
+{{- if not .Values.substrate.enabled }}{{ fail "connectorsGitFetch requires substrate.enabled" }}{{ end -}}
+{{- if not .Values.networkPolicy.enabled }}{{ fail "connectorsGitFetch requires networkPolicy.enabled so only Substrate can reach its TLS listener" }}{{ end -}}
+{{- $_ := required "connectorsGitFetch.sourceName is required" .Values.connectorsGitFetch.sourceName -}}
+{{- $_ := required "connectorsGitFetch.tls.existingSecret is required" .Values.connectorsGitFetch.tls.existingSecret -}}
+{{- $_ := required "connectorsGitFetch.trustRoots.existingSecret is required" .Values.connectorsGitFetch.trustRoots.existingSecret -}}
+{{- end -}}
 {{- if and (index .Values.components "workflow").enabled (not (index .Values.components "identity").enabled) -}}
 {{- fail "the Workflow library requires components.identity.enabled" -}}
 {{- end -}}

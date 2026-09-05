@@ -26,6 +26,8 @@ function defaultHandlers() {
   server.use(
     http.get("/api/session", () => HttpResponse.json(session)),
     http.get("/api/agents", () => HttpResponse.json([agent])),
+    http.get(`/api/agents/${agent.id}/tasks`, () => HttpResponse.json([])),
+    http.get("/api/capability-profiles", () => HttpResponse.json([])),
     http.get("/api/connectors/claude-code", () =>
       HttpResponse.json({ provider: "claude-code", connected: true }),
     ),
@@ -46,6 +48,39 @@ describe("workspace store", () => {
     expect(workspace.agents).toEqual([agent]);
     expect(workspace.selectedAgentId).toBe("agent-1");
     expect(workspace.connected).toBe(true);
+  });
+
+  it("does not expose the authenticated shell before selected-agent history is ready", async () => {
+    let releaseTasks!: () => void;
+    const tasksReady = new Promise<void>((resolve) => {
+      releaseTasks = resolve;
+    });
+    const historicalTask = {
+      id: "task-history-1",
+      agent_id: agent.id,
+      prompt: "Continue the coding session",
+      status: "succeeded",
+      output: "Ready",
+      failure_code: null,
+      created_at_ms: 1_788_260_000_001,
+      updated_at_ms: 1_788_260_000_002,
+    };
+    server.use(
+      http.get(`/api/agents/${agent.id}/tasks`, async () => {
+        await tasksReady;
+        return HttpResponse.json([historicalTask]);
+      }),
+    );
+    const workspace = useWorkspaceStore();
+
+    const bootstrapping = workspace.bootstrap();
+    await vi.waitFor(() => expect(workspace.selectedAgentId).toBe(agent.id));
+    expect(workspace.sessionState).toBe("loading");
+
+    releaseTasks();
+    await bootstrapping;
+    expect(workspace.sessionState).toBe("ready");
+    expect(workspace.historyFor(agent.id)).toEqual([historicalTask]);
   });
 
   it("shows sign in only when the session endpoint returns 401", async () => {

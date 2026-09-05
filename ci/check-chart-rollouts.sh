@@ -137,6 +137,10 @@ grep -q 'name: tls-source' "$rendered"
 grep -q 'DEV_CENTER_CONNECTORS_DOCS_AVAILABLE: "false"' "$rendered"
 grep -q 'DEV_CENTER_AGENTIDE_WORKSPACE_ENABLED: "true"' "$rendered"
 grep -q 'DEV_CENTER_WORKFLOW_ORIGIN:' "$rendered"
+grep -A1 'name: CONNECTORS_GIT_FETCH_ORIGIN' "$rendered" | grep -q 'https://devcenter-connectors.devcenter.svc.cluster.local:8443'
+grep -A1 'name: CONNECTORS_GIT_FETCH_TLS_LISTEN' "$rendered" | grep -q '0.0.0.0:8443'
+grep -A1 'name: CONNECTORS_GIT_FETCH_TLS_CERTIFICATE_FILE' "$rendered" | grep -q '/etc/connectors/git-fetch/tls.crt'
+grep -A1 'name: CONNECTORS_GIT_FETCH_TLS_PRIVATE_KEY_FILE' "$rendered" | grep -q '/etc/connectors/git-fetch/tls.key'
 
 if helm template devcenter "$chart" \
   --namespace devcenter \
@@ -231,6 +235,7 @@ helm template devcenter "$chart" \
   --set ingress.connectorAdminRoutes.enabled=true \
   --set ingress.connectorDocs.enabled=true \
   --set networkPolicy.enabled=false \
+  --set connectorsGitFetch.enabled=false \
   > "$rendered"
 
 grep -q 'path: /api/connectors/v1/connect-sessions' "$rendered"
@@ -275,6 +280,7 @@ if helm template devcenter "$chart" \
   --set components.identity.enabled=false \
   --set components.secrets.enabled=false \
   --set networkPolicy.enabled=false \
+  --set connectorsGitFetch.enabled=false \
   >/dev/null 2>"$invalid_identity_cli_error"
 then
   echo "chart unexpectedly exposed Identity CLI routes without Identity" >&2
@@ -303,6 +309,7 @@ if helm template devcenter "$chart" \
   --set components.connectors.enabled=false \
   --set components.secrets.enabled=false \
   --set networkPolicy.enabled=false \
+  --set connectorsGitFetch.enabled=false \
   >/dev/null 2>"$invalid_connector_client_error"
 then
   echo "chart unexpectedly exposed the Connector client API without Connectors" >&2
