@@ -47,7 +47,7 @@ spec:
             - sh
             - -ec
             - |
-              chown 0:0 /var/run/substrate-tls &&
+              chown 0:0 /var/lib/substrate /var/run/substrate-tls &&
               chmod 0700 /var/lib/substrate /var/run/substrate /var/run/substrate-tls &&
               rm -f /var/run/substrate-tls/tls.crt /var/run/substrate-tls/tls.key &&
               cp /var/run/substrate-tls-source/tls.crt /var/run/substrate-tls/tls.crt &&
@@ -55,11 +55,12 @@ spec:
               chmod 0644 /var/run/substrate-tls/tls.crt &&
               chmod 0600 /var/run/substrate-tls/tls.key &&
               chown 65532:65532 /var/run/substrate-tls/tls.crt /var/run/substrate-tls/tls.key &&
-              chown 65532:65532 /var/lib/substrate /var/run/substrate /var/run/substrate-tls
               {{- if $workspaceClaim }}
               chmod 0700 /var/lib/substrate/workspaces &&
-              chown 65532:65532 /var/lib/substrate/workspaces
+              chown 65532:65532 /var/lib/substrate/workspaces &&
               {{- end }}
+              chown 65532:65532 /var/run/substrate /var/run/substrate-tls &&
+              chown 65532:65532 /var/lib/substrate
           volumeMounts:
             - {name: state, mountPath: /var/lib/substrate}
             {{- if $workspaceClaim }}

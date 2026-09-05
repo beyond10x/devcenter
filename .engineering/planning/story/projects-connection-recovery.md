@@ -16,6 +16,8 @@ scope:
   path: README.md
 - confidence: cited
   path: ci/check-chart-rollouts.sh
+- confidence: inferred
+  path: ci/check-substrate-volume-permissions.sh
 - confidence: cited
   path: deploy/charts/devcenter/Chart.yaml
 - confidence: inferred
@@ -36,7 +38,7 @@ scope:
   path: frontend/src/features/projects/ProjectsView.vue
 - confidence: cited
   path: openapi.json
-revision: 19
+revision: 22
 ---
 ## Outcome
 
@@ -92,3 +94,11 @@ Honor an explicit zero for composed workload replicas, and expose Substrate repl
 The maintenance regression fails against the predecessor because an explicitly stopped Workspace still renders one replica. The corrected chart passes the full rollout checks: Workspace and Substrate render zero while their controllers, services, workspace claim and Substrate state claim template remain; ordinary values retain one and invalid Substrate replica counts are refused. Helm 3.19 lint, version consistency and diff checks pass. The independent read-only review found nothing and is recorded verbatim in review-result:projects-quota-cutover-pass-1.
 
 This prepares chart 0.8.24 with unchanged application images. The downstream first-stage successful Helm revision must select the new disk/image/command with both writers stopped. Only the second stage restores writers, after verifying that exact rollback target and no overlapping deployment. Hosted publication and the two-stage migration remain pending.
+
+## Nested volume initialization
+
+Executing the rendered chart 0.8.24 volume-permissions command with production-equivalent CHOWN and FOWNER capabilities reproduces permission denied for an existing owner-private state volume and nested workspace mount. The root initializer cannot traverse a mode-0700 parent already owned by the non-root daemon. Temporarily own the state parent while initializing nested mounts, then hand the parent back last. Preserve permissions, the capability allowlist, TLS file ownership and repeatable initialization. Add execution-level checks for initial and repeated startup and publish chart 0.8.25 without rebuilding the application. Production cutover remains pending until this correction is independently reviewed and released.
+
+## Nested initializer validation
+
+The execution regression runs the chart-rendered initializer with CHOWN/FOWNER only, no privilege escalation, a read-only root and private state/runtime/TLS mounts. The predecessor passes four shared-layout cases and fails all four separate-mount cases. The corrected chart passes all eight initial/repeated cases, preserving existing state and hidden workspace bytes plus directory and TLS ownership/modes. The full chart rollout checks, Helm 3.19 lint, version consistency against application 0.8.21, shell syntax and diff checks pass. All disposable fixture containers were removed. Independent read-only review found nothing and is recorded verbatim in review-result:projects-quota-init-order-pass-1. Chart 0.8.25 publication, the final hosted image/initializer proof and the staged data cutover remain pending.
