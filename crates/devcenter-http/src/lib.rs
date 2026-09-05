@@ -926,6 +926,22 @@ fn project_routes() -> Router<AppState> {
             "/api/project-terminals/{terminal_id}/attach",
             get(attach_terminal),
         )
+        .route_layer(axum::middleware::from_fn(workspace_request_timing))
+}
+
+async fn workspace_request_timing(
+    request: axum::extract::Request,
+    next: axum::middleware::Next,
+) -> Response {
+    let started = std::time::Instant::now();
+    let mut response = next.run(request).await;
+    if let Ok(value) = HeaderValue::from_str(&format!(
+        "bff;dur={:.3}",
+        started.elapsed().as_secs_f64() * 1_000.0,
+    )) {
+        response.headers_mut().append("server-timing", value);
+    }
+    response
 }
 
 fn coding_coordination_routes() -> Router<AppState> {
@@ -2470,22 +2486,21 @@ async fn coordination_view(
         verify_coordination_identity(&snapshot, workspace)?;
         (snapshot, version.ok_or(CoordinationIssue::INVALID)?)
     };
-    let (grants, _) =
-        query_coordination(state, authenticated, "agentide.list_grants", &workspace.id).await?;
-    let (pins, _) = query_coordination(
-        state,
-        authenticated,
-        "agentide.list_context_pins",
-        &workspace.id,
-    )
-    .await?;
-    let (checkpoints, _) = query_coordination(
-        state,
-        authenticated,
-        "agentide.list_approval_checkpoints",
-        &workspace.id,
-    )
-    .await?;
+    let ((grants, _), (pins, _), (checkpoints, _)) = tokio::try_join!(
+        query_coordination(state, authenticated, "agentide.list_grants", &workspace.id),
+        query_coordination(
+            state,
+            authenticated,
+            "agentide.list_context_pins",
+            &workspace.id
+        ),
+        query_coordination(
+            state,
+            authenticated,
+            "agentide.list_approval_checkpoints",
+            &workspace.id
+        ),
+    )?;
     Ok(CodingCoordinationView {
         summary: CoordinationSummary::ready(through_version),
         session,

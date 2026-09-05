@@ -448,8 +448,8 @@ export const api = {
         project_ref: repository.project_ref,
       }),
     }),
-  project: (projectId: string) =>
-    request<Project>(`/api/projects/${encodeURIComponent(projectId)}`),
+  project: (projectId: string, signal?: AbortSignal) =>
+    request<Project>(`/api/projects/${encodeURIComponent(projectId)}`, { signal }),
   branches: (projectId: string) =>
     request<Branch[]>(`/api/projects/${encodeURIComponent(projectId)}/branches`),
   repositoryTree: (projectId: string) =>
@@ -493,36 +493,44 @@ export const api = {
     }),
   codingSessions: (projectId: string) =>
     request<CodingSession[]>(`/api/projects/${encodeURIComponent(projectId)}/sessions`),
-  createCodingSession: (projectId: string, sourceRevision: string) =>
+  createCodingSession: (projectId: string, sourceRevision: string, signal?: AbortSignal) =>
     request<CodingSession>(`/api/projects/${encodeURIComponent(projectId)}/sessions`, {
       method: "POST",
+      signal,
       body: JSON.stringify({
         source_revision: sourceRevision,
         idempotency_key: crypto.randomUUID(),
       }),
     }),
-  codingSession: (sessionId: string) =>
-    request<CodingSession>(`/api/project-sessions/${encodeURIComponent(sessionId)}`),
-  resumeCodingSession: (sessionId: string) =>
+  codingSession: (sessionId: string, signal?: AbortSignal) =>
+    request<CodingSession>(`/api/project-sessions/${encodeURIComponent(sessionId)}`, { signal }),
+  resumeCodingSession: (sessionId: string, signal?: AbortSignal) =>
     request<CodingSession>(`/api/project-sessions/${encodeURIComponent(sessionId)}/resume`, {
       method: "POST",
+      signal,
     }),
   closeCodingSession: (sessionId: string) =>
     request<CodingSession>(`/api/project-sessions/${encodeURIComponent(sessionId)}`, {
       method: "DELETE",
     }),
-  codingCoordination: (sessionId: string) =>
+  codingCoordination: (sessionId: string, signal?: AbortSignal) =>
     request<CodingCoordinationView>(
       `/api/project-sessions/${encodeURIComponent(sessionId)}/coordination`,
+      { signal },
     ),
-  codingWorkbench: (sessionId: string) =>
+  codingWorkbench: (sessionId: string, signal?: AbortSignal) =>
     request<AgentIdeWorkbenchView>(
       `/api/project-sessions/${encodeURIComponent(sessionId)}/workbench`,
+      { signal },
     ),
-  mutateCodingWorkbench: (sessionId: string, input: MutateAgentIdeWorkbench) =>
+  mutateCodingWorkbench: (
+    sessionId: string,
+    input: MutateAgentIdeWorkbench,
+    signal?: AbortSignal,
+  ) =>
     request<AgentIdeWorkbenchView>(
       `/api/project-sessions/${encodeURIComponent(sessionId)}/workbench`,
-      { method: "POST", body: JSON.stringify(input) },
+      { method: "POST", body: JSON.stringify(input), signal },
     ),
   pinCodingContext: (
     sessionId: string,
@@ -565,16 +573,24 @@ export const api = {
         body: JSON.stringify({ decision, idempotency_key: crypto.randomUUID() }),
       },
     ),
-  codingTree: (sessionId: string, path = "", cursor?: string, limit = 500) => {
+  codingTree: (
+    sessionId: string,
+    path = "",
+    cursor?: string,
+    limit = 500,
+    signal?: AbortSignal,
+  ) => {
     const parameters = new URLSearchParams({ path, limit: String(limit) });
     if (cursor) parameters.set("cursor", cursor);
     return request<CodingTreeProjection>(
       `/api/project-sessions/${encodeURIComponent(sessionId)}/tree?${parameters.toString()}`,
+      { signal },
     );
   },
-  codingFile: (sessionId: string, path: string) =>
+  codingFile: (sessionId: string, path: string, signal?: AbortSignal) =>
     request<FileProjection>(
       `/api/project-sessions/${encodeURIComponent(sessionId)}/files/${encodeWorkspacePath(path)}`,
+      { signal },
     ),
   saveCodingFile: (sessionId: string, path: string, content: string, expectedSha256: string) =>
     request<FileProjection>(
@@ -594,12 +610,15 @@ export const api = {
       method: "POST",
       body: JSON.stringify({ selector, mode }),
     }),
-  terminalProfiles: (sessionId: string) =>
+  terminalProfiles: (sessionId: string, signal?: AbortSignal) =>
     request<TerminalProfile[]>(
       `/api/project-sessions/${encodeURIComponent(sessionId)}/terminal-profiles`,
+      { signal },
     ),
-  terminals: (sessionId: string) =>
-    request<TerminalSession[]>(`/api/project-sessions/${encodeURIComponent(sessionId)}/terminals`),
+  terminals: (sessionId: string, signal?: AbortSignal) =>
+    request<TerminalSession[]>(`/api/project-sessions/${encodeURIComponent(sessionId)}/terminals`, {
+      signal,
+    }),
   createTerminal: (
     sessionId: string,
     input: {
@@ -613,8 +632,10 @@ export const api = {
       method: "POST",
       body: JSON.stringify(input),
     }),
-  terminal: (terminalId: string) =>
-    request<TerminalSession>(`/api/project-terminals/${encodeURIComponent(terminalId)}`),
+  terminal: (terminalId: string, signal?: AbortSignal) =>
+    request<TerminalSession>(`/api/project-terminals/${encodeURIComponent(terminalId)}`, {
+      signal,
+    }),
   terminateTerminal: (terminalId: string) =>
     request<TerminalSession>(`/api/project-terminals/${encodeURIComponent(terminalId)}`, {
       method: "DELETE",

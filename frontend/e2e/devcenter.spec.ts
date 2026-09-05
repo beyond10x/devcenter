@@ -1674,3 +1674,92 @@ test("shows one stable MCP endpoint and least-privilege client setup", async ({
   const accessibility = await new AxeBuilder({ page }).withTags(["wcag2a", "wcag2aa"]).analyze();
   expect(accessibility.violations).toEqual([]);
 });
+
+test("opens an editable file while coordination, layout, and terminals are still loading", async ({
+  page,
+}, testInfo) => {
+  test.skip(testInfo.project.name !== "chromium", "Desktop progressive workspace behavior");
+  await mockAuthenticatedWorkspace(page, { agentideWorkspace: true });
+  let release!: () => void;
+  const ancillary = new Promise<void>((resolve) => {
+    release = resolve;
+  });
+  const waiting = new Set<string>();
+  await page.route(
+    /\/api\/project-sessions\/[^/]+\/(resume|workbench|terminals)$/,
+    async (route) => {
+      waiting.add(new URL(route.request().url()).pathname.split("/").at(-1) ?? "");
+      await ancillary;
+      await route.fallback();
+    },
+  );
+  try {
+    await page.goto(`/projects/${project.id}/sessions/${codingSession.id}`);
+    await expect(page.getByRole("button", { name: "main.rs" })).toBeVisible();
+    await page.getByRole("button", { name: "main.rs" }).click();
+    await expect(page.locator(".editor-leaf .monaco-editor")).toBeVisible();
+    await page.locator(".editor-leaf .monaco-editor").click();
+    await page.keyboard.press("ControlOrMeta+A");
+    await page.keyboard.type("// edited while panels restore");
+    await expect(page.getByLabel("Unsaved changes")).toBeVisible();
+    expect([...waiting].sort()).toEqual(["resume", "terminals", "workbench"]);
+    await expect(page.getByLabel("Workspace loading progress")).toContainText("Loading agents");
+    const marks = await page.evaluate(() =>
+      performance.getEntriesByType("mark").map((mark) => mark.name),
+    );
+    expect(marks).toContain("devcenter.workspace.tree-ready");
+    expect(marks).toContain("devcenter.workspace.editable-file");
+    expect(marks).not.toContain("devcenter.workspace.coordination-ready");
+    release();
+    await expect(page.getByLabel("Workspace loading progress")).toHaveCount(0);
+    await expect(page.getByLabel("Unsaved changes")).toBeVisible();
+    await expect(page.locator(".editor-leaf")).toContainText("edited while panels restore");
+  } finally {
+    release();
+  }
+});
+
+test("prepares a new coding session automatically and requests the tree only when ready", async ({
+  page,
+}, testInfo) => {
+  test.skip(testInfo.project.name !== "chromium", "Desktop progressive workspace behavior");
+  await mockAuthenticatedWorkspace(page, { agentideWorkspace: true });
+  let ready = false;
+  let creates = 0;
+  let sessionReads = 0;
+  let earlyTreeReads = 0;
+  await page.route(`**/api/projects/${project.id}/sessions`, async (route) => {
+    if (route.request().method() === "GET") {
+      await route.fulfill({ json: [] });
+      return;
+    }
+    creates += 1;
+    await route.fulfill({ json: { ...codingSession, state: "preparing" } });
+  });
+  await page.route(`**/api/project-sessions/${codingSession.id}`, async (route) => {
+    sessionReads += 1;
+    await route.fulfill({ json: { ...codingSession, state: ready ? "ready" : "preparing" } });
+  });
+  await page.route(`**/api/project-sessions/${codingSession.id}/tree?*`, async (route) => {
+    if (!ready) earlyTreeReads += 1;
+    await route.fallback();
+  });
+  await page.goto(`/projects/${project.id}`);
+  const open = page.getByRole("button", { name: "Open coding workspace", exact: true });
+  await open.hover();
+  expect(creates).toBe(0);
+  expect(sessionReads).toBe(0);
+  await open.click();
+  await expect(page.getByText("Preparing workspace files…")).toBeVisible();
+  await expect.poll(() => sessionReads).toBeGreaterThanOrEqual(2);
+  expect(earlyTreeReads).toBe(0);
+  expect(creates).toBe(1);
+  ready = true;
+  await expect(page.getByRole("button", { name: "main.rs" })).toBeVisible();
+  await page.getByRole("button", { name: "main.rs" }).click();
+  await expect(page.locator(".editor-leaf .monaco-editor")).toBeVisible();
+  const readsAtReady = sessionReads;
+  await page.waitForTimeout(1_200);
+  expect(sessionReads).toBe(readsAtReady);
+  expect(earlyTreeReads).toBe(0);
+});

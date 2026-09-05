@@ -4383,3 +4383,22 @@ pre,
     display: none;
   }
 }
+
+.hosted-workspace-content {
+  display: flex;
+  flex-direction: column;
+  min-height: 0;
+  flex: 1;
+}
+.workbench-startup {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.5rem 1rem;
+  padding: 0.4rem 1rem;
+  font-size: 0.75rem;
+}
+.workbench-startup > span {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.4rem;
+}

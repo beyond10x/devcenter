@@ -2,6 +2,18 @@
 
 ## Unreleased
 
+## 0.8.18 - 2026-09-05
+
+- Open a lightweight coding-workspace route, preload the renderer on button intent, and show the
+  repository tree as soon as materialization is ready. Restore the focused editor first with at
+  most four file requests, while coordination and terminals load independently.
+- Poll preparing sessions automatically with cancellation and bounded backoff; preserve local
+  edits, tab closures and focus when delayed saved layouts arrive, and persist layout changes in
+  order.
+- Query independent coordination panels concurrently and expose BFF handler duration through
+  `Server-Timing`. Compose the Git Smart HTTP v2 proxy and efficient Workspace service through
+  exact source pins while retaining 50-commit materialization history.
+
 ## 0.8.17 - 2026-09-05
 
 - Replace the product-local coding surface with AgentIDE's released Vue workbench while preserving

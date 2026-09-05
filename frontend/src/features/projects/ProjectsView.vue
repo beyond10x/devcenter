@@ -35,6 +35,11 @@ import {
   type WorkflowDefinition,
   type WorkflowRun,
 } from "@/api/client";
+import {
+  beginWorkspaceStartup,
+  markWorkspaceStage,
+  preloadWorkbench,
+} from "@/features/workbench/workspaceStartup";
 import { useWorkspaceStore } from "@/stores/workspace";
 
 type Tab = "overview" | "files" | "chat" | "workflows" | "aep";
@@ -69,6 +74,7 @@ const draft = ref("");
 const runningWorkflow = ref<string>();
 const codingSessions = ref<CodingSession[]>([]);
 const startingCodingSession = ref(false);
+let codingRequest: AbortController | undefined;
 
 const projectId = computed(() =>
   typeof route.params.projectId === "string" ? route.params.projectId : undefined,
@@ -84,7 +90,11 @@ const selectedThread = computed(() =>
 );
 
 onMounted(load);
-watch(projectId, load);
+watch(projectId, () => {
+  codingRequest?.abort();
+  startingCodingSession.value = false;
+  void load();
+});
 watch(
   () => route.query.q,
   (value) => {
@@ -97,7 +107,10 @@ watch(selectedThreadId, () => {
   closeMessageStream();
   void loadMessages();
 });
-onBeforeUnmount(closeMessageStream);
+onBeforeUnmount(() => {
+  closeMessageStream();
+  codingRequest?.abort();
+});
 let repositoryRequest = 0;
 let workflowObservationGeneration = 0;
 let searchTimer: number | undefined;
@@ -167,21 +180,29 @@ async function load() {
 
 async function openCodingWorkbench(existing?: CodingSession) {
   const snapshot = project.value;
-  if (!snapshot?.pinned_commit) return;
+  if (!snapshot?.pinned_commit || startingCodingSession.value) return;
+  beginWorkspaceStartup();
+  preloadWorkbench();
+  codingRequest?.abort();
+  const request = new AbortController();
+  codingRequest = request;
   startingCodingSession.value = true;
   error.value = "";
   try {
     const session =
-      existing ?? (await api.createCodingSession(snapshot.id, snapshot.pinned_commit));
+      existing ??
+      (await api.createCodingSession(snapshot.id, snapshot.pinned_commit, request.signal));
+    if (request.signal.aborted || projectId.value !== snapshot.id) return;
+    markWorkspaceStage("session-response");
     await router.push({
       name: "coding-session",
       params: { projectId: snapshot.id, sessionId: session.id },
       query: { pane: "editor" },
     });
   } catch (caught) {
-    error.value = errorMessage(caught);
+    if (!request.signal.aborted) error.value = errorMessage(caught);
   } finally {
-    startingCodingSession.value = false;
+    if (codingRequest === request) startingCodingSession.value = false;
   }
 }
 
@@ -461,6 +482,8 @@ function shortCommit(commit?: string | null) {
           class="button primary small"
           type="button"
           :disabled="startingCodingSession || !project.pinned_commit"
+          @pointerenter="preloadWorkbench"
+          @focus="preloadWorkbench"
           @click="openCodingWorkbench(resumableCodingSession)"
         >
           <LoaderCircle v-if="startingCodingSession" class="spinning" :size="15" />
