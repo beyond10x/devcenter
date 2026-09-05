@@ -165,12 +165,21 @@ mounts or host namespaces. The default keeps the ordinary unprivileged entrypoin
 verify that the selected runtime's child processes cannot inherit that capability; enabling a
 terminal execution profile additionally requires its existing sandbox and cgroup guarantees.
 
-For an existing installation, pause workspace writers before copying the complete workspace tree,
-including hidden baseline data, onto the new filesystem. Verify file contents and metadata before
-switching mounts; keep the original state volume and a recoverable copy. A rollback after new
-writes requires another pause and a synchronized copy back, so the unchanged state database and
-workspace files still describe the same resources. Changing the mount does not retrofit quotas
-onto old resources whose recorded storage limit is absent.
+For an existing installation, stop Workspace and Substrate before copying the complete workspace
+tree, including hidden baseline data, onto the new filesystem. Verify contents and metadata; keep
+the original state volume and a recoverable copy. Chart 0.8.24 honors
+`components.workspace.replicas: 0` and `substrate.replicas: 0` while preserving their resources.
+Substrate permits only zero or one replica because it owns one durable state store.
+
+First complete an upgrade selecting the new filesystem, image and quota command with both writers
+at zero. Verify that successful Helm revision and absence of writer pods before a second upgrade
+restores both to one. Serialize both stages so no other deployment replaces the rollback target.
+An automatic rollback can then stop writers while retaining their current filesystem and state.
+After quota-bound workspaces exist, rollback must retain enforced quota storage; copying bytes
+back to an ordinary filesystem does not preserve their limits. Returning to an old mount requires
+another verified writer stop, synchronized files and state, and proof that every surviving storage
+contract remains enforced. The mount change does not retrofit quotas onto old resources whose
+recorded storage limit is absent.
 
 When the chart enables the sibling Identity, Connectors, Workspace, and Agent Platform components,
 it supplies their private service origins to Agent Platform through explicit `AGENT_PLATFORM_*`

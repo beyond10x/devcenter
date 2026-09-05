@@ -18,11 +18,13 @@ scope:
   path: ci/check-chart-rollouts.sh
 - confidence: cited
   path: deploy/charts/devcenter/Chart.yaml
+- confidence: inferred
+  path: deploy/charts/devcenter/templates/components.yaml
 - confidence: cited
   path: deploy/charts/devcenter/templates/substrate.yaml
-- confidence: cited
+- confidence: inferred
   path: deploy/charts/devcenter/values.schema.json
-- confidence: cited
+- confidence: inferred
   path: deploy/charts/devcenter/values.yaml
 - confidence: cited
   path: frontend/e2e/devcenter.spec.ts
@@ -34,7 +36,7 @@ scope:
   path: frontend/src/features/projects/ProjectsView.vue
 - confidence: cited
   path: openapi.json
-revision: 14
+revision: 19
 ---
 ## Outcome
 
@@ -78,3 +80,15 @@ A related Substrate source repair is owned by story:git-workspace-quota-lifecycl
 ## Quota executable selection
 
 The new hosted quota filesystem now mounts, but direct process inspection shows that the non-root daemon has zero effective/permitted capabilities despite Kubernetes adding SYS_ADMIN to its bounding set. Select the Substrate image's byte-identical substrate-daemon-quota executable only when projectQuotas.enabled. That root-owned executable carries cap_sys_admin=ep; the default entrypoint remains plain. Preserve UID/GID65532, only SYS_ADMIN in the bounding set, the existing privilege-escalation opt-in, read-only root and absence of host mounts. Release the corrected chart as immutable 0.8.23 and deploy it with the image that supplies the quota executable; never pair that command with an older image. Final runtime evidence must prove parent/worker capability masks and actual enforced quota facts.
+
+## Atomic storage cutover
+
+The independent private deployment review identified an atomic rollback hazard during storage migration: a one-stage upgrade may accept writes on the new filesystem before another workload makes Helm roll back to the stale old mount. A prior scale-down is not a durable freeze because component replicas use a default expression that converts explicit zero to one, and Substrate replicas are fixed at one.
+
+Honor an explicit zero for composed workload replicas, and expose Substrate replicas as zero or one with default one. Preserve enabled resources and PVCs while stopped. Add rendered regression checks proving the maintenance values keep both writers at zero and retain the state/workspace claims. Prepare chart 0.8.24 without rebuilding application images. The private operator can then first commit the new disk/image with both writers stopped, and enable writers in a second upgrade whose automatic rollback target already uses the same quota filesystem. Post-write rollback must retain enforced quota storage while any quota-bound workspace survives.
+
+## Stopped cutover validation
+
+The maintenance regression fails against the predecessor because an explicitly stopped Workspace still renders one replica. The corrected chart passes the full rollout checks: Workspace and Substrate render zero while their controllers, services, workspace claim and Substrate state claim template remain; ordinary values retain one and invalid Substrate replica counts are refused. Helm 3.19 lint, version consistency and diff checks pass. The independent read-only review found nothing and is recorded verbatim in review-result:projects-quota-cutover-pass-1.
+
+This prepares chart 0.8.24 with unchanged application images. The downstream first-stage successful Helm revision must select the new disk/image/command with both writers stopped. Only the second stage restores writers, after verifying that exact rollback target and no overlapping deployment. Hosted publication and the two-stage migration remain pending.

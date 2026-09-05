@@ -18,7 +18,7 @@ metadata:
     app.kubernetes.io/component: substrate
 spec:
   serviceName: {{ include "devcenter.fullname" . }}-substrate
-  replicas: 1
+  replicas: {{ .Values.substrate.replicas }}
   podManagementPolicy: OrderedReady
   updateStrategy: {type: RollingUpdate}
   selector:

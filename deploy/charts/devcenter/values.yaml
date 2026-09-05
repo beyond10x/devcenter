@@ -282,6 +282,8 @@ secrets:
 
 substrate:
   enabled: false
+  # Zero stops the writer during storage maintenance while preserving its resources.
+  replicas: 1
   image: {repository: "", digest: "", pullPolicy: IfNotPresent}
   volumePermissions:
     image: {repository: "", digest: "", pullPolicy: IfNotPresent}

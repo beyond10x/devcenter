@@ -130,6 +130,43 @@ for invalid_quota in missing-claim reversed-range short-range; do
   grep -q 'project quota' "$invalid_workflow_error"
 done
 
+# A stopped migration stage keeps controllers, Services and storage declarations. Helm's
+# rollback target can then adopt the new filesystem before either writer is restarted.
+resource_manifest() {
+  awk -v wanted_kind="$1" -v wanted_name="$2" '
+    function emit() { if (kind == wanted_kind && name == wanted_name) printf "%s", document }
+    /^---$/ { emit(); kind = ""; name = ""; document = ""; next }
+    { document = document $0 "\n" }
+    /^kind: / { kind = $2 }
+    /^  name: / && name == "" { name = $2 }
+    END { emit() }
+  '
+}
+grep -Fxq '  replicas: 1' <<<"$(resource_manifest Deployment devcenter-workspace < "$rendered")"
+grep -Fxq '  replicas: 1' <<<"$default_substrate"
+stopped_render=$(helm template devcenter "$chart" --namespace devcenter --values "$values" \
+  --set components.workspace.replicas=0 --set components.workspace.persistence.enabled=true \
+  --set substrate.replicas=0 --set substrate.workspaceStorage.existingClaim=quota-workspaces \
+  --set substrate.workspaceStorage.projectQuotas.enabled=true)
+stopped_workspace=$(resource_manifest Deployment devcenter-workspace <<<"$stopped_render")
+stopped_substrate=$(resource_manifest StatefulSet devcenter-substrate <<<"$stopped_render")
+grep -Fxq '  replicas: 0' <<<"$stopped_workspace"
+grep -Fxq '  replicas: 0' <<<"$stopped_substrate"
+grep -Fq 'claimName: devcenter-workspace' <<<"$stopped_workspace"
+grep -Fq 'claimName: "quota-workspaces"' <<<"$stopped_substrate"
+grep -Fq 'metadata: {name: state}' <<<"$stopped_substrate"
+grep -Fq 'command: ["/usr/local/bin/substrate-daemon-quota"]' <<<"$stopped_substrate"
+test -n "$(resource_manifest PersistentVolumeClaim devcenter-workspace <<<"$stopped_render")"
+test -n "$(resource_manifest Service devcenter-workspace <<<"$stopped_render")"
+test -n "$(resource_manifest Service devcenter-substrate <<<"$stopped_render")"
+for invalid_replicas in -1 2; do
+  if substrate_render --set "substrate.replicas=$invalid_replicas" >/dev/null 2>"$invalid_workflow_error"; then
+    echo "chart unexpectedly admitted Substrate replicas: $invalid_replicas" >&2
+    exit 1
+  fi
+  grep -q 'replicas' "$invalid_workflow_error"
+done
+
 for deployment_name in \
   devcenter \
   devcenter-aep-service \
