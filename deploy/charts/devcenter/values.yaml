@@ -308,6 +308,15 @@ substrate:
   storage:
     className: ""
     size: 20Gi
+  workspaceStorage:
+    # An operator-provisioned filesystem mounted separately from durable service state.
+    existingClaim: ""
+    projectQuotas:
+      # Opts the non-root daemon into SYS_ADMIN for kernel project-quota management.
+      # Requires an exclusive quota-capable filesystem and at least 128 reserved IDs.
+      enabled: false
+      idsStart: 200000
+      idsEnd: 204095
   nodeSelector:
     kubernetes.io/arch: amd64
     kubernetes.io/os: linux

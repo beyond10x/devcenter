@@ -1,6 +1,14 @@
 {{- if .Values.substrate.enabled }}
 {{- $tlsSecret := required "substrate.tls.existingSecret is required" .Values.substrate.tls.existingSecret }}
 {{- $_ := required "substrate.hostedIdentity.origin is required" .Values.substrate.hostedIdentity.origin }}
+{{- $workspaceClaim := .Values.substrate.workspaceStorage.existingClaim }}
+{{- $quotas := .Values.substrate.workspaceStorage.projectQuotas }}
+{{- if $quotas.enabled }}
+{{- $_ := required "project quota configuration requires substrate.workspaceStorage.existingClaim" $workspaceClaim }}
+{{- if lt (add1 (sub (int64 $quotas.idsEnd) (int64 $quotas.idsStart))) 128 }}
+{{- fail "project quota range must contain at least 128 nonzero IDs in increasing order" }}
+{{- end }}
+{{- end }}
 apiVersion: apps/v1
 kind: StatefulSet
 metadata:
@@ -48,8 +56,15 @@ spec:
               chmod 0600 /var/run/substrate-tls/tls.key &&
               chown 65532:65532 /var/run/substrate-tls/tls.crt /var/run/substrate-tls/tls.key &&
               chown 65532:65532 /var/lib/substrate /var/run/substrate /var/run/substrate-tls
+              {{- if $workspaceClaim }}
+              chmod 0700 /var/lib/substrate/workspaces &&
+              chown 65532:65532 /var/lib/substrate/workspaces
+              {{- end }}
           volumeMounts:
             - {name: state, mountPath: /var/lib/substrate}
+            {{- if $workspaceClaim }}
+            - {name: workspace-data, mountPath: /var/lib/substrate/workspaces}
+            {{- end }}
             - {name: runtime, mountPath: /var/run/substrate}
             - {name: tls-source, mountPath: /var/run/substrate-tls-source, readOnly: true}
             - {name: tls, mountPath: /var/run/substrate-tls}
@@ -72,6 +87,10 @@ spec:
             - /var/lib/substrate/workspaces
             - --deployment
             - {{ .Values.substrate.deployment | quote }}
+            {{- if $quotas.enabled }}
+            - --project-quota-ids
+            - {{ printf "%v-%v" (int64 $quotas.idsStart) (int64 $quotas.idsEnd) | quote }}
+            {{- end }}
             {{- if .Values.connectorsGitFetch.enabled }}
             - --git-source
             - {{ printf "%s=https://%s-connectors.%s.svc.cluster.local:%v/internal/git-fetch/" .Values.connectorsGitFetch.sourceName (include "devcenter.fullname" .) .Release.Namespace .Values.connectorsGitFetch.port | quote }}
@@ -88,6 +107,9 @@ spec:
           ports: [{name: https, containerPort: {{ .Values.substrate.port }}}]
           volumeMounts:
             - {name: state, mountPath: /var/lib/substrate}
+            {{- if $workspaceClaim }}
+            - {name: workspace-data, mountPath: /var/lib/substrate/workspaces}
+            {{- end }}
             - {name: runtime, mountPath: /var/run/substrate}
             - {name: tls, mountPath: /etc/substrate/tls, readOnly: true}
             {{- if .Values.substrate.hostedIdentity.caBundle.existingSecret }}
@@ -103,10 +125,20 @@ spec:
             runAsNonRoot: true
             runAsUser: 65532
             runAsGroup: 65532
-            allowPrivilegeEscalation: false
+            # Kubernetes requires this when SYS_ADMIN is explicitly selected.
+            allowPrivilegeEscalation: {{ $quotas.enabled }}
             readOnlyRootFilesystem: true
+            {{- if $quotas.enabled }}
+            capabilities: {drop: ["ALL"], add: ["SYS_ADMIN"]}
+            {{- else }}
             capabilities: {drop: ["ALL"]}
+            {{- end }}
       volumes:
+        {{- if $workspaceClaim }}
+        - name: workspace-data
+          persistentVolumeClaim:
+            claimName: {{ $workspaceClaim | quote }}
+        {{- end }}
         - {name: runtime, emptyDir: {}}
         - {name: tls, emptyDir: {}}
         - name: tls-source
