@@ -2,6 +2,13 @@
 
 ## Unreleased
 
+## 0.8.20 - 2026-09-05
+
+- Select the composed Connector's TLS cryptography provider before restoring background clients,
+  including deployments where the optional Git fetch listener is disabled.
+- Map the internal Git HTTPS service on port 443 to an unprivileged TLS listener, and mount
+  Substrate's Git trust bundle as a regular file compatible with runtime startup validation.
+
 ## 0.8.19 - 2026-09-05
 
 - Compose the compatible GitLab startup fix and exactly aligned generated service factories.

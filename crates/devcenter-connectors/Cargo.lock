@@ -785,13 +785,14 @@ dependencies = [
 
 [[package]]
 name = "devcenter-connectors"
-version = "0.8.19"
+version = "0.8.20"
 dependencies = [
  "agentide-generated-service",
  "anyhow",
  "clap",
  "connectors-runtime",
  "eventlog-postgres",
+ "rustls",
  "serde",
  "serde_yaml",
  "service",

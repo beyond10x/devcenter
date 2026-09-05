@@ -73,6 +73,20 @@ helm template devcenter "$chart" \
   --values "$values" \
   > "$rendered"
 
+# The admitted HTTPS origin and Service use 443, while the process and network policy
+# use the unprivileged listener. Substrate requires the CA bundle to be a regular file.
+grep -Fq 'value: "https://devcenter-connectors.devcenter.svc.cluster.local:443"' "$rendered"
+grep -Fq 'value: "0.0.0.0:8443"' "$rendered"
+grep -Fq 'name: git-fetch-tls, port: 443, targetPort: git-fetch-tls' "$rendered"
+grep -Fq 'name: git-fetch-tls, containerPort: 8443' "$rendered"
+grep -Fq 'name: connectors-git-fetch-ca, mountPath: /etc/substrate/git-fetch/ca.crt, subPath: ca.crt, readOnly: true' "$rendered"
+if helm template devcenter "$chart" --namespace devcenter --values "$values" \
+  --set connectorsGitFetch.port=8443 >/dev/null 2>"$invalid_workflow_error"; then
+  echo "chart unexpectedly admitted a Git fetch origin outside HTTPS port 443" >&2
+  exit 1
+fi
+grep -q '443' "$invalid_workflow_error"
+
 for deployment_name in \
   devcenter \
   devcenter-aep-service \
@@ -137,7 +151,7 @@ grep -q 'name: tls-source' "$rendered"
 grep -q 'DEV_CENTER_CONNECTORS_DOCS_AVAILABLE: "false"' "$rendered"
 grep -q 'DEV_CENTER_AGENTIDE_WORKSPACE_ENABLED: "true"' "$rendered"
 grep -q 'DEV_CENTER_WORKFLOW_ORIGIN:' "$rendered"
-grep -A1 'name: CONNECTORS_GIT_FETCH_ORIGIN' "$rendered" | grep -q 'https://devcenter-connectors.devcenter.svc.cluster.local:8443'
+grep -A1 'name: CONNECTORS_GIT_FETCH_ORIGIN' "$rendered" | grep -q 'https://devcenter-connectors.devcenter.svc.cluster.local:443'
 grep -A1 'name: CONNECTORS_GIT_FETCH_TLS_LISTEN' "$rendered" | grep -q '0.0.0.0:8443'
 grep -A1 'name: CONNECTORS_GIT_FETCH_TLS_CERTIFICATE_FILE' "$rendered" | grep -q '/etc/connectors/git-fetch/tls.crt'
 grep -A1 'name: CONNECTORS_GIT_FETCH_TLS_PRIVATE_KEY_FILE' "$rendered" | grep -q '/etc/connectors/git-fetch/tls.key'

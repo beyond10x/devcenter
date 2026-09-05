@@ -66,7 +66,7 @@ spec:
           ports:
             - {name: http, containerPort: {{ $component.port }}, protocol: TCP}
             {{- if and (eq $name "connectors") $.Values.connectorsGitFetch.enabled }}
-            - {name: git-fetch-tls, containerPort: {{ $.Values.connectorsGitFetch.port }}, protocol: TCP}
+            - {name: git-fetch-tls, containerPort: {{ $.Values.connectorsGitFetch.listenPort }}, protocol: TCP}
             {{- end }}
           {{- if or $component.env $component.envValueFrom (eq $name "secrets") (eq $name "workspace") (eq $name "workflow") (eq $name "agent-platform") (eq $name "aep-service") (and (eq $name "connectors") $.Values.connectorsGitFetch.enabled) }}
           env:
@@ -82,7 +82,7 @@ spec:
             - name: CONNECTORS_GIT_FETCH_ORIGIN
               value: {{ printf "https://%s-connectors.%s.svc.cluster.local:%v" (include "devcenter.fullname" $) $.Release.Namespace $.Values.connectorsGitFetch.port | quote }}
             - name: CONNECTORS_GIT_FETCH_TLS_LISTEN
-              value: {{ printf "0.0.0.0:%v" $.Values.connectorsGitFetch.port | quote }}
+              value: {{ printf "0.0.0.0:%v" $.Values.connectorsGitFetch.listenPort | quote }}
             - name: CONNECTORS_GIT_FETCH_TLS_CERTIFICATE_FILE
               value: /etc/connectors/git-fetch/tls.crt
             - name: CONNECTORS_GIT_FETCH_TLS_PRIVATE_KEY_FILE

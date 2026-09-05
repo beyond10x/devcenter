@@ -232,13 +232,16 @@ connectorsCatalogBundle:
 connectorsGitFetch:
   enabled: false
   sourceName: gitlab
-  port: 8443
+  # The provider admits HTTPS origins on 443; the nonroot process binds a separate high port.
+  port: 443
+  listenPort: 8443
   tls:
     existingSecret: ""
     certificateKey: tls.crt
     privateKeyKey: tls.key
   # CA bundle used by Substrate to verify the Connectors service certificate. When private roots
   # are used, include every trust anchor Substrate also needs rather than replacing them narrowly.
+  # This bundle is mounted as a regular file; roll Substrate after changing its Secret.
   trustRoots:
     existingSecret: ""
     key: ca.crt

@@ -79,11 +79,18 @@
     "connectorsGitFetch": {
       "type": "object",
       "additionalProperties": false,
-      "required": ["enabled", "sourceName", "port", "tls", "trustRoots"],
+      "required": ["enabled", "sourceName", "port", "listenPort", "tls", "trustRoots"],
+      "allOf": [
+        {
+          "if": { "properties": { "enabled": { "const": true } } },
+          "then": { "properties": { "port": { "const": 443 } } }
+        }
+      ],
       "properties": {
         "enabled": { "type": "boolean" },
         "sourceName": { "type": "string", "pattern": "^[a-z][a-z0-9_]{0,63}$" },
         "port": { "type": "integer", "minimum": 1, "maximum": 65535 },
+        "listenPort": { "type": "integer", "minimum": 1, "maximum": 65535 },
         "tls": {
           "type": "object",
           "additionalProperties": false,

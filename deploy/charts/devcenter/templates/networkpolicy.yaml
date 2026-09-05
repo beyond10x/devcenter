@@ -111,7 +111,7 @@ spec:
               app.kubernetes.io/instance: {{ .Release.Name }}
               app.kubernetes.io/component: substrate
       ports:
-        - {protocol: TCP, port: {{ .Values.connectorsGitFetch.port }}}
+        - {protocol: TCP, port: {{ .Values.connectorsGitFetch.listenPort }}}
     {{- end }}
     {{- if .Values.ingress.enabled }}
     - from:

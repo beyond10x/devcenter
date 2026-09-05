@@ -4,7 +4,7 @@ members = ["."]
 
 [package]
 name = "devcenter-connectors"
-version = "0.8.19"
+version = "0.8.20"
 edition = "2024"
 rust-version = "1.98"
 license = "PolyForm-Free-Trial-1.0.0"
@@ -22,6 +22,7 @@ clap = { version = "4.6", features = ["derive", "env"] }
 connectors-runtime = { git = "https://github.com/beyond10x/connectors.git", rev = "235558c11f5fc2e4b8f8440474fb975df49d5329", default-features = false }
 connectors-service = { package = "service", git = "https://github.com/beyond10x/connectors.git", rev = "235558c11f5fc2e4b8f8440474fb975df49d5329" }
 eventlog-postgres = { git = "https://github.com/beyond10x/eventlog.git", rev = "b7e8f0d87b01c403415546d311952cb155caf16f" }
+rustls = { version = "0.23", default-features = false, features = ["aws_lc_rs", "std"] }
 serde = { version = "1", features = ["derive"] }
 serde_yaml = "0.9"
 service-catalog = { git = "https://github.com/beyond10x/service-sdk.git", rev = "0118bd3f9d63ead5d525fb39324b1e5e13c4ab1a" }

@@ -125,6 +125,7 @@ impl From<Deployment> for ServiceDeployment {
 
 #[tokio::main]
 async fn main() -> Result<()> {
+    initialize_tls_provider();
     let args = Args::parse();
     let store = Arc::new(
         eventlog_postgres::PostgresEventStore::connect(
@@ -145,6 +146,12 @@ async fn main() -> Result<()> {
         .await
         .context("serving the composed hosted Connector")?;
     Ok(())
+}
+
+fn initialize_tls_provider() {
+    // Composed clients enable both Rustls provider features. Select the hosted listener's
+    // provider before restored background clients can construct implicit TLS configurations.
+    let _ = rustls::crypto::aws_lc_rs::default_provider().install_default();
 }
 
 fn read_deployments(path: &Path) -> Result<Vec<ServiceDeployment>> {
@@ -197,6 +204,16 @@ mod tests {
     use std::fmt::Write as _;
 
     use super::*;
+
+    #[test]
+    fn tls_clients_can_start_before_optional_listeners() {
+        initialize_tls_provider();
+        // Restored background connectors construct implicit Rustls clients before any
+        // optional Git fetch listener has been bound.
+        let _client = rustls::ClientConfig::builder()
+            .with_root_certificates(rustls::RootCertStore::empty())
+            .with_no_client_auth();
+    }
 
     const OPERATIONS: &[&str] = &[
         "todo.add_item",

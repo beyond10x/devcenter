@@ -94,7 +94,7 @@ spec:
             - {name: identity-ca, mountPath: /etc/substrate/identity, readOnly: true}
             {{- end }}
             {{- if .Values.connectorsGitFetch.enabled }}
-            - {name: connectors-git-fetch-ca, mountPath: /etc/substrate/git-fetch, readOnly: true}
+            - {name: connectors-git-fetch-ca, mountPath: /etc/substrate/git-fetch/ca.crt, subPath: ca.crt, readOnly: true}
             {{- end }}
           readinessProbe: {tcpSocket: {port: https}}
           livenessProbe: {tcpSocket: {port: https}}
