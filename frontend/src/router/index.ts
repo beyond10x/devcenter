@@ -33,6 +33,13 @@ export default createRouter({
     { path: "/profiles", name: "profiles", component: ProfilesView },
     { path: "/publications", name: "publications", component: PublicationsView },
     { path: "/docs", name: "docs", component: DocsView },
+    {
+      path: "/phone",
+      name: "phone",
+      // Lazily, like the workbench: it carries a wasm module and a WebRTC stack, and a
+      // devcenter session that never opens the phone should not pay for either.
+      component: () => import("@/features/phone/PhoneView.vue"),
+    },
     { path: "/:pathMatch(.*)*", redirect: "/projects" },
   ],
   scrollBehavior: () => ({ top: 0 }),
