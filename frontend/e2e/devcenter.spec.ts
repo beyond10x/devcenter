@@ -1232,6 +1232,79 @@ test("reviews and approves only the exact suspended agent call", async ({ page }
   await expect.poll(() => submittedDecision).toEqual({ decision: "approve" });
 });
 
+test("offers GitLab connection recovery for an empty repository listing", async ({ page }) => {
+  await mockAuthenticatedWorkspace(page);
+  await page.route("**/api/repositories**", (route) => route.fulfill({ json: [] }));
+  await page.goto("/projects");
+
+  await expect(page.getByText("No repositories available", { exact: true })).toBeVisible();
+  await expect(
+    page.getByText("Connect or reconnect GitLab to browse your repositories."),
+  ).toBeVisible();
+  await expect(page.getByRole("alert")).toHaveCount(0);
+  const recovery = page.getByRole("link", { name: "Manage GitLab connection" });
+  await expect(recovery).toHaveAttribute("href", "/connectors/gitlab");
+  const accessibility = await new AxeBuilder({ page }).withTags(["wcag2a", "wcag2aa"]).analyze();
+  expect(accessibility.violations).toEqual([]);
+  await recovery.focus();
+  await expect(recovery).toBeFocused();
+  await page.keyboard.press("Enter");
+  await expect(page).toHaveURL(/\/connectors\/gitlab$/);
+  await expect(page.getByRole("heading", { name: "GitLab", exact: true })).toBeVisible();
+});
+
+test("retains no-match wording for an empty repository search", async ({ page }) => {
+  await mockAuthenticatedWorkspace(page);
+  await page.route("**/api/repositories**", (route) => route.fulfill({ json: [] }));
+  await page.goto("/projects?q=missing-repository");
+
+  await expect(page.getByRole("searchbox", { name: "Search repositories" })).toHaveValue(
+    "missing-repository",
+  );
+  await expect(page.getByText("No matching repository", { exact: true })).toBeVisible();
+  await expect(page.getByText(/Try another name/)).toBeVisible();
+  await expect(page.getByRole("alert")).toHaveCount(0);
+});
+
+test("keeps Projects service failure distinct from empty connection recovery", async ({ page }) => {
+  await mockAuthenticatedWorkspace(page);
+  await page.route("**/api/repositories**", (route) =>
+    route.fulfill({ status: 502, json: { code: "workspace_request_refused" } }),
+  );
+  await page.goto("/projects");
+
+  await expect(page.getByRole("alert")).toContainText(
+    "Workspace could not load the requested repository data. Try again.",
+  );
+  await expect(page.getByRole("alert")).not.toContainText("engineering plan");
+  await expect(page.locator(".empty-projects")).toHaveCount(0);
+  await expect(page.getByRole("link", { name: "Manage GitLab connection" })).toHaveCount(0);
+});
+
+test("opens an already opened repository without creating another project", async ({ page }) => {
+  await mockAuthenticatedWorkspace(page);
+  await page.route("**/api/repositories**", (route) =>
+    route.fulfill({
+      json: [{ ...project, visibility: "private", opened_project_id: project.id }],
+    }),
+  );
+  let projectCreations = 0;
+  page.on("request", (request) => {
+    if (new URL(request.url()).pathname === "/api/projects" && request.method() === "POST") {
+      projectCreations += 1;
+    }
+  });
+  await page.goto("/projects");
+
+  const repository = page.getByRole("button", { name: /foundation\/devcenter/ });
+  await expect(repository).toBeVisible();
+  await repository.click();
+  await expect(page).toHaveURL(`/projects/${project.id}`);
+  await expect(page.getByRole("heading", { name: project.path_with_namespace })).toBeVisible();
+  expect(projectCreations).toBe(0);
+  await expect(page.getByRole("alert")).toHaveCount(0);
+});
+
 test("opens a visible repository as a commit-pinned project", async ({ page }, testInfo) => {
   test.skip(testInfo.project.name !== "chromium", "Desktop project behavior");
   await mockAuthenticatedWorkspace(page);

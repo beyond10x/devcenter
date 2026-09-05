@@ -9,12 +9,20 @@ relations:
 - informed_by: story:legacy-gitlab-startup-alignment
 scope:
 - confidence: cited
+  path: Cargo.lock
+- confidence: cited
+  path: Cargo.toml
+- confidence: cited
   path: frontend/e2e/devcenter.spec.ts
+- confidence: cited
+  path: frontend/package.json
 - confidence: cited
   path: frontend/src/api/client.ts
 - confidence: cited
   path: frontend/src/features/projects/ProjectsView.vue
-revision: 6
+- confidence: cited
+  path: openapi.json
+revision: 8
 ---
 ## Outcome
 
@@ -34,3 +42,9 @@ A missing usable GitLab connection renders a clear recoverable Projects state. A
 ## Delivery
 
 One repair unit, an independent adversarial review, per-step repository gates, bot-authored integration and publication, immutable deployment and final browser validation. The operator authorized execution and deployment in the session. Preserve unrelated work and remove only this task's managed trees and named scratch resources after publishing evidence.
+
+## Hosted branch discovery finding
+
+Authenticated repository discovery recovered after normal OAuth reconnect. Project details loaded, but branches took roughly 18 seconds and a subsequent branch selection returned 503 after timing out. Source inspection shows discover_branches resolves gitlab.branches bindings by scanning the provider membership project catalogue; each datasource page resolves the same binding through another scan. This measured UI path is in the original Projects loading scope.
+
+The repair additionally uses the existing admitted gitlab-branch-list operation, bound to the already revalidated project and connection, with 100 records per provider page. It preserves the current Branch response and failure semantics, fetches additional pages until a short page, and never uses missing authorization as permission. Regression fixtures must prove exact numeric project identity and fresh description use, current connection admission, page progression, and errors instead of hidden partial lists. No cross-principal cache or new endpoint is introduced.

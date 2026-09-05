@@ -803,7 +803,7 @@ const FRIENDLY_ERRORS: Record<string, string> = {
   workspace_unavailable: "Repository projects are temporarily unavailable.",
   workspace_access_refused: "Your current GitLab grant does not admit this repository.",
   workspace_snapshot_conflict: "The branch snapshot changed. Refresh the project and try again.",
-  workspace_request_refused: "The central engineering plan query was refused.",
+  workspace_request_refused: "Workspace could not load the requested repository data. Try again.",
   agentide_workspace_disabled: "The hosted coding workbench is disabled in this environment.",
   workspace_file_conflict:
     "This file changed after it was loaded. Review the conflict before editing further.",
