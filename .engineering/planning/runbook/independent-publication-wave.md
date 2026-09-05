@@ -7,7 +7,7 @@ title: Complete independent artifact publication
 relations:
 - decides: story:selective-artifact-publication
 - decides: story:independent-workspace-publication
-revision: 1
+revision: 2
 ---
 ## Authorization and selection
 
@@ -46,4 +46,10 @@ Five previous completed worktrees were GC-reviewed and removed using exact ids: 
 
 ## Gate and status
 
-Plan review complete. Implementation pending. Run scoped unit checks, independent adversarial verification, then the repository gate once on each integrated result. Record each command exit independently. No gate evidence is asserted before execution.
+Plan review complete. Both units are implementing. Devcenter frontend tree is unchanged by the units: frozen install exit 0; frontend check exit 0, 36 Vitest cases; browser gate exit 0, 17 passed and 13 existing project-specific exclusions. ESS 0.9.2 generation, chart lint and chart rollout checks exit 0. Source inspection confirms each browser exclusion targets the other desktop/mobile project.
+
+The coordinator provisioned Workspace's image repository variable through repository administration; existing bot secrets were already present. No credentials or deployment coordinates are recorded here.
+
+Dedicated local PostgreSQL container devcenter-publication-gate-db is reserved for the integrated Rust gate and must be stopped after it. Root Rust gate is pending the source merge; per-command statuses will be recorded when executed.
+
+Installed AEP validation reports the four new review records as lacking findings blocks despite their verbatim empty findings blocks. This is an observed parser diagnostic, not missing reviewer returns. Existing unrelated diagnostics remain three proposed stories with no scope and one legacy review without a findings block; store validation exits 0.

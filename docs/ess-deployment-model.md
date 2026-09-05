@@ -11,8 +11,8 @@ b10x:
 
 # The ESS deployment model
 
-Devcenter is moving from a repository-specific deployment pipeline to a typed compilation model.
-The important change is not a new Helm wrapper. It is that the intent, compatibility decisions,
+Devcenter separates building an artifact, publishing it, and selecting it for deployment.
+The intent, compatibility decisions,
 immutable artifacts, environment obligations, and resulting rollout are separate documents with
 exact identities. Each stage can therefore be reviewed and refused before anything reaches a
 cluster.
@@ -162,6 +162,38 @@ released things belong together?*
 This separation lets a component release independently while a deployed environment remains
 unchanged until its lock intentionally advances. Compatibility policy is visible in the stack;
 the selected bytes are visible in the lock.
+
+## Publication follows each output
+
+A repository release does not imply a new image for every process or a new chart. Devcenter's
+server, deployment CLI, composed Connectors runtime, and chart are separate publication candidates.
+An explicit publication can select one candidate; automatic publication evaluates the candidates
+against their own last successful publications.
+
+For example, publishing a server change leaves the chart's version and digest intact. A later
+Connectors publication still sees Connectors changes that were pending before the server release.
+The comparison starts at the source of the last published Connectors artifact, rather than at the
+most recent repository tag. Failed or incomplete publications do not advance that baseline.
+
+| Changed input | Publication consequence |
+| --- | --- |
+| Browser or server implementation | Evaluate the server image |
+| Composed Connectors implementation | Evaluate the Connectors image |
+| Deployment CLI implementation | Evaluate the CLI image |
+| Chart templates or deployment defaults | Evaluate the chart |
+| An input shared by several outputs | Evaluate its dependent outputs |
+| Planning or public documentation only | No runtime or chart publication |
+
+Every retained artifact keeps its original source commit, version, and immutable digest. A
+composition may therefore contain artifacts from several releases without claiming that they were
+all rebuilt from the composition's commit. Reusing an artifact is an explicit identity-preserving
+operation; a missing or invalid publication record cannot be treated as proof of reuse.
+
+Workspace owns its runtime image publication in the Workspace repository. Its build, image smoke
+checks, signature, and durable release metadata do not require a Devcenter server or chart release.
+Workflow, AEP Service, and Substrate follow the same repository ownership boundary. Publishing one
+of these components makes an artifact available; changing an environment still requires advancing
+the downstream selection.
 
 ## Environments bind obligations without owning secrets
 
