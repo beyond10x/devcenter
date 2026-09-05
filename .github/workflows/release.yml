@@ -311,12 +311,9 @@ jobs:
           pattern: receipt-*
           path: receipts
           merge-multiple: true
-      - name: Publish a durable manifest only after all selected outputs succeed
+      - name: Validate the durable manifest and exact composed candidate
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-          VERSION: ${{ needs.plan.outputs.version }}
-          SOURCE: ${{ needs.plan.outputs.source }}
-          RELEASE_TAG: ${{ needs.plan.outputs.tag }}
         run: |
           chmod +x candidate/target/debug/devcenterctl
           jq -s 'reduce .[] as $receipt ({}; . * $receipt)' receipts/*.json > receipts.json
@@ -324,5 +321,21 @@ jobs:
             --plan candidate/publication-plan.json --receipts receipts.json > release-manifest.json
           echo "$GH_TOKEN" | helm registry login ghcr.io --username "$GITHUB_ACTOR" --password-stdin
           bash ci/publication-candidate.sh release-manifest.json candidate/target/debug/devcenterctl
+      - name: Scoped bot token for protected release publication
+        id: release-token
+        uses: actions/create-github-app-token@fee1f7d63c2ff003460e3d139729b119787bc349 # v2
+        with:
+          app-id: ${{ secrets.B10X_BOT_APP_ID }}
+          private-key: ${{ secrets.B10X_BOT_PRIVATE_KEY }}
+          owner: ${{ github.repository_owner }}
+          repositories: ${{ github.event.repository.name }}
+          permission-contents: write
+      - name: Publish a durable manifest only after all selected outputs succeed
+        env:
+          GH_TOKEN: ${{ steps.release-token.outputs.token }}
+          VERSION: ${{ needs.plan.outputs.version }}
+          SOURCE: ${{ needs.plan.outputs.source }}
+          RELEASE_TAG: ${{ needs.plan.outputs.tag }}
+        run: |
           gh release create "$RELEASE_TAG" --repo "$GITHUB_REPOSITORY" --target "$SOURCE" \
             --title "Devcenter publication ${VERSION}" --generate-notes release-manifest.json

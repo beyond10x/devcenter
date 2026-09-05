@@ -455,10 +455,17 @@ fn workflow_preserves_selection_and_candidate_validation_boundaries() {
         .as_array()
         .unwrap();
     let publish = final_steps.last().unwrap()["run"].as_str().unwrap();
-    assert!(
-        publish.find("publication-candidate.sh").unwrap()
-            < publish.find("gh release create").unwrap()
-    );
+    let step_running = |command: &str| {
+        final_steps
+            .iter()
+            .position(|step| {
+                step["run"]
+                    .as_str()
+                    .is_some_and(|run| run.contains(command))
+            })
+            .unwrap()
+    };
+    assert!(step_running("publication-candidate.sh") < step_running("gh release create"));
     assert!(!publish.contains("--clobber"));
     let promote: Value = serde_yaml::from_str(include_str!(
         "../../../.github/workflows/promote-connectors.yml"
@@ -469,6 +476,54 @@ fn workflow_preserves_selection_and_candidate_validation_boundaries() {
         "./.github/workflows/release.yml"
     );
     assert_eq!(promote["jobs"]["publish"]["with"]["unit"], "connectors");
+}
+
+#[test]
+fn protected_release_publication_uses_a_scoped_bot_token_only_for_github_writes() {
+    let workflow: Value =
+        serde_yaml::from_str(include_str!("../../../.github/workflows/release.yml")).unwrap();
+    let steps = workflow["jobs"]["github-release"]["steps"]
+        .as_array()
+        .unwrap();
+    let token = steps
+        .iter()
+        .find(|step| step["id"] == "release-token")
+        .expect("protected release refs require a bot token");
+    assert_eq!(token["with"]["permission-contents"], "write");
+    assert_eq!(
+        token["with"]["repositories"],
+        "${{ github.event.repository.name }}"
+    );
+    assert_eq!(token["with"]["owner"], "${{ github.repository_owner }}");
+    let publish = steps.last().unwrap();
+    assert_eq!(
+        publish["env"]["GH_TOKEN"],
+        "${{ steps.release-token.outputs.token }}"
+    );
+    assert!(
+        publish["run"]
+            .as_str()
+            .unwrap()
+            .contains("gh release create")
+    );
+    assert!(!publish["run"].as_str().unwrap().contains("helm registry"));
+    let candidate = steps
+        .iter()
+        .find(|step| {
+            step["run"]
+                .as_str()
+                .is_some_and(|run| run.contains("publication-candidate.sh"))
+        })
+        .unwrap();
+    assert_eq!(candidate["env"]["GH_TOKEN"], "${{ secrets.GITHUB_TOKEN }}");
+    for (name, job) in workflow["jobs"].as_object().unwrap() {
+        if name != "github-release" {
+            assert!(
+                !job.to_string()
+                    .contains("steps.release-token.outputs.token")
+            );
+        }
+    }
 }
 
 #[test]
