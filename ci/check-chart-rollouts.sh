@@ -94,7 +94,7 @@ substrate_render() {
     | awk '/^# Source: .*\/substrate.yaml$/ { selected = 1; next } /^---$/ { selected = 0 } selected'
 }
 default_substrate=$(substrate_render)
-if grep -Eq 'add:.*SYS_ADMIN|--project-quota-ids|name: workspace-data' <<<"$default_substrate"; then
+if grep -Eq 'add:.*SYS_ADMIN|--project-quota-ids|name: workspace-data|substrate-daemon-quota' <<<"$default_substrate"; then
   echo "default Substrate unexpectedly enables project quota authority" >&2
   exit 1
 fi
@@ -104,6 +104,7 @@ quota_substrate=$(substrate_render \
   --set substrate.workspaceStorage.projectQuotas.idsStart=200000 \
   --set substrate.workspaceStorage.projectQuotas.idsEnd=204095)
 grep -Fq -- '- --project-quota-ids' <<<"$quota_substrate"
+grep -Fq 'command: ["/usr/local/bin/substrate-daemon-quota"]' <<<"$quota_substrate"
 grep -Fq -- '- "200000-204095"' <<<"$quota_substrate"
 grep -Fq 'claimName: "quota-workspaces"' <<<"$quota_substrate"
 test "$(grep -Fc 'name: workspace-data, mountPath: /var/lib/substrate/workspaces' <<<"$quota_substrate")" -eq 2
