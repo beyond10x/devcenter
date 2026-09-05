@@ -2,6 +2,12 @@
 
 ## Unreleased
 
+## 0.8.19 - 2026-09-05
+
+- Compose the compatible GitLab startup fix and exactly aligned generated service factories.
+  Legacy connections stay inactive until verified reconnection binds current authority; unrelated
+  integrations and the normal reconnect flow remain available after an upgrade.
+
 ## 0.8.18 - 2026-09-05
 
 - Open a lightweight coding-workspace route, preload the renderer on button intent, and show the
