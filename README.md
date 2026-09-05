@@ -155,10 +155,13 @@ The filesystem must enforce project quotas; the released runtime proves inherita
 byte enforcement and inode enforcement at startup. An ordinary volume or directory-size check
 does not provide that guarantee.
 
-This option explicitly grants the non-root daemon `SYS_ADMIN`, which Linux requires for project
-quota management. Kubernetes consequently enables privilege escalation for that container. All
-other capabilities remain dropped, the root filesystem remains read-only, and the chart adds no
-host mounts or host namespaces. The default leaves this authority disabled. The operator must
+This option selects `/usr/local/bin/substrate-daemon-quota` from Substrate 0.7.4 or later and grants
+the non-root daemon `SYS_ADMIN`, which Linux requires for project quota management. The quota
+executable carries only `cap_sys_admin=ep`; this preserves the explicitly delegated capability
+across non-root process startup. Kubernetes consequently enables privilege escalation for that
+container. Deploy the image and quota command together, including on rollback. All other
+capabilities remain dropped, the root filesystem remains read-only, and the chart adds no host
+mounts or host namespaces. The default keeps the ordinary unprivileged entrypoint. The operator must
 verify that the selected runtime's child processes cannot inherit that capability; enabling a
 terminal execution profile additionally requires its existing sandbox and cgroup guarantees.
 

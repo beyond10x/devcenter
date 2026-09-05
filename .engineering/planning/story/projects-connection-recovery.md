@@ -34,7 +34,7 @@ scope:
   path: frontend/src/features/projects/ProjectsView.vue
 - confidence: cited
   path: openapi.json
-revision: 13
+revision: 14
 ---
 ## Outcome
 
@@ -74,3 +74,7 @@ Provide an opt-in hosted quota configuration for the existing Substrate Git/file
 Validate the range and required PVC at render time. Add positive/negative chart regression checks for quota arguments, the separate mount, default capabilities and invalid configurations. Update generic deployment documentation and publish only the changed chart output. The downstream operator must provision ext4 with project+quota features and enforced project quotas, freeze writers for an inventory/hash-verified complete workspace-tree migration, retain the original data and document a synchronized rollback. Existing eight workspace records have no storage quota; migration preserves that state and does not invent allocations.
 
 A related Substrate source repair is owned by story:git-workspace-quota-lifecycle in its repository: attach quota before Git writes, preserve allocation on rename, kernel accounting on observation and complete failure/restart cleanup. Configuration alone cannot close this story. Real quota enforcement and the authenticated editor remain required validation. The current published runtime does not include the sandbox toolchain/cgroup delegation for terminal execution; this repair does not claim to introduce that separate serving profile.
+
+## Quota executable selection
+
+The new hosted quota filesystem now mounts, but direct process inspection shows that the non-root daemon has zero effective/permitted capabilities despite Kubernetes adding SYS_ADMIN to its bounding set. Select the Substrate image's byte-identical substrate-daemon-quota executable only when projectQuotas.enabled. That root-owned executable carries cap_sys_admin=ep; the default entrypoint remains plain. Preserve UID/GID65532, only SYS_ADMIN in the bounding set, the existing privilege-escalation opt-in, read-only root and absence of host mounts. Release the corrected chart as immutable 0.8.23 and deploy it with the image that supplies the quota executable; never pair that command with an older image. Final runtime evidence must prove parent/worker capability masks and actual enforced quota facts.

@@ -78,6 +78,9 @@ spec:
         - name: substrate
           image: {{ include "devcenter.image" .Values.substrate.image | quote }}
           imagePullPolicy: {{ .Values.substrate.image.pullPolicy }}
+          {{- if $quotas.enabled }}
+          command: ["/usr/local/bin/substrate-daemon-quota"]
+          {{- end }}
           args:
             - --socket
             - /var/run/substrate/substrate.sock
