@@ -6,7 +6,7 @@ status: draft
 title: Projects recovery execution and verification
 relations:
 - implements: story:projects-connection-recovery
-revision: 1
+revision: 2
 ---
 ## Authorized repair wave
 
@@ -41,3 +41,11 @@ The source trees use wave/projects-recovery then impl/projects-connection-recove
 ## Completion evidence required
 
 Regression failure before implementation, affected package checks, independent adversarial findings, each required integration gate step with its own exit status, immutable runtime image and rollout evidence, and authenticated hosted Projects/repository navigation verification. Until the hosted flow is verified, this story stays active. Cleanup preserves all evidence before finishing and garbage collecting only exact reviewed task worktree IDs.
+
+## Runtime publication scope
+
+Publish Devcenter server 0.8.21 and Workspace runtime 0.2.20 after review and integration gates. The Workspace public client contract does not change, so Devcenter retains its released 0.2.19 client pins. Devcenter release publication selects server explicitly and composes the existing chart, Connectors and deployment CLI receipts. No Connectors provider rebuild is required by this repair.
+
+Frontend red tests reproduced missing recovery guidance and the engineering-plan-specific error text. Green runs passed 46 unit cases and 27 browser cases with 15 pre-existing platform-specific skips. Main Rust checks include the PostgreSQL store contract against a task-owned PostgreSQL 17 fixture. The repository-pinned ESS 0.9.2 build comparison passed.
+
+Read-only organization documentation reconciliation used clean Atlas remote main 7b67e8e2437ec9956135930435875a8a76139c3f with explicit managed Workspace and Devcenter roots. It refuses the pre-existing AgentIDE v4 manifest through the pinned older Docs System collector. This repair changes no public documentation source or declaration; no organization-wide documentation convergence is claimed.

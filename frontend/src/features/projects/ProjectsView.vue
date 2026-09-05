@@ -445,9 +445,16 @@ function shortCommit(commit?: string | null) {
           <LoaderCircle v-if="opening === repository.project_ref" class="spinning" :size="18" />
           <ChevronRight v-else :size="18" />
         </button>
-        <div v-if="!repositories.length && !searching" class="empty-projects">
-          <FolderGit2 :size="28" /><strong>No matching repository</strong>
-          <p>Try another name or verify the current GitLab connection.</p>
+        <div v-if="!repositories.length && !searching && !error" class="empty-projects">
+          <FolderGit2 :size="28" />
+          <strong>{{
+            search.trim() ? "No matching repository" : "No repositories available"
+          }}</strong>
+          <p v-if="search.trim()">Try another name or check your GitLab connection.</p>
+          <p v-else>Connect or reconnect GitLab to browse your repositories.</p>
+          <RouterLink class="button primary" to="/connectors/gitlab">
+            Manage GitLab connection
+          </RouterLink>
         </div>
       </section>
     </template>
