@@ -1305,6 +1305,34 @@ test("opens an already opened repository without creating another project", asyn
   await expect(page.getByRole("alert")).toHaveCount(0);
 });
 
+test("keeps revoked access visible when opening a previously listed project", async ({ page }) => {
+  await mockAuthenticatedWorkspace(page);
+  await page.route("**/api/repositories**", (route) =>
+    route.fulfill({
+      json: [{ ...project, visibility: "private", opened_project_id: project.id }],
+    }),
+  );
+  await page.route(`**/api/projects/${project.id}`, (route) =>
+    route.fulfill({ status: 403, json: { code: "workspace_access_refused" } }),
+  );
+  let projectCreations = 0;
+  page.on("request", (request) => {
+    if (new URL(request.url()).pathname === "/api/projects" && request.method() === "POST") {
+      projectCreations += 1;
+    }
+  });
+  await page.goto("/projects");
+  await page.getByRole("button", { name: /foundation\/devcenter/ }).click();
+
+  await expect(page.getByRole("alert")).toContainText(
+    "Your current GitLab grant does not admit this repository.",
+  );
+  await expect(page).toHaveURL("/projects");
+  await expect(page.locator(".empty-projects")).toHaveCount(0);
+  await expect(page.getByRole("link", { name: "Manage GitLab connection" })).toHaveCount(0);
+  expect(projectCreations).toBe(0);
+});
+
 test("opens a visible repository as a commit-pinned project", async ({ page }, testInfo) => {
   test.skip(testInfo.project.name !== "chromium", "Desktop project behavior");
   await mockAuthenticatedWorkspace(page);
