@@ -103,6 +103,38 @@ struct Mirror {
 #[derive(Debug, Subcommand)]
 enum ReleaseAction {
     Verify(ReleaseVerify),
+    /// Select ESS outputs against their last successful publication.
+    Plan(PublicationPlan),
+    /// Complete a manifest only when every selected output has a verified receipt.
+    Complete(PublicationComplete),
+    /// Classify NUL-separated source paths for the pull-request gate.
+    Impact(PublicationImpact),
+}
+
+#[derive(Debug, Args)]
+struct PublicationPlan {
+    #[arg(long, default_value = ".")]
+    root: PathBuf,
+    #[arg(long)]
+    history: PathBuf,
+    #[arg(long)]
+    version: String,
+    #[arg(long, default_value = "auto")]
+    unit: String,
+    #[arg(long)]
+    bootstrap: bool,
+}
+#[derive(Debug, Args)]
+struct PublicationComplete {
+    #[arg(long)]
+    plan: PathBuf,
+    #[arg(long)]
+    receipts: PathBuf,
+}
+#[derive(Debug, Args)]
+struct PublicationImpact {
+    #[arg(long)]
+    all: bool,
 }
 
 #[derive(Debug, Subcommand)]
@@ -153,9 +185,58 @@ fn main() -> Result<()> {
         Action::Rollback(args) => rollback(&args),
         Action::Mirror(args) => mirror(&args),
         Action::Release(ReleaseAction::Verify(args)) => release_verify(&args),
+        Action::Release(ReleaseAction::Plan(args)) => {
+            let history: Vec<devcenterctl::publication::Manifest> =
+                devcenterctl::publication::read_json(&args.history)?;
+            let plan = devcenterctl::publication::plan(
+                &args.root,
+                &history,
+                &args.version,
+                &args.unit,
+                args.bootstrap,
+            )?;
+            println!("{}", serde_json::to_string_pretty(&plan)?);
+            Ok(())
+        }
+        Action::Release(ReleaseAction::Complete(args)) => {
+            let manifest = devcenterctl::publication::complete(
+                devcenterctl::publication::read_json(&args.plan)?,
+                devcenterctl::publication::read_json(&args.receipts)?,
+            )?;
+            println!("{}", serde_json::to_string_pretty(&manifest)?);
+            Ok(())
+        }
+        Action::Release(ReleaseAction::Impact(args)) => publication_impact(&args),
         Action::Deployment(DeploymentAction::Validate(args)) => deployment_validate(&args),
         Action::Bundle(BundleAction::Validate(args)) => bundle_validate(&args),
     }
+}
+
+fn publication_impact(args: &PublicationImpact) -> Result<()> {
+    use std::{collections::BTreeSet, io::Read};
+    let outputs = devcenterctl::publication::outputs(Path::new("."))?;
+    let selected = if args.all {
+        outputs.keys().cloned().collect::<BTreeSet<_>>()
+    } else {
+        let mut input = Vec::new();
+        std::io::stdin().read_to_end(&mut input)?;
+        let mut selected = BTreeSet::new();
+        for path in input.split(|b| *b == 0).filter(|p| !p.is_empty()) {
+            selected.extend(devcenterctl::publication::affected(std::str::from_utf8(
+                path,
+            )?));
+        }
+        selected
+    };
+    for name in outputs.keys() {
+        println!("{}={}", name.replace('-', "_"), selected.contains(name));
+    }
+    let targets = ["server", "connectors", "deployment-cli"]
+        .into_iter()
+        .filter(|name| selected.contains(*name))
+        .collect::<Vec<_>>();
+    println!("oci_targets={}", targets.join(" "));
+    Ok(())
 }
 
 fn leak_check(args: &LeakCheck) -> Result<()> {

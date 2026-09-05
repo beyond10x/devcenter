@@ -22,11 +22,8 @@ normalize_rust_version() {
 }
 
 for named_version in \
-  "chart version:$chart_version" \
-  "chart appVersion:$chart_app_version" \
   "frontend package:$frontend_version" \
-  "OpenAPI:$openapi_version" \
-  "composed Connectors:$connectors_version"
+  "OpenAPI:$openapi_version"
 do
   name=${named_version%%:*}
   version=${named_version#*:}
@@ -37,6 +34,12 @@ do
 done
 
 normalized_rust_version=$(normalize_rust_version "$rust_version")
+for version in "$chart_version" "$chart_app_version" "$connectors_version"; do
+  if [[ ! "$version" =~ ^[0-9]+\.[0-9]+\.[0-9]+([+-][0-9A-Za-z.-]+)?$ ]]; then
+    echo "invalid independent artifact version '$version'" >&2
+    exit 1
+  fi
+done
 if [[ "$connectors_rust_version" != "$rust_version" || "$toolchain_version" != "$normalized_rust_version" ]]; then
   echo "Rust versions are inconsistent: workspace=$rust_version composed=$connectors_rust_version toolchain=$toolchain_version" >&2
   exit 1
