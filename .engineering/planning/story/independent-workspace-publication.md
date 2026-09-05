@@ -9,14 +9,20 @@ relations:
 - decomposes: epic:independent-component-delivery
 scope:
 - confidence: cited
-  path: .github/workflows/promote-workspace.yml
-- confidence: inferred
-  path: workspace/.github/workflows/release.yml
+  path: ../workspace/.github/workflows/release.yml
 - confidence: cited
-  path: workspace/Dockerfile
-- confidence: inferred
-  path: workspace/crates/workspace-service/tests/release.rs
-revision: 6
+  path: ../workspace/Dockerfile
+- confidence: cited
+  path: ../workspace/README.md
+- confidence: cited
+  path: ../workspace/Taskfile.yml
+- confidence: cited
+  path: ../workspace/ci/release.rs
+- confidence: cited
+  path: ../workspace/ci/release_adversary.rs
+- confidence: cited
+  path: .github/workflows/promote-workspace.yml
+revision: 7
 ---
 ## Outcome
 

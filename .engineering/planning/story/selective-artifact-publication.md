@@ -19,6 +19,14 @@ scope:
 - confidence: cited
   path: ci/check-version-consistency.sh
 - confidence: cited
+  path: ci/publication-candidate.sh
+- confidence: cited
+  path: ci/publication-history.sh
+- confidence: cited
+  path: ci/publication-image.sh
+- confidence: cited
+  path: ci/publication-tag-absent.sh
+- confidence: cited
   path: ci/release-unit-impact.sh
 - confidence: cited
   path: crates/devcenterctl/src/lib.rs
@@ -26,7 +34,11 @@ scope:
   path: crates/devcenterctl/src/main.rs
 - confidence: inferred
   path: crates/devcenterctl/src/publication.rs
-revision: 6
+- confidence: cited
+  path: crates/devcenterctl/tests/publication.rs
+- confidence: cited
+  path: crates/devcenterctl/tests/publication_adversary.rs
+revision: 7
 ---
 ## Outcome
 
