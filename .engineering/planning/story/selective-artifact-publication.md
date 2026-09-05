@@ -2,7 +2,7 @@
 format: aep.planning-md/1
 id: story:selective-artifact-publication
 kind: story
-status: active
+status: implemented
 title: Publish only affected Devcenter artifacts
 summary: Separate server, deployment CLI, Connectors runtime and chart publication with independently selected immutable outputs.
 relations:
@@ -38,7 +38,7 @@ scope:
   path: crates/devcenterctl/tests/publication.rs
 - confidence: cited
   path: crates/devcenterctl/tests/publication_adversary.rs
-revision: 7
+revision: 8
 ---
 ## Outcome
 

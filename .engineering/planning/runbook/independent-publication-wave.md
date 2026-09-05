@@ -7,7 +7,7 @@ title: Complete independent artifact publication
 relations:
 - decides: story:selective-artifact-publication
 - decides: story:independent-workspace-publication
-revision: 2
+revision: 3
 ---
 ## Authorization and selection
 
@@ -46,10 +46,14 @@ Five previous completed worktrees were GC-reviewed and removed using exact ids: 
 
 ## Gate and status
 
-Plan review complete. Both units are implementing. Devcenter frontend tree is unchanged by the units: frozen install exit 0; frontend check exit 0, 36 Vitest cases; browser gate exit 0, 17 passed and 13 existing project-specific exclusions. ESS 0.9.2 generation, chart lint and chart rollout checks exit 0. Source inspection confirms each browser exclusion targets the other desktop/mobile project.
+Plan review complete. Both implementation units passed independent adversarial review. Devcenter source commit 738b3b6 was merged as 2f4bfd6 and published to the default branch through 0eed3b4. Workspace source and release evidence are published through 2cb2d07, tagged 0.2.18. Devcenter frontend tree is unchanged by the units: frozen install exit 0; frontend check exit 0, 36 Vitest cases; browser gate exit 0, 17 passed and 13 existing project-specific exclusions. ESS 0.9.2 generation, chart lint and chart rollout checks exit 0. Source inspection confirms each browser exclusion targets the other desktop/mobile project.
 
 The coordinator provisioned Workspace's image repository variable through repository administration; existing bot secrets were already present. No credentials or deployment coordinates are recorded here.
 
-Dedicated local PostgreSQL container devcenter-publication-gate-db is reserved for the integrated Rust gate and must be stopped after it. Root Rust gate is pending the source merge; per-command statuses will be recorded when executed.
+Integrated root cargo fmt, clippy and test commands all exited 0: 66 tests, including the actual PostgreSQL contract. Nested Connectors fmt, clippy and test commands all exited 0: 3 tests. Publication impact fixtures, version consistency, ESS generation, chart lint/rollouts, workflow actionlint and leak checks all exited 0. The dedicated PostgreSQL gate container was stopped after the gate.
+
+Remote CLI-only publication run 33935069359 is in progress. Local planning against the real 0.8.17 manifest selected deployment-cli only; server, Connectors and chart retain their exact original versions, source and digests. No chart or unrelated application publication is requested.
+
+Workspace initial owner release run 33934695619 refused before build because repository-scoped GitHub credentials cannot enumerate organization packages to prove first-package absence. Existing administrator read-only access confirmed the configured target is absent. This is an operational bootstrap correction under review, not authority to assume a 404 means absence or to change package visibility. The old Devcenter Workspace publisher remains until the owner publication has been verified.
 
 Installed AEP validation reports the four new review records as lacking findings blocks despite their verbatim empty findings blocks. This is an observed parser diagnostic, not missing reviewer returns. Existing unrelated diagnostics remain three proposed stories with no scope and one legacy review without a findings block; store validation exits 0.
