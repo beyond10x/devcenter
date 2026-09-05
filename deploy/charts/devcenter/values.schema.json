@@ -134,7 +134,29 @@
         }
       }
     },
-    "substrate": { "type": "object" },
+    "substrate": {
+      "type": "object",
+      "properties": {
+        "workspaceStorage": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["existingClaim", "projectQuotas"],
+          "properties": {
+            "existingClaim": { "type": "string", "maxLength": 253, "pattern": "^$|^[a-z0-9]([-a-z0-9.]*[a-z0-9])?$" },
+            "projectQuotas": {
+              "type": "object",
+              "additionalProperties": false,
+              "required": ["enabled", "idsStart", "idsEnd"],
+              "properties": {
+                "enabled": { "type": "boolean" },
+                "idsStart": { "type": "integer", "minimum": 1, "maximum": 4294967295 },
+                "idsEnd": { "type": "integer", "minimum": 1, "maximum": 4294967295 }
+              }
+            }
+          }
+        }
+      }
+    },
     "secrets": { "type": "object" },
     "networkPolicy": {
       "type": "object",

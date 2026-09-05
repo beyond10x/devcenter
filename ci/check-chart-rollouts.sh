@@ -87,6 +87,48 @@ if helm template devcenter "$chart" --namespace devcenter --values "$values" \
 fi
 grep -q '443' "$invalid_workflow_error"
 
+# Quota-backed Git workspaces keep state on its existing claim and use an explicitly
+# selected filesystem. The default daemon must retain its unprivileged posture.
+substrate_render() {
+  helm template devcenter "$chart" --namespace devcenter --values "$values" "$@" \
+    | awk '/^# Source: .*\/substrate.yaml$/ { selected = 1; next } /^---$/ { selected = 0 } selected'
+}
+default_substrate=$(substrate_render)
+if grep -Eq 'add:.*SYS_ADMIN|--project-quota-ids|name: workspace-data' <<<"$default_substrate"; then
+  echo "default Substrate unexpectedly enables project quota authority" >&2
+  exit 1
+fi
+quota_substrate=$(substrate_render \
+  --set substrate.workspaceStorage.existingClaim=quota-workspaces \
+  --set substrate.workspaceStorage.projectQuotas.enabled=true \
+  --set substrate.workspaceStorage.projectQuotas.idsStart=200000 \
+  --set substrate.workspaceStorage.projectQuotas.idsEnd=204095)
+grep -Fq -- '- --project-quota-ids' <<<"$quota_substrate"
+grep -Fq -- '- "200000-204095"' <<<"$quota_substrate"
+grep -Fq 'claimName: "quota-workspaces"' <<<"$quota_substrate"
+test "$(grep -Fc 'name: workspace-data, mountPath: /var/lib/substrate/workspaces' <<<"$quota_substrate")" -eq 2
+grep -Fq 'capabilities: {drop: ["ALL"], add: ["SYS_ADMIN"]}' <<<"$quota_substrate"
+grep -Fq 'allowPrivilegeEscalation: true' <<<"$quota_substrate"
+grep -Fq 'runAsNonRoot: true' <<<"$quota_substrate"
+grep -Fq 'readOnlyRootFilesystem: true' <<<"$quota_substrate"
+if grep -Eq 'privileged: true|hostPath:|hostPID: true|hostNetwork: true|SYS_RESOURCE' <<<"$quota_substrate"; then
+  echo "project quota configuration enables unrelated host authority" >&2
+  exit 1
+fi
+for invalid_quota in missing-claim reversed-range short-range; do
+  quota_args=(--set substrate.workspaceStorage.projectQuotas.enabled=true)
+  case "$invalid_quota" in
+    missing-claim) ;;
+    reversed-range) quota_args+=(--set substrate.workspaceStorage.existingClaim=quota-workspaces --set substrate.workspaceStorage.projectQuotas.idsStart=300000 --set substrate.workspaceStorage.projectQuotas.idsEnd=200000) ;;
+    short-range) quota_args+=(--set substrate.workspaceStorage.existingClaim=quota-workspaces --set substrate.workspaceStorage.projectQuotas.idsStart=200000 --set substrate.workspaceStorage.projectQuotas.idsEnd=200126) ;;
+  esac
+  if substrate_render "${quota_args[@]}" >/dev/null 2>"$invalid_workflow_error"; then
+    echo "chart unexpectedly admitted project quota configuration: $invalid_quota" >&2
+    exit 1
+  fi
+  grep -q 'project quota' "$invalid_workflow_error"
+done
+
 for deployment_name in \
   devcenter \
   devcenter-aep-service \

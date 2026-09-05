@@ -146,6 +146,29 @@ explicit, browser tab close only detaches, and the separate Kill action terminat
 process. The terminal row is keyboard- and pointer-resizable, while scrollback enters AgentIDE
 context only when a human explicitly attaches a selection.
 
+Git coding sessions request hard byte and inode quotas. Their Substrate host must prove those
+guarantees before admitting a materialization. The chart's optional
+`substrate.workspaceStorage.existingClaim` mounts an operator-provisioned workspace filesystem
+separately from durable service state. Setting `workspaceStorage.projectQuotas.enabled` and its
+inclusive `idsStart`/`idsEnd` range delegates at least 128 exclusive project IDs to that host.
+The filesystem must enforce project quotas; the released runtime proves inheritance, accounting,
+byte enforcement and inode enforcement at startup. An ordinary volume or directory-size check
+does not provide that guarantee.
+
+This option explicitly grants the non-root daemon `SYS_ADMIN`, which Linux requires for project
+quota management. Kubernetes consequently enables privilege escalation for that container. All
+other capabilities remain dropped, the root filesystem remains read-only, and the chart adds no
+host mounts or host namespaces. The default leaves this authority disabled. The operator must
+verify that the selected runtime's child processes cannot inherit that capability; enabling a
+terminal execution profile additionally requires its existing sandbox and cgroup guarantees.
+
+For an existing installation, pause workspace writers before copying the complete workspace tree,
+including hidden baseline data, onto the new filesystem. Verify file contents and metadata before
+switching mounts; keep the original state volume and a recoverable copy. A rollback after new
+writes requires another pause and a synchronized copy back, so the unchanged state database and
+workspace files still describe the same resources. Changing the mount does not retrofit quotas
+onto old resources whose recorded storage limit is absent.
+
 When the chart enables the sibling Identity, Connectors, Workspace, and Agent Platform components,
 it supplies their private service origins to Agent Platform through explicit `AGENT_PLATFORM_*`
 inputs. Enabling Agent Platform persistence also supplies its state path inside the mounted volume,
