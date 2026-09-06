@@ -64,7 +64,7 @@ scope:
   path: generated/ess/build.json
 - confidence: cited
   path: openapi.json
-revision: 50
+revision: 51
 ---
 ## Outcome
 
@@ -264,3 +264,17 @@ Independent review identified two compatibility defects in the first local Files
 ## Files entry release candidate verified
 
 The deciding saved-layout regression fails both resume cases with HTTP422 before the review corrections. After correction, all46 frontend unit tests and32 production browser cases pass, with18 existing desktop-only mobile exclusions. Root and composed Rust formatting, Clippy with warnings denied, all root tests and all four composed tests pass; chart lint, version and release-impact checks, rollout regressions including eight initializer executions, and the confidential-marker check pass. Independent pass2 approves exact runtime/test/version diff SHA256 5195c9615112574d51cc64184782707d80ad3431b6013ec48b26ea8e828ad887. Server0.8.30 is the only intended publication output. CI, immutable publication, downstream rollout and actual Files-click acceptance remain required before claiming this navigation correction deployed.
+
+## Files entry deployed and verified
+
+Devcenter PR54 merged source c9ed84eb830e9be448737c86370080d27c64ee39 after exact-head Gate34030872949 succeeded. Publication34031650732 succeeded and publication-0.8.30 records server sha256:3b0686ce6727cf3b810e04296e6c4cc2ccb865faa558d2d29a058c5173943b7a. The stable full-index runtime/test/version diff against the reviewed base is ec36c17ddbd27dc3c71df525b4125aded7b63114f775706b1621d4adff04c671; independent committed-source comparison confirms it is identical to the approved correction. Other publication outputs were reused.
+
+The downstream input review approved exactly five server substitutions in the three existing deployment inputs. Normal validation, atomic deployment and running-image verification passed. Independent live workload inspection proves only the server changed among eleven workloads, and the Ready runtime reports the published digest with zero restarts. The deployment retains Workspace0.2.22 and the existing quota storage. No terminal execution profile or credential bytes were added.
+
+Authenticated headless acceptance now enters through the actual Project Files button with no mocked application responses. It opens the Files pane first, creates the workspace through the normal browser action, and persists Agent-to-Files navigation twice with HTTP200 before opening any file, including after closing the Files placeholder. The real editor renders44 non-overlapping lines, keyboard editing saves with HTTP200, exact content and hash are restored, and the browser reloads the file. No JavaScript errors or CSP violations occurred before or after reload. Ready took23066ms and the editor appeared at38494ms in this single observation; navigation checks are included in the latter timing. Both the owned test workspace and its coordination closed through the normal API after one reconciliation retry.
+
+The operator's separately preserved workspace remains Ready and its root tree returnsHTTP200 after rollout. It was not edited or closed by this final test. The user had already confirmed that workspace works and identified the initial Agent tab and ineffective explorer entry as the confusion; the released navigation correction directly addresses those observations.
+
+Overall deployment acceptance remains failed: no admitted terminal profile is configured, and the fresh coding-Agent request is admitted with HTTP202 then fails model_credential_unavailable. The independently exercised project Agent also fails after HTTP200 admission. The repeatable downstream harness requires Files entry/navigation, edit/save/restore/reload, actual terminal output and both successful Agent replies before it can report overall success. The Claude subscription credential blocker stays open and this story stays active; file-only evidence does not supply its withheld successful Agent test result.
+
+Terminal investigation confirms that configuration alone cannot serve execution. The current released image lacks the sandbox and shell toolchain, and the deployment lacks the explicit delegated cgroup root required by the runtime's capability probes. The existing node-bound Kubernetes serving-profile and namespace-driver stories in the owning runtime remain proposed. No fallback shell, weakened probe, extra privileges or invented execution capability was introduced. That serving profile and successful Agent credential recovery remain undelivered work.
