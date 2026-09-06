@@ -64,7 +64,7 @@ scope:
   path: generated/ess/build.json
 - confidence: cited
   path: openapi.json
-revision: 49
+revision: 50
 ---
 ## Outcome
 
@@ -260,3 +260,7 @@ The concrete navigation defect is that Projects emits pane=editor but HostedWork
 ## Saved-layout review corrections
 
 Independent review identified two compatibility defects in the first local Files-pane implementation. A saved chat-only layout did not yet contain the synthetic Files pane, so a later focus mutation omitted it and the real BFF would reject the inconsistent target. Closing the Files placeholder also removed the renderer's only editor navigation target. The production-browser regression now restores an actual chat-only saved layout, enforces the BFF focus-target contract, waits for successful persisted focus mutations, and covers closing Files before returning from Agent chat. Both ready/preparing resume cases fail the initial candidate with HTTP422. Include local panes absent from durable layout in queued mutations, and retain the Files pane like the permanent Agent pane. Full frontend and production-browser gates and independent re-review follow these corrections.
+
+## Files entry release candidate verified
+
+The deciding saved-layout regression fails both resume cases with HTTP422 before the review corrections. After correction, all46 frontend unit tests and32 production browser cases pass, with18 existing desktop-only mobile exclusions. Root and composed Rust formatting, Clippy with warnings denied, all root tests and all four composed tests pass; chart lint, version and release-impact checks, rollout regressions including eight initializer executions, and the confidential-marker check pass. Independent pass2 approves exact runtime/test/version diff SHA256 5195c9615112574d51cc64184782707d80ad3431b6013ec48b26ea8e828ad887. Server0.8.30 is the only intended publication output. CI, immutable publication, downstream rollout and actual Files-click acceptance remain required before claiming this navigation correction deployed.
