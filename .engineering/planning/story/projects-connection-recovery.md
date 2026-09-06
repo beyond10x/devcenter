@@ -19,6 +19,10 @@ scope:
 - confidence: inferred
   path: ci/check-substrate-volume-permissions.sh
 - confidence: cited
+  path: crates/devcenter-connectors/Cargo.lock
+- confidence: cited
+  path: crates/devcenter-connectors/Cargo.toml
+- confidence: cited
   path: deploy/charts/devcenter/Chart.yaml
 - confidence: inferred
   path: deploy/charts/devcenter/templates/components.yaml
@@ -38,7 +42,7 @@ scope:
   path: frontend/src/features/projects/ProjectsView.vue
 - confidence: cited
   path: openapi.json
-revision: 23
+revision: 26
 ---
 ## Outcome
 
@@ -110,3 +114,19 @@ Server 0.8.21 was published from source 003f038301d5448d0771342b52868dd268026f8b
 Earlier authenticated post-release verification confirmed repository search, project detail, branch listing and default-branch selection. For the same 18-branch repository, branch loading fell from 12048 ms to 1009 ms and selection succeeded in 1310 ms. These timings measure branch discovery and selection, not an editable workspace. The then-observed file-preparation refusal led to the separately released quota repair and verified two-stage storage deployment; workload readiness and public HTTP checks now pass.
 
 The operator requires all further UI verification to use a headless browser. The final headless diagnostic returns AUTH_REQUIRED before project data is available, so an existing sign-in method is still required. A real file tree, read/edit/restore/close, both repository-chat and coding-Agent interactions, and end-to-end startup timing remain pending in the downstream coordination story. This source story remains active; readiness and the isolated quota proof are not substituted for those browser acceptance checks. The runtime's separate terminal execution profile remains unserved.
+
+## Smart HTTP authentication repair
+
+The first new hosted coding session after the quota cutover passed quota admission and failed at Git fetch. A read-only comparison against the same provider and existing credential returned 200 for REST API Bearer authentication, 401 for Git discovery with Bearer, and 200 with a protocol-v2 advertisement for Git discovery using GitLab's documented HTTP Basic username oauth2 and the token as password. The released Git broker incorrectly reuses REST bearer_headers for Smart HTTP.
+
+Consume the independently reviewed Connectors story:git-http-oauth-authentication source revision in the composed runtime manifest and lockfile. Publish only the Connectors image at a fresh immutable artifact version, preserving unrelated release units and the verified chart and quota filesystem. Update the downstream private deployment's exact image version/digest through its existing lock and CI. The upstream fixture must require Git-specific Basic authentication and complete a real protocol-v2 fetch while REST continues to require Bearer; credentials must remain header-only and absent from responses, URLs, and persisted state.
+
+Source gates, an independent review and deployed image verification precede the final authenticated headless checks. The existing sign-in requirement is still pending. A separate real project Agent request is admitted and starts, then fails with model_credential_unavailable; that credential-resolution path must also be verified before claiming Agent acceptance. No database migration belongs to this runtime repair.
+
+## Reviewed source consumption
+
+The composed Connectors manifest and lock consume the reviewed source revision fe3541a6d866e84855dfdc19ec4d22a7e779b1e5, proposed in Connectors PR15. The deciding real-Git regression and all 40 package cases, formatting, Clippy and twelve-workspace offline metadata pass; the independent source review found no blocking findings. Full source CI34002384974 is running.
+
+The published SDK still depends on the preceding Connectors protocol/service revision. Keep all shared nominal types on the repaired revision through workspace-root Git patches for those two contracts. Cargo requires a different source URL for the patch, so the direct runtime/contracts and overrides use the repository's SSH URL, covered by the existing delivery transport authentication. Locked metadata resolves exactly 32 Connectors packages from one source revision, with no duplicate package names or retained predecessor source. Unrelated SDK and generated-service pins stay at their released revisions.
+
+Prepare the composed Connectors artifact 0.8.26. The release-unit classifier selects Connectors only. Version consistency and nested formatting pass. The full Devcenter gate and affected OCI build, independent consumer review, source merge, immutable publication and downstream rollout remain required; authenticated headless acceptance is still pending the existing sign-in requirement.
