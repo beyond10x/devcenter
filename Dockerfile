@@ -42,6 +42,7 @@ RUN --mount=type=secret,id=github_token,required=true \
     --mount=type=cache,id=devcenter-connectors-target,target=/source/target,sharing=locked \
     token="$(cat /run/secrets/github_token)" && \
     git config --global url."https://x-access-token:${token}@github.com/".insteadOf "https://github.com/" && \
+    git config --global --add url."https://x-access-token:${token}@github.com/".insteadOf "ssh://git@github.com/" && \
     cargo build --locked --release && \
     git config --global --unset-all url."https://x-access-token:${token}@github.com/".insteadOf && \
     install -D /source/target/release/devcenter-connectors /out/devcenter-connectors

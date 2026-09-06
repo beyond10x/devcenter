@@ -127,6 +127,8 @@ nodes:
       - >-
         token="$(cat /run/secrets/github-token)" && git config --global
         url."https://x-access-token:${token}@github.com/".insteadOf "https://github.com/" &&
+        git config --global --add
+        url."https://x-access-token:${token}@github.com/".insteadOf "ssh://git@github.com/" &&
         cp /source/crates/devcenter-connectors/Cargo.toml /build/Cargo.toml &&
         cp /source/crates/devcenter-connectors/Cargo.lock /build/Cargo.lock &&
         cp -R /source/crates/devcenter-connectors/src /build/src && cd /build &&

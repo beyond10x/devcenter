@@ -13,6 +13,10 @@ scope:
 - confidence: cited
   path: Cargo.toml
 - confidence: cited
+  path: Dockerfile
+- confidence: cited
+  path: Dockerfile.ess
+- confidence: cited
   path: README.md
 - confidence: cited
   path: ci/check-chart-rollouts.sh
@@ -33,6 +37,8 @@ scope:
 - confidence: inferred
   path: deploy/charts/devcenter/values.yaml
 - confidence: cited
+  path: ess/build.yaml
+- confidence: cited
   path: frontend/e2e/devcenter.spec.ts
 - confidence: cited
   path: frontend/package.json
@@ -41,8 +47,10 @@ scope:
 - confidence: cited
   path: frontend/src/features/projects/ProjectsView.vue
 - confidence: cited
+  path: generated/ess/build.json
+- confidence: cited
   path: openapi.json
-revision: 26
+revision: 28
 ---
 ## Outcome
 
@@ -130,3 +138,9 @@ The composed Connectors manifest and lock consume the reviewed source revision f
 The published SDK still depends on the preceding Connectors protocol/service revision. Keep all shared nominal types on the repaired revision through workspace-root Git patches for those two contracts. Cargo requires a different source URL for the patch, so the direct runtime/contracts and overrides use the repository's SSH URL, covered by the existing delivery transport authentication. Locked metadata resolves exactly 32 Connectors packages from one source revision, with no duplicate package names or retained predecessor source. Unrelated SDK and generated-service pins stay at their released revisions.
 
 Prepare the composed Connectors artifact 0.8.26. The release-unit classifier selects Connectors only. Version consistency and nested formatting pass. The full Devcenter gate and affected OCI build, independent consumer review, source merge, immutable publication and downstream rollout remain required; authenticated headless acceptance is still pending the existing sign-in requirement.
+
+## Image-build transport correction
+
+The first independent consumer review found that host Cargo authentication supports both transports but the isolated Connectors Docker stage only rewrites HTTPS dependencies. The new shared-contract source identity therefore needs the SSH prefix mapped to the same existing token-authenticated HTTPS endpoint inside that stage. Add that mapping to the authoritative ESS Connectors build command and to the maintained Dockerfile's corresponding stage. Both mappings are removed by the existing unset-all cleanup; no credential or SSH key is added to the source or image.
+
+ESS 0.9.2 validates the existing specification and deterministically regenerates the compiled build IR and Dockerfile projection. The existing projection check passes before and after the edit; Bake and graph are unchanged. Version consistency and diff checks pass. The shared build files conservatively broaden CI impact to the image units; final publication explicitly selects only Connectors and retains the prior successful artifacts for the other units. A second independent review and the real CI OCI build must verify this remedy before publication. The first review and its finding are retained in the evidence archive; its initial unsupported findings shape was refused by AEP and a schema-admissible report has been requested from the critic.
