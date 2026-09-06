@@ -53,12 +53,18 @@ scope:
 - confidence: cited
   path: frontend/src/features/projects/ProjectsView.vue
 - confidence: cited
+  path: frontend/src/features/workbench/HostedWorkspaceView.vue
+- confidence: cited
+  path: frontend/src/features/workbench/devcenterWorkbenchHost.ts
+- confidence: cited
+  path: frontend/tests/devcenter-workbench-host.test.ts
+- confidence: cited
   path: frontend/vite.config.ts
 - confidence: cited
   path: generated/ess/build.json
 - confidence: cited
   path: openapi.json
-revision: 44
+revision: 50
 ---
 ## Outcome
 
@@ -238,3 +244,23 @@ The downstream input review approves the exact server-only update. Deployment va
 Authenticated headless acceptance against the deployed application passes the actual CSP contract, a non-overlapping 44-line editor, root exploration, real keyboard edit/save, exact content and hash restoration, and browser reload. No CSP violations were observed before or after reload, and no JavaScript errors occurred. The workspace route appeared in 1120 ms, materialization reached Ready in 15453 ms, and the editor appeared in 23783 ms. These are one end-to-end observation, not a latency guarantee. Both the owned Workspace and AgentIDE coordination closed through the normal API after one reconciliation retry.
 
 A fresh coding-Agent request was admitted with HTTP202 and then failed model_credential_unavailable. This matches the earlier project-Agent failure; normal Claude reconnection remains outstanding under credential-blocker:claude-subscription-redemption. Files is ready for operator testing after a full document reload. This story stays active because Agent acceptance is incomplete; the successful file and deployment evidence does not clear the credential blocker. Temporary diagnostic resources are retired separately after this record is published.
+
+## Operator acceptance contradicts Files readiness
+
+The operator followed the testing invitation and still found the project Files tab showing the obsolete read-only repository preview, while an opened coding session reports preparation refused and the Terminal reports no deployment-admitted execution profile. The prior isolated browser test reached the editor through a separate Open coding workspace action and closed that temporary session afterward. Its success does not prove the operator's actual entry, existing-session recovery, or terminal execution. The blanket Files-ready statement is withdrawn pending that validation.
+
+Route the enabled project Files entry through normal create/resume into the materialized editor, with visible startup and recoverable failure handling. Inspect the actual failed session and preserve user work; do not replace it with an unreported fresh-session result. Investigate and deliver the required terminal serving profile through the owning runtime and private deployment records without weakening isolation or inventing available capabilities. Preserve a successful named workspace and direct URL for the operator to inspect. Add repeatable deployed acceptance that reports Files navigation, file edit/save/reload, terminal execution, and both Agent replies separately. A failed or unavailable stage must prevent overall readiness. Existing Claude credential acceptance remains independently blocked until normal reconnection and successful reply evidence.
+
+## User-verified workspace and navigation root cause
+
+The operator opened the preserved live test workspace and confirmed that file editing works. They identified the initial Agent tab and an ineffective workspace navigation entry as the source of confusion. No new preparation runtime failure has been reproduced; an older failed session remains a separate saved record. Preserve the handed-off workspace for the operator instead of closing it as disposable test state.
+
+The concrete navigation defect is that Projects emits pane=editor but HostedWorkspaceView never consumes it. The host starts with only a chat pane, and the released renderer's Workspace explorer action can only focus an editor pane that already exists. Add a neutral Files editor pane with a clear file-selection prompt, consume the explicit route preference, restore a saved editor when present, and preserve later user focus against delayed layout restoration. Production browser regression covers Files create/resume, initial editor selection, Agent-to-explorer navigation before any file opens, actual file opening and a failed-session project return. Terminal profiles remain absent and Agent credential acceptance remains unproved; neither is claimed by server0.8.30.
+
+## Saved-layout review corrections
+
+Independent review identified two compatibility defects in the first local Files-pane implementation. A saved chat-only layout did not yet contain the synthetic Files pane, so a later focus mutation omitted it and the real BFF would reject the inconsistent target. Closing the Files placeholder also removed the renderer's only editor navigation target. The production-browser regression now restores an actual chat-only saved layout, enforces the BFF focus-target contract, waits for successful persisted focus mutations, and covers closing Files before returning from Agent chat. Both ready/preparing resume cases fail the initial candidate with HTTP422. Include local panes absent from durable layout in queued mutations, and retain the Files pane like the permanent Agent pane. Full frontend and production-browser gates and independent re-review follow these corrections.
+
+## Files entry release candidate verified
+
+The deciding saved-layout regression fails both resume cases with HTTP422 before the review corrections. After correction, all46 frontend unit tests and32 production browser cases pass, with18 existing desktop-only mobile exclusions. Root and composed Rust formatting, Clippy with warnings denied, all root tests and all four composed tests pass; chart lint, version and release-impact checks, rollout regressions including eight initializer executions, and the confidential-marker check pass. Independent pass2 approves exact runtime/test/version diff SHA256 5195c9615112574d51cc64184782707d80ad3431b6013ec48b26ea8e828ad887. Server0.8.30 is the only intended publication output. CI, immutable publication, downstream rollout and actual Files-click acceptance remain required before claiming this navigation correction deployed.

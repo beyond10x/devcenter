@@ -82,7 +82,8 @@ const projectId = computed(() =>
 const resumableCodingSession = computed(() =>
   codingSessions.value.find(
     (session) =>
-      session.state === "ready" && session.source_revision === project.value?.pinned_commit,
+      (session.state === "ready" || session.state === "preparing") &&
+      session.source_revision === project.value?.pinned_commit,
   ),
 );
 const selectedThread = computed(() =>
@@ -204,6 +205,14 @@ async function openCodingWorkbench(existing?: CodingSession) {
   } finally {
     if (codingRequest === request) startingCodingSession.value = false;
   }
+}
+
+function selectTab(tab: Tab) {
+  if (tab === "files" && workspace.session?.agentide_workspace_enabled) {
+    void openCodingWorkbench(resumableCodingSession.value);
+    return;
+  }
+  activeTab.value = tab;
 }
 
 async function loadEngineeringArtifacts(id: string) {
@@ -508,8 +517,14 @@ function shortCommit(commit?: string | null) {
           :key="tab"
           type="button"
           :class="{ active: activeTab === tab }"
-          @click="activeTab = tab"
+          :disabled="tab === 'files' && startingCodingSession"
+          @click="selectTab(tab)"
         >
+          <LoaderCircle
+            v-if="tab === 'files' && startingCodingSession"
+            class="spinning"
+            :size="14"
+          />
           {{ tab }}
         </button>
       </nav>
@@ -560,10 +575,6 @@ function shortCommit(commit?: string | null) {
           </div>
           <p v-if="!repositoryTree.length">The exact snapshot contains no root entries.</p>
         </div>
-        <p class="surface-note">
-          This preview is read through the current Connector grant. A populated Substrate filesystem
-          remains a separate materialization step.
-        </p>
       </section>
 
       <section v-else-if="activeTab === 'chat'" class="project-chat">

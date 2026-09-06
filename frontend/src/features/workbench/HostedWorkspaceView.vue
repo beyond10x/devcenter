@@ -19,7 +19,7 @@ const container = ref<HTMLElement>();
 const state = ref<ViewState>("loading");
 const detail = ref("");
 const progress = ref<StartupProgress[]>([]);
-const preparation = ref<{ message: string }>();
+const preparation = ref<{ stage: string; message: string }>();
 let generation = 0;
 let host: DevcenterWorkbenchHost | undefined;
 let controller: WorkbenchController | undefined;
@@ -55,9 +55,15 @@ async function mountWorkbench() {
     detail.value = "The project and coding-session route are required.";
     return;
   }
-  const nextHost = new DevcenterWorkbenchHost(projectId, sessionId, workspace, (next) => {
-    if (current === generation) progress.value = next;
-  });
+  const nextHost = new DevcenterWorkbenchHost(
+    projectId,
+    sessionId,
+    workspace,
+    (next) => {
+      if (current === generation) progress.value = next;
+    },
+    route.query.pane === "editor",
+  );
   const nextController = new WorkbenchController(nextHost);
   nextController.subscribe((frame) => {
     if (current === generation) preparation.value = frame.preparation;
@@ -151,7 +157,16 @@ function disposeWorkbench() {
     </section>
   </main>
   <div v-else class="hosted-workspace-content">
-    <p v-if="preparation" class="workbench-startup" role="status">{{ preparation.message }}</p>
+    <div v-if="preparation" class="workbench-startup" role="status">
+      <span>{{ preparation.message }}</span>
+      <RouterLink
+        v-if="['refused', 'closed', 'closing'].includes(preparation.stage)"
+        class="button small"
+        :to="`/projects/${String(route.params.projectId ?? '')}`"
+      >
+        Return to project
+      </RouterLink>
+    </div>
     <div
       v-if="progress.some((part) => part.state !== 'ready')"
       class="workbench-startup"

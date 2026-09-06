@@ -222,6 +222,7 @@ async function mockAuthenticatedWorkspace(
     staleTerminal?: boolean;
     refuseCodingSession?: boolean;
     emptyWorkflowLibrary?: boolean;
+    existingChatLayout?: boolean;
   } = {},
 ) {
   const capabilities = [
@@ -331,7 +332,15 @@ async function mockAuthenticatedWorkspace(
         focused_pane: string | null;
         open_files: string[];
       }
-    | undefined;
+    | undefined = options.existingChatLayout
+    ? {
+        session_id: codingSession.id,
+        through_version: 1,
+        panes: [{ id: "chat", kind: "Chat", title: "Agent", path: null, line: null, column: null }],
+        focused_pane: "chat",
+        open_files: [],
+      }
+    : undefined;
   await page.route(/^https?:\/\/[^/]+\/api\//, async (route) => {
     const request = route.request();
     const path = new URL(request.url()).pathname;
@@ -839,7 +848,7 @@ async function mockAuthenticatedWorkspace(
         return;
       }
       const submitted = request.postDataJSON() as {
-        action: { kind: string };
+        action: { kind: string; pane_id?: string };
         panes: Array<Record<string, unknown>>;
         focused_pane?: string | null;
         open_files: string[];
@@ -847,6 +856,14 @@ async function mockAuthenticatedWorkspace(
       };
       expect(submitted.idempotency_key).not.toBe("");
       expect(submitted.action.kind).not.toBe("");
+      if (
+        submitted.action.kind === "focus_pane" &&
+        (submitted.focused_pane !== submitted.action.pane_id ||
+          !submitted.panes.some((pane) => pane.id === submitted.focused_pane))
+      ) {
+        await route.fulfill({ status: 422, json: { code: "coding_workbench_invalid" } });
+        return;
+      }
       workbenchView = {
         session_id: codingSession.id,
         through_version: (workbenchView?.through_version ?? 0) + 1,
@@ -1351,7 +1368,7 @@ test("opens a visible repository as a commit-pinned project", async ({ page }, t
   await expect(page.getByRole("button", { name: "Refresh snapshot" })).toBeVisible();
   await page.getByRole("button", { name: "files" }).click();
   await expect(page.getByText("README.md", { exact: true })).toBeVisible();
-  await expect(page.getByText(/separate materialization step/)).toBeVisible();
+  await expect(page.getByText("Read only", { exact: true })).toBeVisible();
   await page.getByRole("button", { name: "aep" }).click();
   await expect(page.getByRole("heading", { name: "Repository workspace boundary" })).toBeVisible();
   await expect(
@@ -1863,7 +1880,7 @@ test("opens an editable file while coordination, layout, and terminals are still
   }
 });
 
-test("prepares a new coding session automatically and requests the tree only when ready", async ({
+test("Files opens a new coding session and requests the tree only when ready", async ({
   page,
 }, testInfo) => {
   test.skip(testInfo.project.name !== "chromium", "Desktop progressive workspace behavior");
@@ -1889,21 +1906,97 @@ test("prepares a new coding session automatically and requests the tree only whe
     await route.fallback();
   });
   await page.goto(`/projects/${project.id}`);
-  const open = page.getByRole("button", { name: "Open coding workspace", exact: true });
+  const open = page.getByRole("button", { name: "files", exact: true });
   await open.hover();
   expect(creates).toBe(0);
   expect(sessionReads).toBe(0);
   await open.click();
   await expect(page.getByText("Preparing workspace files…")).toBeVisible();
+  await expect(
+    page.getByText("Select a file from the workspace explorer to start editing."),
+  ).toBeVisible();
+  await expect(page.getByLabel("Message the agent")).toHaveCount(0);
   await expect.poll(() => sessionReads).toBeGreaterThanOrEqual(2);
   expect(earlyTreeReads).toBe(0);
   expect(creates).toBe(1);
   ready = true;
   await expect(page.getByRole("button", { name: "main.rs" })).toBeVisible();
+  await page.getByRole("button", { name: "Agent chat", exact: true }).click();
+  await expect(page.getByLabel("Message the agent")).toBeVisible();
+  await page.getByRole("button", { name: "Workspace explorer", exact: true }).click();
+  await expect(
+    page.getByText("Select a file from the workspace explorer to start editing."),
+  ).toBeVisible();
   await page.getByRole("button", { name: "main.rs" }).click();
   await expect(page.locator(".editor-leaf .monaco-editor")).toBeVisible();
   const readsAtReady = sessionReads;
   await page.waitForTimeout(1_200);
   expect(sessionReads).toBe(readsAtReady);
   expect(earlyTreeReads).toBe(0);
+});
+
+for (const state of ["ready", "preparing"] as const) {
+  test(`Files resumes the existing ${state} workspace without creating another`, async ({
+    page,
+  }, testInfo) => {
+    test.skip(testInfo.project.name !== "chromium", "Desktop workspace entry behavior");
+    await mockAuthenticatedWorkspace(page, { agentideWorkspace: true, existingChatLayout: true });
+    let creates = 0;
+    await page.route(`**/api/projects/${project.id}/sessions`, async (route) => {
+      if (route.request().method() === "POST") creates += 1;
+      await route.fulfill({ json: [{ ...codingSession, state }] });
+    });
+    await page.goto(`/projects/${project.id}`);
+    await page.getByRole("button", { name: "files", exact: true }).click();
+    await expect(page).toHaveURL(
+      `/projects/${project.id}/sessions/${codingSession.id}?pane=editor`,
+    );
+    await expect(page.getByLabel("Workspace loading progress")).toHaveCount(0);
+    const focus = async (button: string, pane: string) => {
+      const persisted = page.waitForResponse(
+        (response) =>
+          response.request().method() === "POST" &&
+          new URL(response.url()).pathname.endsWith("/workbench") &&
+          (response.request().postDataJSON() as { action?: { kind?: string; pane_id?: string } })
+            .action?.pane_id === pane,
+      );
+      await page.getByRole("button", { name: button, exact: true }).click();
+      expect((await persisted).status()).toBe(200);
+    };
+    await focus("Agent chat", "chat");
+    await focus("Workspace explorer", "files");
+    await expect(
+      page.getByText("Select a file from the workspace explorer to start editing."),
+    ).toBeVisible();
+    await page.getByRole("button", { name: "Close Files", exact: true }).click();
+    await focus("Agent chat", "chat");
+    await focus("Workspace explorer", "files");
+    await expect(page.getByRole("button", { name: "main.rs" })).toBeVisible();
+    await page.getByRole("button", { name: "main.rs" }).click();
+    await expect(page.locator(".editor-leaf .monaco-editor")).toBeVisible();
+    expect(creates).toBe(0);
+  });
+}
+
+test("a previously refused workspace offers a route back to project Files", async ({
+  page,
+}, testInfo) => {
+  test.skip(testInfo.project.name !== "chromium", "Desktop workspace recovery behavior");
+  await mockAuthenticatedWorkspace(page, { agentideWorkspace: true });
+  await page.route(`**/api/project-sessions/${codingSession.id}`, async (route) => {
+    await route.fulfill({
+      json: {
+        ...codingSession,
+        state: "refused",
+        failure_code: "substrate_materialization_refused",
+      },
+    });
+  });
+  await page.goto(`/projects/${project.id}/sessions/${codingSession.id}`);
+  await expect(
+    page.getByRole("status").filter({ hasText: "File preparation failed" }),
+  ).toBeVisible();
+  await page.getByRole("link", { name: "Return to project", exact: true }).click();
+  await expect(page).toHaveURL(`/projects/${project.id}`);
+  await expect(page.getByRole("button", { name: "files", exact: true })).toBeVisible();
 });
