@@ -32,13 +32,15 @@ scope:
   path: crates/devcenter-http/src/lib.rs
 - confidence: cited
   path: deploy/charts/devcenter/Chart.yaml
+- confidence: cited
+  path: deploy/charts/devcenter/README.md
 - confidence: inferred
   path: deploy/charts/devcenter/templates/components.yaml
 - confidence: cited
   path: deploy/charts/devcenter/templates/substrate.yaml
-- confidence: inferred
+- confidence: cited
   path: deploy/charts/devcenter/values.schema.json
-- confidence: inferred
+- confidence: cited
   path: deploy/charts/devcenter/values.yaml
 - confidence: cited
   path: ess/build.yaml
@@ -64,7 +66,7 @@ scope:
   path: generated/ess/build.json
 - confidence: cited
   path: openapi.json
-revision: 51
+revision: 54
 ---
 ## Outcome
 
@@ -278,3 +280,17 @@ The operator's separately preserved workspace remains Ready and its root tree re
 Overall deployment acceptance remains failed: no admitted terminal profile is configured, and the fresh coding-Agent request is admitted with HTTP202 then fails model_credential_unavailable. The independently exercised project Agent also fails after HTTP200 admission. The repeatable downstream harness requires Files entry/navigation, edit/save/restore/reload, actual terminal output and both successful Agent replies before it can report overall success. The Claude subscription credential blocker stays open and this story stays active; file-only evidence does not supply its withheld successful Agent test result.
 
 Terminal investigation confirms that configuration alone cannot serve execution. The current released image lacks the sandbox and shell toolchain, and the deployment lacks the explicit delegated cgroup root required by the runtime's capability probes. The existing node-bound Kubernetes serving-profile and namespace-driver stories in the owning runtime remain proposed. No fallback shell, weakened probe, extra privileges or invented execution capability was introduced. That serving profile and successful Agent credential recovery remain undelivered work.
+
+## Authorized terminal and Agent completion
+
+The operator authorized implementing the remaining terminal runtime, deploying it and verifying real execution plus both Agent replies. Preserve the user-confirmed workspace and keep test mutations in disposable sessions. Recheck normal Claude credential redemption through a real project-Agent request; a successful reply, not stored connection presence, closes that part.
+
+The selected terminal investigation retains the host driver's existing confinement and capability probes. Test whether a container-private cgroup v2 namespace can expose only its own delegation root, with parent resource limits preserved, then hand the subtree to the non-root daemon. A disposable, bounded pod with no host paths, host namespaces or service-account token will establish the prerequisite before service changes. The runtime also needs a pinned compatible bubblewrap, socat and shell toolchain. Record the precise bootstrap capability set, privilege drop and rollback before implementation; never bypass an absent capability fact. The owning Substrate record covers execution packaging and bootstrap; Devcenter owns generic chart composition and the downstream repository owns actual deployment values.
+
+## Terminal chart candidate verified
+
+Chart 0.8.26 composes the reviewed Substrate container bootstrap through an explicit opt-in. It requires amd64 and an explicit versioned Localhost seccomp path, fixes the AppArmor label, starts with exactly the five bootstrap capabilities, mounts bounded temporary storage and preserves current state and quota volumes. Workspace terminal admission stays in the downstream deployment. Application pods have no host paths or host namespaces.
+
+Both independent chart reviews approve the source with no remaining findings. The full frontend check passes 46 unit tests, and the production-browser suite passes 32 cases with 18 existing mobile exclusions. Root and composed Rust formatting, Clippy with warnings denied, all root tests and all four composed tests pass. Chart lint, version consistency, positive and negative execution renders, eight real volume initializer runs and the confidential-marker check pass. The pinned Docs System collector accepts both affected repositories. The complete organization documentation audit separately refuses an existing aep/docs manifest mismatch; this change does not alter that repository or its catalog records.
+
+The local Substrate candidate independently passes ordinary and quota PTY journeys, worker capability removal, resource observations, descendant and cgroup cleanup, four ordinary/quota image-startup checks, missing-profile/memory-limit refusals and an AppArmor-denied undeclared cgroup mount. The complete delegated host, SDK, remote WSS, MCP and wire lane also passes. These local results do not assert a released or deployed terminal. Immutable runtime/chart publication, node prerequisites, actual browser terminal output and preservation of the user's workspace remain required. Both Agent surfaces still require successful model replies; the credential blocker remains open.
