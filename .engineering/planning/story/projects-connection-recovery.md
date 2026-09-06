@@ -66,7 +66,7 @@ scope:
   path: generated/ess/build.json
 - confidence: cited
   path: openapi.json
-revision: 58
+revision: 60
 ---
 ## Outcome
 
@@ -320,3 +320,21 @@ Terminal profile discovery now returns one declared profile, but the actual brow
 A read-only live comparison of the same session through current Connector authority confirms that a raw page limit of2 returns zero filtered items with partial=true and an opaque continuation, while limit100 returns the matching session. Following the limit2 continuation finds the same session on the sixth page. The exact direct Workspace refusal is terminal_session_binding_refused. Thus the access failure is a consumer pagination defect, not evidence of an invalid actor or permission grant. The runtime and confinement changes are not implicated.
 
 Workspace owns correction of its shared authority consumer and terminal session/grant lookups. Devcenter query_coordination similarly rejects partial pages at its larger100-row boundary. Consume continuation with explicit page/row bounds, cycle and metadata validation, and consistent authorized aggregate versions; preserve all identity checks and never accept a truncated authority inventory. Add regressions for empty filtered pages, later matching records, malformed continuation and revision mismatch, then repeat the actual headless journey after reviewed immutable releases.
+
+## Reviewed pagination publication
+
+PR57 merged as 4909adf8e31eb80c9f17b14a390e32b3561b3f49 after the exact reviewed source passed full Gate 34056659457 and both affected OCI build targets. All six reviewed runtime, regression and version files matched the review hashes before integration.
+
+Publication 0.8.33 completed in release 34057509938. Both server architecture builds and keyless signing succeeded on the first attempt. Its final composition job failed during a chart-pull step whose captured diagnostic was not emitted; the exact candidate subsequently passed the same local composition check. Retrying only that failed job passed remote composition validation and durable publication without a source change or image rebuild. The exact remote cause of the first failure is not established.
+
+The durable release manifest exactly matches the completed CI plan and receipt: server sha256:430e0082ff69c7704a45d43a44ced2f7e3578cfe568ce58340da9dcbc9041d3f at the merge source. It reuses chart 0.8.32, Connectors 0.8.27 and deployment CLI 0.8.18. Workspace 0.2.23 was separately reviewed and released to correct its authority consumer. The private composition changes only server and Workspace version/digest pins; local validation against the exact released chart confirms all eleven workload images agree with the lock. Normal downstream CI and actual headless Files, terminal and Agent acceptance remain required. The Claude credential blocker remains open.
+
+## Deployed Files and terminal acceptance
+
+The reviewed composition of server 0.8.33 and Workspace 0.2.23 passed all three normal downstream jobs: immutable artifact and lock validation, atomic deployment, and deployed verification. A before/after inventory of thirteen workloads proves that only those two service images changed. All other serving and initializer images, desired replicas, durable claim identities and installed execution profiles remain unchanged, and every workload is Ready. The operator's preserved workspace remains Ready and readable; no test writes or cleanup target it.
+
+The first actual headless browser run after this deployment passes fresh Git materialization and file editing. Terminal admission now succeeds and a Bash prompt is visible, but the test does not observe its command sentinel. That result is retained as a failed full acceptance attempt, not discarded or counted as terminal execution proof.
+
+A subsequent instrumented headless run waits for initial PTY output, clicks the actual terminal canvas, and asserts input focus before typing the split random printf sentinel. The initial output wait is 502 ms. Fifty binary input bytes and ten binary output frames are observed; the complete sentinel is received from the PTY. Terminal creation, real command output, explicit termination, and subsequent Ready state plus a readable file tree pass. The fresh workspace reaches Ready in approximately 23 seconds. Project Files entry and persisted pane navigation, editor layout, real keyboard save, exact content and hash restoration, and reload all pass. Both disposable Workspace and coordination close after one normal cleanup reconciliation retry. No JavaScript or content-security-policy failure is observed. The changed test readiness and focus conditions do not establish which one caused the first run's missing input.
+
+Both Agent checks still fail, so overall deployment acceptance remains incomplete. The coding attempt now reaches a distinct workspace_actor_view_unavailable failure after a terminal exists. Read-only source diagnosis identifies an absolute execution directory copied into AgentIDE's relative-path terminal context; terminated terminals are included in that validation. Workspace owns its focused repair under story:normalize-terminal-context-directory. The original model credential blocker remains open because no successful model redemption or reply has been observed. Files and terminal acceptance must not be reported as complete Agent acceptance.
