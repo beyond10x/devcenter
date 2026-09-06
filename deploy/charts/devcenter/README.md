@@ -14,6 +14,9 @@ existing project-quota option selects the quota executable after that transition
 within the container's memory ceiling. Durable state and the separate workspace PVC retain
 their existing mounts. The ordinary startup profile remains available when execution is disabled.
 
+The execution profile sets `HOME=/nonexistent` before the bootstrap drops privileges. This keeps
+Git initialization from reading the container runtime's root home and requires no writable home.
+
 Only admit a Workspace terminal profile after the runtime's observed confinement and PTY facts
 have passed deployment tests. Workspace profiles use the existing component `configFiles` and
 `WORKSPACE_TERMINAL_PROFILES_PATH` configuration. Node profile installation and private terminal

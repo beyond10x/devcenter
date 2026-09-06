@@ -141,6 +141,7 @@ grep -Fq 'localhostProfile: "substrate/host-exec-v1-amd64.json"' <<<"$execution_
 grep -Fq 'capabilities: {drop: ["ALL"], add: ["CHOWN", "SETGID", "SETUID", "SETPCAP", "SYS_ADMIN"]}' <<<"$execution_substrate"
 grep -Fq 'automountServiceAccountToken: false' <<<"$execution_substrate"
 grep -Fq 'runAsNonRoot: false' <<<"$execution_substrate"
+grep -Fq 'name: HOME, value: /nonexistent' <<<"$execution_substrate"
 grep -Fq 'emptyDir: {medium: Memory, sizeLimit: "512Mi"}' <<<"$execution_substrate"
 if grep -Eq 'privileged: true|hostPath:|hostPID: true|hostNetwork: true|SYS_RESOURCE|Unconfined' <<<"$execution_substrate"; then
   echo "execution configuration enables unrelated host authority" >&2
@@ -151,6 +152,7 @@ quota_execution=$(substrate_render "${execution_args[@]}" \
   --set substrate.workspaceStorage.projectQuotas.enabled=true)
 grep -Fq -- '- --project-quotas' <<<"$quota_execution"
 grep -Fq -- '- --project-quota-ids' <<<"$quota_execution"
+grep -Fq 'name: HOME, value: /nonexistent' <<<"$quota_execution"
 for invalid_execution in missing-profile wrong-architecture unsafe-path; do
   invalid_args=("${execution_args[@]}")
   case "$invalid_execution" in
