@@ -2384,7 +2384,7 @@ async fn query_coordination_session(
     }
 }
 
-fn verify_coordination_identity(
+fn verify_coordination_session_binding(
     snapshot: &Value,
     workspace: &CodingSession,
 ) -> Result<(), CoordinationIssue> {
@@ -2394,12 +2394,43 @@ fn verify_coordination_identity(
         && snapshot.get("project_id").and_then(Value::as_str)
             == Some(workspace.project_id.as_str())
         && snapshot.get("source_revision").and_then(Value::as_str)
-            == Some(workspace.source_revision.as_str())
-        && snapshot.get("manifest_digest").and_then(Value::as_str)
-            == workspace.manifest_sha256.as_deref();
+            == Some(workspace.source_revision.as_str());
     matches
         .then_some(())
         .ok_or(CoordinationIssue::IDENTITY_MISMATCH)
+}
+
+fn verify_coordination_identity(
+    snapshot: &Value,
+    workspace: &CodingSession,
+) -> Result<(), CoordinationIssue> {
+    verify_coordination_session_binding(snapshot, workspace)?;
+    (snapshot.get("manifest_digest").and_then(Value::as_str)
+        == workspace.manifest_sha256.as_deref())
+    .then_some(())
+    .ok_or(CoordinationIssue::IDENTITY_MISMATCH)
+}
+
+fn verify_coordination_identity_for_close(
+    snapshot: &Value,
+    workspace: &CodingSession,
+) -> Result<(), CoordinationIssue> {
+    // Workspace deliberately omits materialization details once it enters cleanup. Closing the
+    // same owned coordination session still requires every immutable binding; a supplied digest
+    // must match. Only this retirement path may accept the omitted post-ready digest.
+    if workspace.manifest_sha256.is_none()
+        && matches!(
+            workspace.state,
+            CodingSessionState::Closing
+                | CodingSessionState::Closed
+                | CodingSessionState::Unknown
+                | CodingSessionState::Refused
+        )
+    {
+        verify_coordination_session_binding(snapshot, workspace)
+    } else {
+        verify_coordination_identity(snapshot, workspace)
+    }
 }
 
 async fn ensure_coordination(
@@ -3203,7 +3234,7 @@ async fn close_coding_session(
             let coordination =
                 match query_coordination_session(&state, &authenticated, &session.id).await {
                     Ok(Some((snapshot, _)))
-                        if verify_coordination_identity(&snapshot, &session).is_err() =>
+                        if verify_coordination_identity_for_close(&snapshot, &session).is_err() =>
                     {
                         CoordinationSummary::degraded(CoordinationIssue::IDENTITY_MISMATCH)
                     }
@@ -6326,6 +6357,62 @@ mod tests {
             }))
             .is_err()
         );
+    }
+
+    #[test]
+    fn coordination_close_accepts_hidden_manifest_but_preserves_session_binding() {
+        let mut workspace: CodingSession = serde_json::from_value(json!({
+            "id": "session-one", "project_id": "project-one",
+            "source_revision": "a".repeat(40), "working_materialization_ref": null,
+            "base_materialization_ref": null, "manifest_sha256": null,
+            "state": "closed", "failure_code": null,
+            "limits": {"max_files": 1_000, "max_total_bytes": 1_048_576, "max_file_bytes": 65_536},
+            "created_at_ms": 1, "updated_at_ms": 2
+        }))
+        .unwrap();
+        let snapshot = json!({
+            "session_id": "session-one", "workspace_session_id": "session-one",
+            "project_id": "project-one", "source_revision": "a".repeat(40),
+            "manifest_digest": "b".repeat(64), "state": "Active"
+        });
+        for state in [
+            CodingSessionState::Closing,
+            CodingSessionState::Closed,
+            CodingSessionState::Unknown,
+            CodingSessionState::Refused,
+        ] {
+            workspace.state = state;
+            assert!(verify_coordination_identity_for_close(&snapshot, &workspace).is_ok());
+            assert!(verify_coordination_identity(&snapshot, &workspace).is_err());
+            for field in [
+                "session_id",
+                "workspace_session_id",
+                "project_id",
+                "source_revision",
+            ] {
+                let mut mismatched = snapshot.clone();
+                mismatched[field] = json!("other");
+                assert!(verify_coordination_identity_for_close(&mismatched, &workspace).is_err());
+                mismatched.as_object_mut().unwrap().remove(field);
+                assert!(verify_coordination_identity_for_close(&mismatched, &workspace).is_err());
+            }
+            let mut closed = snapshot.clone();
+            closed["state"] = json!("Closed");
+            assert!(verify_coordination_identity_for_close(&closed, &workspace).is_ok());
+        }
+        for state in [CodingSessionState::Preparing, CodingSessionState::Ready] {
+            workspace.state = state;
+            assert!(verify_coordination_identity_for_close(&snapshot, &workspace).is_err());
+        }
+        for state in [CodingSessionState::Ready, CodingSessionState::Closed] {
+            workspace.state = state;
+            workspace.manifest_sha256 = Some("b".repeat(64));
+            assert!(verify_coordination_identity_for_close(&snapshot, &workspace).is_ok());
+            assert!(verify_coordination_identity(&snapshot, &workspace).is_ok());
+            workspace.manifest_sha256 = Some("c".repeat(64));
+            assert!(verify_coordination_identity_for_close(&snapshot, &workspace).is_err());
+            assert!(verify_coordination_identity(&snapshot, &workspace).is_err());
+        }
     }
 
     #[tokio::test]

@@ -9,6 +9,8 @@ relations:
 - informed_by: story:legacy-gitlab-startup-alignment
 scope:
 - confidence: cited
+  path: CHANGELOG.md
+- confidence: cited
   path: Cargo.lock
 - confidence: cited
   path: Cargo.toml
@@ -26,6 +28,8 @@ scope:
   path: crates/devcenter-connectors/Cargo.lock
 - confidence: cited
   path: crates/devcenter-connectors/Cargo.toml
+- confidence: cited
+  path: crates/devcenter-http/src/lib.rs
 - confidence: cited
   path: deploy/charts/devcenter/Chart.yaml
 - confidence: inferred
@@ -50,7 +54,7 @@ scope:
   path: generated/ess/build.json
 - confidence: cited
   path: openapi.json
-revision: 31
+revision: 35
 ---
 ## Outcome
 
@@ -170,3 +174,19 @@ The composed Connectors 0.8.27 candidate consumes source 53ba51fb744e223e220523f
 Locked metadata resolves all 32 Connectors packages to that one reviewed source, with no duplicate package names. Nested formatting, release version consistency and diff checks pass. Release impact is Connectors only. The complete Devcenter gate and affected OCI build precede publication; the downstream private deployment continues to be coordinated by this artifact rather than an ungoverned private planning file.
 
 Authenticated project chat independently reproduced model_credential_unavailable. A fresh, one-use normal subscription lease was created successfully, but immediate redemption returned HTTP 400 subscription-oauth-refused. This identifies OAuth refresh or refreshed-record validation as the failure boundary. The provider connection still reports Connected because its status checks stored-record presence. Normal Claude reconnection has been requested from the operator; this source-framing change does not repair or claim Agent credential acceptance.
+
+## Deployed framing repair and ready-session recovery
+
+Connectors source CI34020120274 and Devcenter gate/image CI34020408981 succeeded. PR51 merged source76b89f0ba76f0373bf7bb78cbbaf2eb234dce273. Publication0.8.27 succeeded in CI34021522883 and signed the Connectors index sha256:d6a7e8621ceb223f0e562b18f1d58800bcf0f30a337b7d34ba351b3b25a29e79. The downstream deployment validation, deployment and verification jobs passed. Direct running-image verification matches that exact digest, with only Connectors changed among the eleven locked workload images.
+
+Authenticated headless creation now reaches ready, proving live Git checkout interoperability. The next file/terminal metadata requests return not found. Exact read-only durable operation evidence proves Workspace's own cleanup operation destroys the successfully created materialization immediately after publication. Workspace story:preserve-ready-materialization owns the delayed preparing-read recovery correction and next independent runtime release. Browser file acceptance remains pending that repair.
+
+A separate close-response defect exists in this BFF: Workspace hides its manifest hash outside ready, but the close handler compares that absent hash with AgentIDE's retained digest and refuses coordination closure. Correct only the close-specific comparison: retain exact session, Workspace-session, project and source identity checks, and validate any manifest supplied. Ordinary ready-session coordination retains its strict manifest comparison. Verify already-closed/retry paths and reject mismatched session/project/source bindings. No user authority or general mutation check is relaxed.
+
+Authenticated project Agent still fails model_credential_unavailable, with normal one-use credential redemption returning subscription-oauth-refused. The requested normal Claude reconnection remains outstanding. Neither the deployed framing fix nor the remaining workspace fixes claim model-credential acceptance.
+
+## Coordination close verification
+
+Independent source review found no actionable defects in the close-specific correction and is preserved in review-result:coding-session-close-pass-1. The pinned Node22.23.1 and pnpm11.25.0 frontend install/build pass. All68 root Rust tests pass, including the new cleanup-state, immutable-binding and manifest regression. Final workspace Clippy with warnings denied, formatting, release version consistency and whitespace checks pass. A numeric-separator lint in the new fixture was corrected without changing values.
+
+Prepare server0.8.28; only local root package versions advance. The next publication selects the server explicitly, retaining the existing independently published CLI, chart and Connectors image. Workspace0.2.21 publishes independently from its owner repository; the downstream deployment will consume both immutable runtime digests in one ordinary deployment. Full Devcenter CI and authenticated read/edit/save/restore/close remain required before product completion.
