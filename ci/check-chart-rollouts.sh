@@ -130,6 +130,41 @@ for invalid_quota in missing-claim reversed-range short-range; do
   grep -q 'project quota' "$invalid_workflow_error"
 done
 
+# Execution is an explicit profile, with no host mount or default-profile fallback.
+execution_args=(--set substrate.execution.enabled=true
+  --set-string 'substrate.nodeSelector.kubernetes\.io/arch=amd64'
+  --set substrate.execution.seccompProfile=substrate/host-exec-v1-amd64.json)
+execution_substrate=$(substrate_render "${execution_args[@]}")
+grep -Fq 'command: ["/usr/local/bin/substrate-container-exec"]' <<<"$execution_substrate"
+grep -Fq 'localhostProfile: substrate-host-exec-v1' <<<"$execution_substrate"
+grep -Fq 'localhostProfile: "substrate/host-exec-v1-amd64.json"' <<<"$execution_substrate"
+grep -Fq 'capabilities: {drop: ["ALL"], add: ["CHOWN", "SETGID", "SETUID", "SETPCAP", "SYS_ADMIN"]}' <<<"$execution_substrate"
+grep -Fq 'automountServiceAccountToken: false' <<<"$execution_substrate"
+grep -Fq 'runAsNonRoot: false' <<<"$execution_substrate"
+grep -Fq 'emptyDir: {medium: Memory, sizeLimit: "512Mi"}' <<<"$execution_substrate"
+if grep -Eq 'privileged: true|hostPath:|hostPID: true|hostNetwork: true|SYS_RESOURCE|Unconfined' <<<"$execution_substrate"; then
+  echo "execution configuration enables unrelated host authority" >&2
+  exit 1
+fi
+quota_execution=$(substrate_render "${execution_args[@]}" \
+  --set substrate.workspaceStorage.existingClaim=quota-workspaces \
+  --set substrate.workspaceStorage.projectQuotas.enabled=true)
+grep -Fq -- '- --project-quotas' <<<"$quota_execution"
+grep -Fq -- '- --project-quota-ids' <<<"$quota_execution"
+for invalid_execution in missing-profile wrong-architecture unsafe-path; do
+  invalid_args=("${execution_args[@]}")
+  case "$invalid_execution" in
+    missing-profile) invalid_args+=(--set substrate.execution.seccompProfile=) ;;
+    wrong-architecture) invalid_args+=(--set-string 'substrate.nodeSelector.kubernetes\.io/arch=arm64') ;;
+    unsafe-path) invalid_args+=(--set substrate.execution.seccompProfile=../host-exec-v1-amd64.json) ;;
+  esac
+  if substrate_render "${invalid_args[@]}" >/dev/null 2>"$invalid_workflow_error"; then
+    echo "chart unexpectedly admitted execution configuration: $invalid_execution" >&2
+    exit 1
+  fi
+  grep -Eq 'execution|seccompProfile|amd64' "$invalid_workflow_error"
+done
+
 # A stopped migration stage keeps controllers, Services and storage declarations. Helm's
 # rollback target can then adopt the new filesystem before either writer is restarted.
 resource_manifest() {

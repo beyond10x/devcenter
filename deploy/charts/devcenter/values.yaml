@@ -287,6 +287,11 @@ substrate:
   image: {repository: "", digest: "", pullPolicy: IfNotPresent}
   volumePermissions:
     image: {repository: "", digest: "", pullPolicy: IfNotPresent}
+  execution:
+    # Requires the versioned node profiles installed before this pod starts.
+    enabled: false
+    seccompProfile: ""
+    temporarySize: 512Mi
   port: 8443
   deployment: hosted
   tls:

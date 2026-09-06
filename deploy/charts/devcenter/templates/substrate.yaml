@@ -3,6 +3,13 @@
 {{- $_ := required "substrate.hostedIdentity.origin is required" .Values.substrate.hostedIdentity.origin }}
 {{- $workspaceClaim := .Values.substrate.workspaceStorage.existingClaim }}
 {{- $quotas := .Values.substrate.workspaceStorage.projectQuotas }}
+{{- $execution := .Values.substrate.execution }}
+{{- if $execution.enabled }}
+{{- $_ := required "substrate.execution.seccompProfile must name the preinstalled node profile" $execution.seccompProfile }}
+{{- if ne (index .Values.substrate.nodeSelector "kubernetes.io/arch") "amd64" }}
+{{- fail "substrate.execution currently requires an amd64 node selector" }}
+{{- end }}
+{{- end }}
 {{- if $quotas.enabled }}
 {{- $_ := required "project quota configuration requires substrate.workspaceStorage.existingClaim" $workspaceClaim }}
 {{- if lt (add1 (sub (int64 $quotas.idsEnd) (int64 $quotas.idsStart))) 128 }}
@@ -31,6 +38,7 @@ spec:
         {{- include "devcenter.labels" . | nindent 8 }}
         app.kubernetes.io/component: substrate
     spec:
+      automountServiceAccountToken: false
       {{- with .Values.global.imagePullSecrets }}
       imagePullSecrets:
         {{- range . }}
@@ -79,10 +87,18 @@ spec:
         - name: substrate
           image: {{ include "devcenter.image" .Values.substrate.image | quote }}
           imagePullPolicy: {{ .Values.substrate.image.pullPolicy }}
-          {{- if $quotas.enabled }}
+          {{- if $execution.enabled }}
+          command: ["/usr/local/bin/substrate-container-exec"]
+          {{- else if $quotas.enabled }}
           command: ["/usr/local/bin/substrate-daemon-quota"]
           {{- end }}
           args:
+            {{- if $execution.enabled }}
+            {{- if $quotas.enabled }}
+            - --project-quotas
+            {{- end }}
+            - --
+            {{- end }}
             - --socket
             - /var/run/substrate/substrate.sock
             - --state
@@ -111,6 +127,9 @@ spec:
           ports: [{name: https, containerPort: {{ .Values.substrate.port }}}]
           volumeMounts:
             - {name: state, mountPath: /var/lib/substrate}
+            {{- if $execution.enabled }}
+            - {name: execution-temporary, mountPath: /tmp}
+            {{- end }}
             {{- if $workspaceClaim }}
             - {name: workspace-data, mountPath: /var/lib/substrate/workspaces}
             {{- end }}
@@ -126,18 +145,33 @@ spec:
           livenessProbe: {tcpSocket: {port: https}}
           resources: {{ toYaml .Values.substrate.resources | nindent 12 }}
           securityContext:
+            {{- if $execution.enabled }}
+            runAsNonRoot: false
+            runAsUser: 0
+            runAsGroup: 0
+            appArmorProfile: {type: Localhost, localhostProfile: substrate-host-exec-v1}
+            seccompProfile: {type: Localhost, localhostProfile: {{ $execution.seccompProfile | quote }}}
+            {{- else }}
             runAsNonRoot: true
             runAsUser: 65532
             runAsGroup: 65532
+            {{- end }}
             # Kubernetes requires this when SYS_ADMIN is explicitly selected.
-            allowPrivilegeEscalation: {{ $quotas.enabled }}
+            allowPrivilegeEscalation: {{ or $quotas.enabled $execution.enabled }}
             readOnlyRootFilesystem: true
-            {{- if $quotas.enabled }}
+            {{- if $execution.enabled }}
+            # The PID-1 bootstrap drops this set before exec of the non-root daemon.
+            capabilities: {drop: ["ALL"], add: ["CHOWN", "SETGID", "SETUID", "SETPCAP", "SYS_ADMIN"]}
+            {{- else if $quotas.enabled }}
             capabilities: {drop: ["ALL"], add: ["SYS_ADMIN"]}
             {{- else }}
             capabilities: {drop: ["ALL"]}
             {{- end }}
       volumes:
+        {{- if $execution.enabled }}
+        - name: execution-temporary
+          emptyDir: {medium: Memory, sizeLimit: {{ $execution.temporarySize | quote }}}
+        {{- end }}
         {{- if $workspaceClaim }}
         - name: workspace-data
           persistentVolumeClaim:
