@@ -50,7 +50,7 @@ scope:
   path: generated/ess/build.json
 - confidence: cited
   path: openapi.json
-revision: 29
+revision: 31
 ---
 ## Outcome
 
@@ -154,3 +154,19 @@ The downstream deployment changed only the Connectors version and digest in its 
 The exact released Substrate 0.7.5 Git client also passed the repaired Connectors fixture, checking the admitted commit, fifty shallow-history entries, no tags, no transient authority in stored Git configuration and a spent broker session. This is a real client compatibility fixture with synthetic custody, not a hosted user session.
 
 Post-deployment headless Chromium rendered the public sign-in page with HTTP 200, no JavaScript errors and no failed application assets. Its anonymous session request correctly returned HTTP 401. No usable authenticated browser state was supplied, so file-tree, read/edit/restore/close, both Agent replies and end-to-end workspace startup timing remain unverified. The observed Agent credential failure also remains unresolved. The story stays active. Task-local build outputs and diagnostic pods were removed, evidence retained privately, and managed worktree retirement follows publication of this record.
+
+## Authenticated discovery follow-up
+
+The operator authorized reusing the live browser's Devcenter session for headless acceptance. The copied session authenticated successfully: project details, branch and repository tree returned HTTP 200, and the Files tab rendered the repository entries. A new coding-session creation reached the workbench route in about 1.1 seconds, then was refused at materialization after about 8.5 seconds. Substrate recorded workspace.git-fetch-failed. A normal Identity-derived source-broker request isolated HTTP 502 to its first v2 discovery exchange.
+
+The provider's credentialed Smart HTTP response is HTTP 200 with the expected Git advertisement content type, but prefixes version 2 with the exact upload-pack service-announcement packet and a flush. Connectors' current v2 parser rejects that optional framing. Its existing real-Git fixture omits the preamble, explaining why earlier controlled compatibility passed. Connectors story:git-v2-smart-http-preamble owns the bounded parser and fixture repair. This story consumes the reviewed source and publishes only the changed Connectors image, then repeats the authenticated browser acceptance. Readiness and the previous OAuth repair do not close the outstanding source-file defect.
+
+The temporary browser session remains outside all repository trees and is removed after the authorized checks. No database migration or new cloud resource is required by this follow-up.
+
+## Reviewed Git v2 framing consumption
+
+The composed Connectors 0.8.27 candidate consumes source 53ba51fb744e223e220523ff49f313e1d23d8673 from Connectors PR16. The real HTTP fixture failed with HTTP 502 under the original parser and all 42 GitLab tests pass with the exact optional preamble correction. Independent review found no actionable defects. Full source gate CI34020120274 is running; it must pass before merge.
+
+Locked metadata resolves all 32 Connectors packages to that one reviewed source, with no duplicate package names. Nested formatting, release version consistency and diff checks pass. Release impact is Connectors only. The complete Devcenter gate and affected OCI build precede publication; the downstream private deployment continues to be coordinated by this artifact rather than an ungoverned private planning file.
+
+Authenticated project chat independently reproduced model_credential_unavailable. A fresh, one-use normal subscription lease was created successfully, but immediate redemption returned HTTP 400 subscription-oauth-refused. This identifies OAuth refresh or refreshed-record validation as the failure boundary. The provider connection still reports Connected because its status checks stored-record presence. Normal Claude reconnection has been requested from the operator; this source-framing change does not repair or claim Agent credential acceptance.
