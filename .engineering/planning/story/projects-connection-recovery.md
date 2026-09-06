@@ -66,7 +66,7 @@ scope:
   path: generated/ess/build.json
 - confidence: cited
   path: openapi.json
-revision: 55
+revision: 56
 ---
 ## Outcome
 
@@ -298,3 +298,11 @@ The local Substrate candidate independently passes ordinary and quota PTY journe
 ## Unique chart publication identifier
 
 The publication history already owns identifier 0.8.26 for an earlier server release. Select unused identifier 0.8.31 for this chart-only publication, verified absent both as a completed publication and an anonymous registry chart tag. Chart.yaml and its README reference now agree on 0.8.31. The implementation, security profiles and release scope are unchanged; no existing publication or artifact tag will be replaced.
+
+## Hosted Git regression after terminal bootstrap
+
+The immutable Substrate0.7.6 and chart0.8.31 releases, final downstream composition, exact artifact pins, three node installers, and real-node empty-workspace PTY journey passed. Normal downstream validation, atomic application and verification also succeeded. The protected existing workspace still reads successfully and all durable volume identities remain unchanged.
+
+The full browser acceptance then correctly failed a new normal Files session during materialization. Read-only operation-ledger inspection identifies workspace.git-init-failed before network discovery. The bootstrap starts as root and drops UID/GID but inherits HOME=/root from the container runtime. The non-root daemon therefore tries to stat /root/.gitconfig. A local libgit2 initialization probe reproduces that exact failure with HOME=/root and succeeds with a non-root home setting; a separate two-stage libgit2/gix probe also succeeds. This is an environment composition error, not evidence to weaken confinement or credential admission.
+
+The published chart has fixed Substrate environment entries and does not expose an arbitrary extraEnv map. Correct the execution-enabled branch with an explicit absent, read-only home path so ambient root configuration is excluded. Verify the failure/passing native Git initialization pair, the rendered environment and the full chart gate, then publish a unique chart-only successor and repeat hosted creation, Files editing, actual terminal output and both Agent replies. Do not report overall readiness from the node-only PTY result. The Claude credential blocker remains open independently.

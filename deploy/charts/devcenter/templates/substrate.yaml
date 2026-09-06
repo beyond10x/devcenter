@@ -116,6 +116,10 @@ spec:
             - {{ printf "%s=https://%s-connectors.%s.svc.cluster.local:%v/internal/git-fetch/" .Values.connectorsGitFetch.sourceName (include "devcenter.fullname" .) .Release.Namespace .Values.connectorsGitFetch.port | quote }}
             {{- end }}
           env:
+            {{- if $execution.enabled }}
+            # The bootstrap changes UID; exclude the runtime-injected root home from Git config.
+            - {name: HOME, value: /nonexistent}
+            {{- end }}
             - {name: SUBSTRATE_TLS_LISTEN, value: {{ printf "0.0.0.0:%v" .Values.substrate.port | quote }}}
             - {name: SUBSTRATE_TLS_CERTIFICATE_CHAIN, value: /etc/substrate/tls/tls.crt}
             - {name: SUBSTRATE_TLS_PRIVATE_KEY, value: /etc/substrate/tls/tls.key}
