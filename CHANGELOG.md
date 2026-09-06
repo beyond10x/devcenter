@@ -2,6 +2,11 @@
 
 ## Unreleased
 
+## 0.8.33 - 2026-09-06
+
+- Follow bounded AgentIDE query continuations, including empty filtered pages, so workspace coordination remains available beyond the first raw projection window.
+- Refuse cyclic, malformed, incomplete or conflicting-revision inventories while preserving session identity and grant checks.
+
 ## 0.8.30 - 2026-09-06
 
 - Open the materialized coding workspace directly from project Files, resuming an existing ready or preparing session for the selected revision.

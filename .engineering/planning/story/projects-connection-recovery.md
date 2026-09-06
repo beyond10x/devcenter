@@ -66,7 +66,7 @@ scope:
   path: generated/ess/build.json
 - confidence: cited
   path: openapi.json
-revision: 56
+revision: 58
 ---
 ## Outcome
 
@@ -306,3 +306,17 @@ The immutable Substrate0.7.6 and chart0.8.31 releases, final downstream composit
 The full browser acceptance then correctly failed a new normal Files session during materialization. Read-only operation-ledger inspection identifies workspace.git-init-failed before network discovery. The bootstrap starts as root and drops UID/GID but inherits HOME=/root from the container runtime. The non-root daemon therefore tries to stat /root/.gitconfig. A local libgit2 initialization probe reproduces that exact failure with HOME=/root and succeeds with a non-root home setting; a separate two-stage libgit2/gix probe also succeeds. This is an environment composition error, not evidence to weaken confinement or credential admission.
 
 The published chart has fixed Substrate environment entries and does not expose an arbitrary extraEnv map. Correct the execution-enabled branch with an explicit absent, read-only home path so ambient root configuration is excluded. Verify the failure/passing native Git initialization pair, the rendered environment and the full chart gate, then publish a unique chart-only successor and repeat hosted creation, Files editing, actual terminal output and both Agent replies. Do not report overall readiness from the node-only PTY result. The Claude credential blocker remains open independently.
+
+## Corrected Git home deployed; terminal browser acceptance still fails
+
+Chart-only publication0.8.32 succeeded after PR56 and exact-head Gate34054125776. Release34054644611 publishes chart sha256:c99d4cdf99a3a42c95c465c1419615699b53cfbd564a3d73285171e66fd51cd1. The corrected execution branch supplies HOME=/nonexistent. The previously failing composition was first rolled back through normal downstream CI; fresh Git creation, tree and close passed on that rollback. The reviewed corrected composition then passed immutable artifact validation, atomic deployment and running-configuration verification. The runtime is Substrate0.7.6, and all other serving and initializer images and durable volume identities remain preserved. Both node prerequisite installers are Ready on all three selected nodes.
+
+Authenticated headless acceptance creates a fresh Git workspace and reaches Ready in24046ms. Project Files entry, persisted Agent-to-Files navigation including the closed-placeholder case,44-line editor geometry, keyboard save, exact content/hash restoration and reload pass. No JavaScript or CSP errors were observed. The separately preserved operator workspace remains Ready and readable; it was not edited or closed.
+
+Terminal profile discovery now returns one declared profile, but the actual browser creation returnsHTTP403 workspace_access_refused and no terminal output is proved. A narrow API session can create and terminate a terminal after normal coordination resume, so the deciding remaining investigation is the difference in the complete browser journey. No authority bypass or session rewrite is warranted by that observation. Both fresh Agent requests still fail; the coding request is admitted withHTTP202 then returns model_credential_unavailable, while project chat is admitted withHTTP200 and fails. The disposable Workspace and coordination both close after one normal reconciliation retry. The story and Claude credential blocker remain open, and the deployment is not claimed fully accepted.
+
+## Terminal refusal isolated to unconsumed authority pages
+
+A read-only live comparison of the same session through current Connector authority confirms that a raw page limit of2 returns zero filtered items with partial=true and an opaque continuation, while limit100 returns the matching session. Following the limit2 continuation finds the same session on the sixth page. The exact direct Workspace refusal is terminal_session_binding_refused. Thus the access failure is a consumer pagination defect, not evidence of an invalid actor or permission grant. The runtime and confinement changes are not implicated.
+
+Workspace owns correction of its shared authority consumer and terminal session/grant lookups. Devcenter query_coordination similarly rejects partial pages at its larger100-row boundary. Consume continuation with explicit page/row bounds, cycle and metadata validation, and consistent authorized aggregate versions; preserve all identity checks and never accept a truncated authority inventory. Add regressions for empty filtered pages, later matching records, malformed continuation and revision mismatch, then repeat the actual headless journey after reviewed immutable releases.
