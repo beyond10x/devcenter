@@ -13,6 +13,8 @@ export default defineConfig(({ mode }) => ({
   },
   build: {
     assetsDir: "assets",
+    // Keep small font assets same-origin under the application's font-src policy.
+    assetsInlineLimit: 0,
     sourcemap: false,
   },
   server: {

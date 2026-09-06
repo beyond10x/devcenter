@@ -2,6 +2,12 @@
 
 ## Unreleased
 
+## 0.8.29 - 2026-09-06
+
+- Render Monaco line positions under the application security policy while retaining nonce
+  requirements for scripts and style elements. Serve bundled fonts from same-origin asset files.
+- Verify hosted editor layout, edit/save and browser policy behavior against the production build.
+
 ## 0.8.28 - 2026-09-06
 
 - Close the matching AgentIDE coordination session when Workspace omits its manifest during

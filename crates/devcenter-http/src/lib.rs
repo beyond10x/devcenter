@@ -1006,7 +1006,7 @@ async fn app() -> Response {
         HeaderValue::from_static("nosniff"),
     );
     let policy = format!(
-        "default-src 'self'; script-src 'self' 'wasm-unsafe-eval' 'nonce-{nonce}'; style-src 'self' 'nonce-{nonce}'; font-src 'self'; connect-src 'self'; img-src 'self' data:; base-uri 'none'; form-action 'self'; frame-ancestors 'none'; object-src 'none'"
+        "default-src 'self'; script-src 'self' 'wasm-unsafe-eval' 'nonce-{nonce}'; style-src 'self' 'nonce-{nonce}'; style-src-attr 'unsafe-inline'; font-src 'self'; connect-src 'self'; img-src 'self' data:; base-uri 'none'; form-action 'self'; frame-ancestors 'none'; object-src 'none'"
     );
     let Ok(policy) = HeaderValue::from_str(&policy) else {
         return StatusCode::INTERNAL_SERVER_ERROR.into_response();
@@ -6176,7 +6176,16 @@ mod tests {
             .to_str()
             .unwrap()
             .to_owned();
-        assert!(!policy.contains("unsafe-inline"));
+        // Monaco renders line geometry in style attributes. Only those attributes
+        // may be inline; scripts and style elements still require a nonce.
+        assert_eq!(
+            policy
+                .split(';')
+                .map(str::trim)
+                .filter(|directive| directive.contains("unsafe-inline"))
+                .collect::<Vec<_>>(),
+            vec!["style-src-attr 'unsafe-inline'"]
+        );
         assert!(policy.contains("script-src 'self'"));
         assert!(policy.contains("'wasm-unsafe-eval'"));
         let nonce_source = policy

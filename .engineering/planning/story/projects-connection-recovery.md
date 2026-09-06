@@ -47,14 +47,18 @@ scope:
 - confidence: cited
   path: frontend/package.json
 - confidence: cited
+  path: frontend/playwright.config.ts
+- confidence: cited
   path: frontend/src/api/client.ts
 - confidence: cited
   path: frontend/src/features/projects/ProjectsView.vue
 - confidence: cited
+  path: frontend/vite.config.ts
+- confidence: cited
   path: generated/ess/build.json
 - confidence: cited
   path: openapi.json
-revision: 35
+revision: 43
 ---
 ## Outcome
 
@@ -190,3 +194,37 @@ Authenticated project Agent still fails model_credential_unavailable, with norma
 Independent source review found no actionable defects in the close-specific correction and is preserved in review-result:coding-session-close-pass-1. The pinned Node22.23.1 and pnpm11.25.0 frontend install/build pass. All68 root Rust tests pass, including the new cleanup-state, immutable-binding and manifest regression. Final workspace Clippy with warnings denied, formatting, release version consistency and whitespace checks pass. A numeric-separator lint in the new fixture was corrected without changing values.
 
 Prepare server0.8.28; only local root package versions advance. The next publication selects the server explicitly, retaining the existing independently published CLI, chart and Connectors image. Workspace0.2.21 publishes independently from its owner repository; the downstream deployment will consume both immutable runtime digests in one ordinary deployment. Full Devcenter CI and authenticated read/edit/save/restore/close remain required before product completion.
+
+## Root explorer integration follow-up
+
+Server0.8.28 and Workspace0.2.21 publication and downstream deployment succeeded. Direct running-image evidence verifies both exact digests, with only those two runtimes changed among eleven workload images. All four earlier owned workspaces and their AgentIDE coordination now close through the normal API. A fresh authenticated workspace reaches ready and closes cleanly after normal cleanup reconciliation. Independent direct file and terminal metadata reads now return success; the materialization remains present.
+
+The explorer's empty-root tree query still fails: Workspace passes an empty path to SDK read_directory, whose relative-path validator correctly rejects it. Workspace story:serve-workspace-root-tree now owns composing the released bounded tree observation into root pages within the existing 1000-inode materialization ceiling. Nested paths retain their native directory listing. No foundation path-validation or authority relaxation is needed. The complete browser edit/save acceptance remains pending this consumer repair. A fresh project Agent request still fails model_credential_unavailable; Claude reconnection is outstanding.
+
+## Deployed explorer and editor rendering follow-up
+
+Workspace 0.2.22 publication and downstream validation, deployment and verification succeeded. Running-image evidence confirms only Workspace changed among all eleven workload images. Authenticated headless acceptance now reaches ready, lists the root explorer and reads README successfully. The reversible browser edit did not reach a save request; its screenshot shows overlapping editor lines. Exact original file bytes were verified and both the owned Workspace and AgentIDE coordination closed normally.
+
+Diagnose the production editor's CSP, dynamic style installation and actual keyboard focus with browser evidence. The existing development-server workbench test passes, but its small fixture does not assert multiline geometry and it does not exercise the built frontend. Extend the existing frontend and HTTP regression scope to cover the demonstrated behavior before choosing the smallest correction. Any change to style policy must preserve nonce-restricted scripts and style elements and existing network authority. Record actual read/edit/save/restore evidence after release; the explorer result alone does not prove editable Files.
+
+Two subsequent fresh sessions were refused at source authority before materialization. Determine the concrete broker refusal independently of the editor, without changing user credentials or bypassing source admission. Normal Claude reconnection remains outstanding for Agent acceptance.
+
+## Editor defect isolated
+
+After normal branch refresh, a fresh authenticated headless workspace passes read/edit/save and exact restoration, followed by normal closure of both workspace and coordination. Keyboard typing works with Monaco's native EditContext; the earlier harness insertText action did not produce a dirty document. The separate rendering failure is real: the browser reports enforced style-src-attr violations, and affected lines declare a positive inline top/height but compute top zero and height zero. Nonce-bearing style elements load correctly.
+
+Permit inline style attributes through a dedicated style-src-attr directive for Monaco's generated line geometry while preserving the nonce-restricted script-src and style-src element policy. Keep bundled font files same-origin instead of build-time data URLs rejected by font-src. Strengthen the hosted-workbench regression to assert non-overlapping multiline layout, no editor policy violations, actual edit/save and nonce presence while the editor is mounted. Run browser acceptance against a production build so the gate covers the artifact being deployed. A separate late nonce assertion currently observes the chat-only remount and accidentally counts Vite development style tags; move it to the mounted editor.
+
+The source-authority refusals match an advanced provider branch and stale selected commit. Normal same-branch selection updated the pinned revision and the next checkout passed. No broker authorization change is required by this observation.
+
+## Editor release candidate verification
+
+The deciding production-browser regression fails against the predecessor because rendered line geometry overlaps. With the dedicated style-attribute policy and same-origin bundled fonts, the regression passes, including line geometry, keyboard edit/save, nonce-bearing editor style elements and absence of CSP violations. The complete production browser suite passes 29 cases with 15 existing platform skips. All 46 frontend unit cases, generated types, typechecking, formatting, lint and production build pass. The move from development to production testing exposed an existing contrast helper that assumed six-digit hex; it now also accepts minified three-digit colors while retaining the same minimum contrast threshold.
+
+Candidate server 0.8.29 advances only the eight local root packages, frontend and OpenAPI release versions. No dependency revision, chart, CLI release or composed Connectors runtime changes are selected. The full Rust gate, independent source review, exact-head CI, immutable server publication and downstream rollout remain delivery gates. Hosted geometry and both Agent surfaces must be reported from actual acceptance after rollout.
+
+## Editor independent review and Agent boundary
+
+The independent source review approves the final correction with no remaining findings; its exact report is preserved in review-result:editor-layout-pass-1. It explicitly records the document-wide style-attribute allowance and the distinction between production-preview fixture evidence, actual Rust response assertions and pending deployed acceptance. Root and composed Clippy pass with warnings denied; composed formatting and all four composed cases pass. Remaining root tests and leak checks continue before merge.
+
+A fresh hosted coding-Agent request is admitted with HTTP 202 after the normal workbench focus operation persists, then fails model_credential_unavailable. It matches the previously observed project-Agent credential failure. The same owned workspace passes file read/edit/save and exact restoration and both normal close states. The existing Claude subscription credential blocker remains open; the editor release does not claim to clear it.
