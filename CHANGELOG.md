@@ -2,6 +2,11 @@
 
 ## Unreleased
 
+## 0.8.28 - 2026-09-06
+
+- Close the matching AgentIDE coordination session when Workspace omits its manifest during
+  cleanup, preserving session, project and source binding checks and strict ready-session identity.
+
 ## 0.8.20 - 2026-09-05
 
 - Select the composed Connector's TLS cryptography provider before restoring background clients,
