@@ -1387,6 +1387,22 @@ test("drives the AgentIDE v2 workbench over the Devcenter host port", async ({
   page,
 }, testInfo) => {
   test.skip(testInfo.project.name !== "chromium", "Desktop hosted-workbench behavior");
+  const policyViolations: string[] = [];
+  await page.exposeFunction("recordWorkbenchPolicyViolation", (directive: string) => {
+    policyViolations.push(directive);
+  });
+  await page.addInitScript(() => {
+    const target = globalThis as unknown as {
+      addEventListener(
+        type: string,
+        listener: (event: { effectiveDirective: string }) => void,
+      ): void;
+      recordWorkbenchPolicyViolation(directive: string): Promise<void>;
+    };
+    target.addEventListener("securitypolicyviolation", (event) => {
+      void target.recordWorkbenchPolicyViolation(event.effectiveDirective);
+    });
+  });
   await page.route("**/*", async (route) => {
     if (route.request().resourceType() !== "document") {
       await route.continue();
@@ -1398,7 +1414,7 @@ test("drives the AgentIDE v2 workbench over the Devcenter host port", async ({
       headers: {
         ...response.headers(),
         "content-security-policy":
-          "default-src 'self'; script-src 'self' 'wasm-unsafe-eval' 'nonce-__DEVCENTER_CSP_NONCE__'; style-src 'self' 'nonce-__DEVCENTER_CSP_NONCE__'; font-src 'self'; connect-src 'self' ws:; img-src 'self' data:",
+          "default-src 'self'; script-src 'self' 'wasm-unsafe-eval' 'nonce-__DEVCENTER_CSP_NONCE__'; style-src 'self' 'nonce-__DEVCENTER_CSP_NONCE__'; style-src-attr 'unsafe-inline'; font-src 'self'; connect-src 'self'; img-src 'self' data:",
       },
     });
   });
@@ -1455,6 +1471,42 @@ test("drives the AgentIDE v2 workbench over the Devcenter host port", async ({
     )
     .toBeGreaterThanOrEqual(3);
 
+  // Tokenization replaces line nodes with HTML carrying inline geometry. Check
+  // actual positions, since a mounted editor can still have all lines overlap.
+  const assertLineLayout = async () => {
+    await expect
+      .poll(() =>
+        page.locator(".editor-leaf .view-line").evaluateAll((lines) => {
+          const bounds = lines.map((line) =>
+            (
+              line as unknown as { getBoundingClientRect(): { top: number; height: number } }
+            ).getBoundingClientRect(),
+          );
+          return (
+            bounds.length >= 3 &&
+            bounds.every(
+              (line, index) =>
+                line.height === 20 && (index === 0 || line.top >= bounds[index - 1].top + 20),
+            )
+          );
+        }),
+      )
+      .toBe(true);
+  };
+  await assertLineLayout();
+  await expect(page.locator(".monaco-colors")).not.toHaveCount(0);
+  await expect
+    .poll(() =>
+      page.locator("style").evaluateAll((styles) => {
+        return styles.filter((style) => {
+          const target = style as unknown as { nonce: string };
+          return target.nonce !== "__DEVCENTER_CSP_NONCE__";
+        }).length;
+      }),
+    )
+    .toBe(0);
+  expect(policyViolations).toEqual([]);
+
   await page.locator(".editor-leaf .monaco-editor").click();
   await page.keyboard.press("ControlOrMeta+A");
   await page.keyboard.type('fn main() { println!("agentide"); }');
@@ -1485,17 +1537,7 @@ test("drives the AgentIDE v2 workbench over the Devcenter host port", async ({
   await expect(
     page.getByRole("paragraph").filter({ hasText: "Review the saved AgentIDE change." }),
   ).toBeVisible();
-  await expect(page.locator("style")).not.toHaveCount(0);
-  await expect
-    .poll(() =>
-      page.locator("style").evaluateAll((styles) => {
-        return styles.filter((style) => {
-          const target = style as unknown as { nonce: string };
-          return target.nonce !== "__DEVCENTER_CSP_NONCE__";
-        }).length;
-      }),
-    )
-    .toBe(0);
+  expect(policyViolations).toEqual([]);
 });
 
 test("refuses an actor-private coding session before mounting AgentIDE", async ({
@@ -1688,7 +1730,8 @@ test("persists themes and makes search and navigation shortcuts discoverable", a
   const contrastRatios = await page.evaluate<number[]>(`(() => {
     const themes = ["light", "dark", "monokai", "solarized-light", "solarized-dark"];
     const parse = (color) => {
-      const hex = color.trim().slice(1);
+      const value = color.trim().slice(1);
+      const hex = value.length === 3 ? [...value].map((digit) => digit + digit).join("") : value;
       return [0, 2, 4].map((offset) => Number.parseInt(hex.slice(offset, offset + 2), 16));
     };
     const luminance = (color) => {

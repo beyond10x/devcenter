@@ -18,8 +18,8 @@ export default defineConfig({
     { name: "mobile-chromium", use: { ...devices["Pixel 7"] } },
   ],
   webServer: {
-    command: `pnpm dev --port ${port}`,
+    command: `pnpm build && pnpm exec vite preview --host 127.0.0.1 --port ${port}`,
     url: origin,
-    reuseExistingServer: !process.env.CI,
+    reuseExistingServer: false,
   },
 });
