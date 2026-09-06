@@ -8,7 +8,7 @@ relations:
 - blocks: story:projects-connection-recovery
 - blocks: story:refresh-user-bound-model-credential
 withholds: test_result
-revision: 1
+revision: 2
 ---
 ## Missing credential evidence
 
@@ -21,3 +21,9 @@ The connection owner completes the normal Claude reconnect flow in Devcenter Con
 ## Independent work
 
 Repository discovery, Git checkout, file transport and workspace/coordination cleanup can be repaired and verified independently. This blocker withholds the successful Agent test result; it does not prevent that work or claim the credential-readiness UI story is implemented.
+
+## Latest deployed observation
+
+After server 0.8.29 and Workspace 0.2.22 delivery, a fresh coding-Agent browser request is admitted with HTTP202 and fails model_credential_unavailable within about three seconds. The earlier project-Agent request failed at the same credential boundary, and normal one-use subscription redemption previously returned subscription-oauth-refused. File read/edit/save/restoration and both normal workspace close states now pass independently.
+
+The operator has been notified that Files is ready and that Claude must be reconnected through the normal connection flow before Agent acceptance can be completed. No reconnection completion or successful model reply has been observed, so this blocker remains open. Once reconnection is reported, verify both Agent surfaces through fresh normal requests before clearing it.

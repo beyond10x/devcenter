@@ -58,7 +58,7 @@ scope:
   path: generated/ess/build.json
 - confidence: cited
   path: openapi.json
-revision: 43
+revision: 44
 ---
 ## Outcome
 
@@ -228,3 +228,13 @@ Candidate server 0.8.29 advances only the eight local root packages, frontend an
 The independent source review approves the final correction with no remaining findings; its exact report is preserved in review-result:editor-layout-pass-1. It explicitly records the document-wide style-attribute allowance and the distinction between production-preview fixture evidence, actual Rust response assertions and pending deployed acceptance. Root and composed Clippy pass with warnings denied; composed formatting and all four composed cases pass. Remaining root tests and leak checks continue before merge.
 
 A fresh hosted coding-Agent request is admitted with HTTP 202 after the normal workbench focus operation persists, then fails model_credential_unavailable. It matches the previously observed project-Agent credential failure. The same owned workspace passes file read/edit/save and exact restoration and both normal close states. The existing Claude subscription credential blocker remains open; the editor release does not claim to clear it.
+
+## Deployed editable workspace acceptance
+
+Devcenter PR53 merged source 606d8a06bae0d2b7557b929d74af6a3c91938014 after full source CI34027865961 and the affected OCI build passed. Publication34028621812 succeeded for both native server images, smoke checks, signing, index verification and immutable publication. Server 0.8.29 is recorded by publication-0.8.29 at sha256:3556ecc4db589ad478f92d98ff9c2f70666e66fc972014126b87fd4ed2ff61b1. The chart, CLI, Connectors image and other service outputs are reused.
+
+The downstream input review approves the exact server-only update. Deployment validation, atomic apply and running-image verification all succeeded. Direct workload evidence proves that only the server changed among eleven workloads and that the Ready runtime reports the exact published image digest with zero restarts. Workspace remains 0.2.22; quota storage and all unrelated deployment inputs remain unchanged.
+
+Authenticated headless acceptance against the deployed application passes the actual CSP contract, a non-overlapping 44-line editor, root exploration, real keyboard edit/save, exact content and hash restoration, and browser reload. No CSP violations were observed before or after reload, and no JavaScript errors occurred. The workspace route appeared in 1120 ms, materialization reached Ready in 15453 ms, and the editor appeared in 23783 ms. These are one end-to-end observation, not a latency guarantee. Both the owned Workspace and AgentIDE coordination closed through the normal API after one reconciliation retry.
+
+A fresh coding-Agent request was admitted with HTTP202 and then failed model_credential_unavailable. This matches the earlier project-Agent failure; normal Claude reconnection remains outstanding under credential-blocker:claude-subscription-redemption. Files is ready for operator testing after a full document reload. This story stays active because Agent acceptance is incomplete; the successful file and deployment evidence does not clear the credential blocker. Temporary diagnostic resources are retired separately after this record is published.
