@@ -5,7 +5,7 @@
     reason = "Axum handler helpers deliberately carry a complete HTTP refusal response"
 )]
 
-use std::collections::BTreeMap;
+use std::collections::{BTreeMap, BTreeSet};
 use std::fmt;
 use std::sync::{Arc, Mutex};
 use std::time::{Duration, SystemTime, UNIX_EPOCH};
@@ -2304,6 +2304,11 @@ struct CoordinationIssue {
 }
 
 impl CoordinationIssue {
+    const INCOMPLETE: Self = Self {
+        code: "agentide_coordination_incomplete",
+        retryable: false,
+        status: StatusCode::SERVICE_UNAVAILABLE,
+    };
     const UNAVAILABLE: Self = Self {
         code: "agentide_coordination_unavailable",
         retryable: true,
@@ -2330,26 +2335,92 @@ impl CoordinationIssue {
     }
 }
 
-fn coordination_page(output: &Value) -> Result<(Vec<Value>, Option<u64>), CoordinationIssue> {
+const COORDINATION_PAGE_SIZE: usize = 1_000;
+const MAX_COORDINATION_PAGES: usize = 10;
+
+#[derive(Debug)]
+struct CoordinationPage {
+    items: Vec<Value>,
+    through_version: Option<u64>,
+    next_cursor: Option<String>,
+}
+
+fn coordination_page(output: &Value) -> Result<CoordinationPage, CoordinationIssue> {
     let object = output.as_object().ok_or(CoordinationIssue::INVALID)?;
     let items = object
         .get("items")
         .and_then(Value::as_array)
         .cloned()
         .ok_or(CoordinationIssue::INVALID)?;
-    if object.get("partial").and_then(Value::as_bool) == Some(true)
-        || object
-            .get("next_cursor")
-            .is_some_and(|cursor| !cursor.is_null())
-    {
+    if items.len() > COORDINATION_PAGE_SIZE {
+        return Err(CoordinationIssue::INVALID);
+    }
+    let partial = object
+        .get("partial")
+        .and_then(Value::as_bool)
+        .ok_or(CoordinationIssue::INVALID)?;
+    let next_cursor = match object.get("next_cursor") {
+        None | Some(Value::Null) => None,
+        Some(Value::String(cursor)) if !cursor.is_empty() && cursor.len() <= 8_192 => {
+            Some(cursor.clone())
+        }
+        Some(_) => return Err(CoordinationIssue::INVALID),
+    };
+    if partial != next_cursor.is_some() {
         return Err(CoordinationIssue::INVALID);
     }
     let through_version = match object.get("through_version") {
-        Some(Value::Number(number)) => number.as_u64().ok_or(CoordinationIssue::INVALID)?,
-        Some(Value::Null) | None => return Ok((items, None)),
+        Some(Value::Number(number)) => Some(number.as_u64().ok_or(CoordinationIssue::INVALID)?),
+        Some(Value::Null) | None => None,
         Some(_) => return Err(CoordinationIssue::INVALID),
     };
-    Ok((items, Some(through_version)))
+    if !items.is_empty() && through_version.is_none() {
+        return Err(CoordinationIssue::INVALID);
+    }
+    Ok(CoordinationPage {
+        items,
+        through_version,
+        next_cursor,
+    })
+}
+
+async fn collect_coordination_pages<F, Fut>(
+    mut fetch: F,
+) -> Result<(Vec<Value>, Option<u64>), CoordinationIssue>
+where
+    F: FnMut(Value) -> Fut,
+    Fut: std::future::Future<Output = Result<Value, CoordinationIssue>>,
+{
+    let mut items = Vec::new();
+    let mut through_version = None;
+    let mut cursor = None;
+    let mut seen = BTreeSet::new();
+    // Generated-service limits count raw rows before filtering. An empty page can continue.
+    for _ in 0..MAX_COORDINATION_PAGES {
+        let mut request = json!({"limit": COORDINATION_PAGE_SIZE});
+        if let Some(current) = cursor {
+            request["cursor"] = Value::String(current);
+        }
+        let page = coordination_page(&fetch(request).await?)?;
+        if let Some(version) = page.through_version {
+            if through_version.is_some_and(|previous| previous != version) {
+                return Err(CoordinationIssue::CONFLICT);
+            }
+            through_version = Some(version);
+        }
+        items.extend(page.items);
+        if items.len() > COORDINATION_PAGE_SIZE * MAX_COORDINATION_PAGES {
+            return Err(CoordinationIssue::INCOMPLETE);
+        }
+        let Some(next) = page.next_cursor else {
+            return Ok((items, through_version));
+        };
+        if !seen.insert(next.clone()) {
+            return Err(CoordinationIssue::INVALID);
+        }
+        cursor = Some(next);
+    }
+    Err(CoordinationIssue::INCOMPLETE)
 }
 
 async fn query_coordination(
@@ -2358,16 +2429,19 @@ async fn query_coordination(
     operation: &str,
     session_id: &str,
 ) -> Result<(Vec<Value>, Option<u64>), CoordinationIssue> {
-    let (output, _) = invoke_connector_operation(
-        state,
-        authenticated,
-        operation,
-        json!({"session_id": session_id, "$page": {"limit": 100}}),
-        false,
-    )
+    collect_coordination_pages(|page| async move {
+        invoke_connector_operation(
+            state,
+            authenticated,
+            operation,
+            json!({"session_id": session_id, "$page": page}),
+            false,
+        )
+        .await
+        .map(|(output, _)| output)
+        .map_err(|_| CoordinationIssue::UNAVAILABLE)
+    })
     .await
-    .map_err(|_| CoordinationIssue::UNAVAILABLE)?;
-    coordination_page(&output)
 }
 
 async fn query_coordination_session(
@@ -6347,22 +6421,119 @@ mod tests {
 
     #[test]
     fn coordination_pages_require_an_exact_authorized_revision() {
-        let (items, version) = coordination_page(&json!({
+        let page = coordination_page(&json!({
             "items": [{"session_id": "session-1"}],
             "through_version": 7,
             "next_cursor": null,
             "partial": false
         }))
         .unwrap();
-        assert_eq!(items.len(), 1);
-        assert_eq!(version, Some(7));
+        assert_eq!(page.items.len(), 1);
+        assert_eq!(page.through_version, Some(7));
 
         assert!(
             coordination_page(&json!({
-                "items": [],
-                "through_version": 7,
-                "next_cursor": "more",
-                "partial": true
+                "items": [{"session_id": "session-1"}],
+                "through_version": null,
+                "next_cursor": null,
+                "partial": false
+            }))
+            .is_err()
+        );
+    }
+
+    #[tokio::test]
+    async fn coordination_reads_continue_empty_filtered_pages_until_complete() {
+        let expected = json!({"session_id": "session-later"});
+        let mut responses = std::collections::VecDeque::from([
+            json!({"items": [], "through_version": null, "partial": true, "next_cursor": "first"}),
+            json!({"items": [expected.clone()], "through_version": 7, "partial": true, "next_cursor": "second"}),
+            json!({"items": [], "through_version": null, "partial": false, "next_cursor": null}),
+        ]);
+        let mut requested = Vec::new();
+        let result = collect_coordination_pages(|page| {
+            requested.push(page);
+            std::future::ready(Ok(responses.pop_front().expect("bounded request")))
+        })
+        .await
+        .unwrap();
+        assert_eq!(result, (vec![expected], Some(7)));
+        assert_eq!(
+            requested,
+            vec![
+                json!({"limit": COORDINATION_PAGE_SIZE}),
+                json!({"limit": COORDINATION_PAGE_SIZE, "cursor": "first"}),
+                json!({"limit": COORDINATION_PAGE_SIZE, "cursor": "second"}),
+            ]
+        );
+    }
+
+    #[tokio::test]
+    async fn coordination_reads_refuse_mixed_authorized_revisions() {
+        let mut version = 6;
+        let error = collect_coordination_pages(|_| {
+            version += 1;
+            std::future::ready(Ok(json!({
+                "items": [{"grant_id": format!("grant-{version}")}],
+                "through_version": version,
+                "partial": version == 7,
+                "next_cursor": if version == 7 { Some("next") } else { None }
+            })))
+        })
+        .await
+        .unwrap_err();
+        assert_eq!(version, 8);
+        assert_eq!(error.code, CoordinationIssue::CONFLICT.code);
+    }
+
+    #[tokio::test]
+    async fn coordination_reads_bound_cycles_and_empty_continuations() {
+        let mut requests = 0;
+        let error = collect_coordination_pages(|_| {
+            requests += 1;
+            std::future::ready(Ok(
+                json!({"items": [], "partial": true, "next_cursor": "cycle"}),
+            ))
+        })
+        .await
+        .unwrap_err();
+        assert_eq!(requests, 2);
+        assert_eq!(error.code, CoordinationIssue::INVALID.code);
+
+        requests = 0;
+        let error = collect_coordination_pages(|_| {
+            requests += 1;
+            std::future::ready(Ok(
+                json!({"items": [], "partial": true, "next_cursor": format!("page-{requests}")}),
+            ))
+        })
+        .await
+        .unwrap_err();
+        assert_eq!(requests, MAX_COORDINATION_PAGES);
+        assert_eq!(error.code, CoordinationIssue::INCOMPLETE.code);
+    }
+
+    #[test]
+    fn coordination_pages_reject_inconsistent_or_unbounded_metadata() {
+        for (partial, cursor) in [
+            (json!(true), Value::Null),
+            (json!(true), json!("")),
+            (json!(true), json!("c".repeat(8_193))),
+            (json!(false), json!("unexpected")),
+            (json!("true"), json!("cursor")),
+            (json!(true), json!(42)),
+        ] {
+            assert!(
+                coordination_page(&json!({
+                    "items": [], "partial": partial, "next_cursor": cursor
+                }))
+                .is_err()
+            );
+        }
+        assert!(
+            coordination_page(&json!({
+                "items": vec![json!({"session_id": "unbounded"}); COORDINATION_PAGE_SIZE + 1],
+                "through_version": 7, "partial": false
             }))
             .is_err()
         );
