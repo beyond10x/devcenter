@@ -50,7 +50,7 @@ scope:
   path: generated/ess/build.json
 - confidence: cited
   path: openapi.json
-revision: 28
+revision: 29
 ---
 ## Outcome
 
@@ -144,3 +144,13 @@ Prepare the composed Connectors artifact 0.8.26. The release-unit classifier sel
 The first independent consumer review found that host Cargo authentication supports both transports but the isolated Connectors Docker stage only rewrites HTTPS dependencies. The new shared-contract source identity therefore needs the SSH prefix mapped to the same existing token-authenticated HTTPS endpoint inside that stage. Add that mapping to the authoritative ESS Connectors build command and to the maintained Dockerfile's corresponding stage. Both mappings are removed by the existing unset-all cleanup; no credential or SSH key is added to the source or image.
 
 ESS 0.9.2 validates the existing specification and deterministically regenerates the compiled build IR and Dockerfile projection. The existing projection check passes before and after the edit; Bake and graph are unchanged. Version consistency and diff checks pass. The shared build files conservatively broaden CI impact to the image units; final publication explicitly selects only Connectors and retains the prior successful artifacts for the other units. A second independent review and the real CI OCI build must verify this remedy before publication. The first review and its finding are retained in the evidence archive; its initial unsupported findings shape was refused by AEP and a schema-admissible report has been requested from the critic.
+
+## Deployed Git HTTP authentication repair
+
+Devcenter PR50 merged source a15597c0d08527a553afe9562c8b3eaa255b2f01 after CI34003341500 passed the full repository gate and affected OCI builds. The independent consumer's second pass found no remaining blocking findings. Publication 0.8.26 completed successfully in CI34004333609, building both supported architectures, signing the Connectors image and validating the exact composed candidate. The immutable Connectors digest is sha256:d499c64f3a30bc2a86d3ee2b5bc887a6bbd2fb1433cd1d1f97d1b85ef7232a0a. Chart 0.8.25, server 0.8.21 and deployment CLI 0.8.18 were reused.
+
+The downstream deployment changed only the Connectors version and digest in its three lock/value/CI inputs. Local rendering matched all eleven workload images to the lock. Its validation, atomic deployment and verification jobs all succeeded. Direct post-deployment observation confirmed that the ready Connectors pod reports the published immutable image ID with zero restarts. Other service pins and the verified quota storage remain unchanged; this authentication repair created no additional cloud resources.
+
+The exact released Substrate 0.7.5 Git client also passed the repaired Connectors fixture, checking the admitted commit, fifty shallow-history entries, no tags, no transient authority in stored Git configuration and a spent broker session. This is a real client compatibility fixture with synthetic custody, not a hosted user session.
+
+Post-deployment headless Chromium rendered the public sign-in page with HTTP 200, no JavaScript errors and no failed application assets. Its anonymous session request correctly returned HTTP 401. No usable authenticated browser state was supplied, so file-tree, read/edit/restore/close, both Agent replies and end-to-end workspace startup timing remain unverified. The observed Agent credential failure also remains unresolved. The story stays active. Task-local build outputs and diagnostic pods were removed, evidence retained privately, and managed worktree retirement follows publication of this record.
