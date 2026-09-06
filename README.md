@@ -165,7 +165,7 @@ mounts or host namespaces. The default keeps the ordinary unprivileged entrypoin
 verify that the selected runtime's child processes cannot inherit that capability; enabling a
 terminal execution profile additionally requires its existing sandbox and cgroup guarantees.
 
-Chart 0.8.26 adds `substrate.execution.enabled` for Substrate 0.7.6's container execution
+Chart 0.8.31 adds `substrate.execution.enabled` for Substrate 0.7.6's container execution
 bootstrap. Install its versioned node security profiles first, configure the matching Localhost
 seccomp path and retain finite container resource limits. The bootstrap prepares a private
 delegation and drops its setup identity before starting the ordinary or quota daemon. See the

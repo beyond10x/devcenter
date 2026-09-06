@@ -66,7 +66,7 @@ scope:
   path: generated/ess/build.json
 - confidence: cited
   path: openapi.json
-revision: 54
+revision: 55
 ---
 ## Outcome
 
@@ -294,3 +294,7 @@ Chart 0.8.26 composes the reviewed Substrate container bootstrap through an expl
 Both independent chart reviews approve the source with no remaining findings. The full frontend check passes 46 unit tests, and the production-browser suite passes 32 cases with 18 existing mobile exclusions. Root and composed Rust formatting, Clippy with warnings denied, all root tests and all four composed tests pass. Chart lint, version consistency, positive and negative execution renders, eight real volume initializer runs and the confidential-marker check pass. The pinned Docs System collector accepts both affected repositories. The complete organization documentation audit separately refuses an existing aep/docs manifest mismatch; this change does not alter that repository or its catalog records.
 
 The local Substrate candidate independently passes ordinary and quota PTY journeys, worker capability removal, resource observations, descendant and cgroup cleanup, four ordinary/quota image-startup checks, missing-profile/memory-limit refusals and an AppArmor-denied undeclared cgroup mount. The complete delegated host, SDK, remote WSS, MCP and wire lane also passes. These local results do not assert a released or deployed terminal. Immutable runtime/chart publication, node prerequisites, actual browser terminal output and preservation of the user's workspace remain required. Both Agent surfaces still require successful model replies; the credential blocker remains open.
+
+## Unique chart publication identifier
+
+The publication history already owns identifier 0.8.26 for an earlier server release. Select unused identifier 0.8.31 for this chart-only publication, verified absent both as a completed publication and an anonymous registry chart tag. Chart.yaml and its README reference now agree on 0.8.31. The implementation, security profiles and release scope are unchanged; no existing publication or artifact tag will be replaced.
