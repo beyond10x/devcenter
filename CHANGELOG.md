@@ -2,6 +2,12 @@
 
 ## Unreleased
 
+## 0.8.30 - 2026-09-06
+
+- Open the materialized coding workspace directly from project Files, resuming an existing ready or preparing session for the selected revision.
+- Honor editor-first workspace entry and keep a selectable Files pane before the first file is opened, including after switching to Agent chat.
+- Provide a project return action for failed or closed workspaces and remove obsolete materialization guidance from the read-only preview.
+
 ## 0.8.29 - 2026-09-06
 
 - Render Monaco line positions under the application security policy while retaining nonce

@@ -81,7 +81,10 @@ export class DevcenterWorkbenchHost implements WorkbenchHostPort {
   readonly #projectId: string;
   readonly #sessionId: string;
   readonly #workspace: WorkspaceStore;
-  readonly #panes: Pane[] = [{ id: "chat", kind: "chat", title: "Agent" }];
+  readonly #panes: Pane[] = [
+    { id: "chat", kind: "chat", title: "Agent" },
+    { id: "files", kind: "editor", title: "Files" },
+  ];
   readonly #openFiles = new Map<string, FileResult>();
   readonly #terminalSockets = new Map<string, WebSocket>();
   readonly #terminalSequences = new Map<string, bigint>();
@@ -105,6 +108,7 @@ export class DevcenterWorkbenchHost implements WorkbenchHostPort {
   readonly #pendingMutations: PendingMutation[] = [];
   readonly #terminalSessions = new Map<string, TerminalSession>();
   readonly #onProgress?: (progress: StartupProgress[]) => void;
+  readonly #preferEditor: boolean;
   #session?: CodingSession;
   #validation?: Promise<void>;
   #treeProjection?: TreeProjection;
@@ -124,11 +128,14 @@ export class DevcenterWorkbenchHost implements WorkbenchHostPort {
     sessionId: string,
     workspace: WorkspaceStore,
     onProgress?: (progress: StartupProgress[]) => void,
+    preferEditor = false,
   ) {
     this.#projectId = projectId;
     this.#sessionId = sessionId;
     this.#workspace = workspace;
     this.#onProgress = onProgress;
+    this.#preferEditor = preferEditor;
+    if (preferEditor) this.#focusedPane = "files";
   }
 
   attachRenderer(renderer: RendererHandle, requestRefresh: () => void): void {
@@ -207,6 +214,10 @@ export class DevcenterWorkbenchHost implements WorkbenchHostPort {
 
     const projections: WorkbenchSnapshot["projections"] = {
       chat: { kind: "chat", messages },
+      files: {
+        kind: "empty",
+        message: "Select a file from the workspace explorer to start editing.",
+      },
     };
     for (const [path, file] of this.#openFiles) {
       projections[editorPane(path)] = {
@@ -415,7 +426,7 @@ export class DevcenterWorkbenchHost implements WorkbenchHostPort {
 
   async closePane(paneId: string, signal: AbortSignal): Promise<void> {
     this.#throwIfAborted(signal);
-    if (paneId === "chat") return;
+    if (paneId === "chat" || paneId === "files") return;
     const panes = [...this.#panes];
     const index = panes.findIndex((pane) => pane.id === paneId);
     if (index < 0) return;
@@ -834,8 +845,8 @@ export class DevcenterWorkbenchHost implements WorkbenchHostPort {
         this.#sessionId,
         {
           action: { kind: "initialize" },
-          panes: [workbenchPane({ id: "chat", kind: "chat", title: "Agent" })],
-          focused_pane: "chat",
+          panes: this.#panes.map(workbenchPane),
+          focused_pane: this.#focusedPane,
           open_files: [],
           idempotency_key: crypto.randomUUID(),
         },
@@ -855,7 +866,15 @@ export class DevcenterWorkbenchHost implements WorkbenchHostPort {
     for (const pane of local.values())
       if (!panes.some((candidate) => candidate.id === pane.id)) panes.push(pane);
     this.#panes.splice(0, this.#panes.length, ...panes);
-    if (!this.#focusTouched) this.#focusedPane = workbench.focused_pane ?? "chat";
+    if (!this.#focusTouched) {
+      const savedEditor =
+        panes.find(
+          (pane) => pane.kind === "editor" && pane.path && pane.id === workbench.focused_pane,
+        ) ?? panes.find((pane) => pane.kind === "editor" && pane.path);
+      this.#focusedPane = this.#preferEditor
+        ? (savedEditor?.id ?? "files")
+        : (workbench.focused_pane ?? "chat");
+    }
     this.#workbenchHydrated = true;
     this.#requestRefresh?.();
   }
@@ -967,7 +986,11 @@ export class DevcenterWorkbenchHost implements WorkbenchHostPort {
       resolve,
       reject,
       action,
-      changed: panes.filter((pane) => JSON.stringify(pane) !== JSON.stringify(before.get(pane.id))),
+      changed: panes.filter(
+        (pane) =>
+          JSON.stringify(pane) !== JSON.stringify(before.get(pane.id)) ||
+          !this.#durableWorkbench?.panes.some((saved) => saved.id === pane.id),
+      ),
       removed: new Set(
         this.#panes
           .filter((pane) => !panes.some((candidate) => candidate.id === pane.id))
@@ -1370,7 +1393,9 @@ function preparationMessage(session: CodingSession): string {
     case "closed":
       return "This coding session is closed.";
     default:
-      return "Workspace files could not be prepared. Return to the project and try again.";
+      return session.failure_code === "source_authority_refused"
+        ? "The repository snapshot is no longer available. Return to the project, refresh its snapshot, and open Files again."
+        : "File preparation failed for this workspace. Return to the project and open Files to start a new workspace.";
   }
 }
 
