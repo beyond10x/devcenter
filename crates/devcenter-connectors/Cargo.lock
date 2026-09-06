@@ -345,7 +345,7 @@ checksum = "fc652a48c352aef3ea3aed32080501cf3ef6ed5da78602a020c991775b0aff04"
 [[package]]
 name = "catalog"
 version = "0.6.5"
-source = "git+ssh://git@github.com/beyond10x/connectors.git?rev=fe3541a6d866e84855dfdc19ec4d22a7e779b1e5#fe3541a6d866e84855dfdc19ec4d22a7e779b1e5"
+source = "git+ssh://git@github.com/beyond10x/connectors.git?rev=53ba51fb744e223e220523ff49f313e1d23d8673#53ba51fb744e223e220523ff49f313e1d23d8673"
 dependencies = [
  "catalog-reader",
  "serde",
@@ -355,7 +355,7 @@ dependencies = [
 [[package]]
 name = "catalog-reader"
 version = "0.6.5"
-source = "git+ssh://git@github.com/beyond10x/connectors.git?rev=fe3541a6d866e84855dfdc19ec4d22a7e779b1e5#fe3541a6d866e84855dfdc19ec4d22a7e779b1e5"
+source = "git+ssh://git@github.com/beyond10x/connectors.git?rev=53ba51fb744e223e220523ff49f313e1d23d8673#53ba51fb744e223e220523ff49f313e1d23d8673"
 
 [[package]]
 name = "cc"
@@ -478,7 +478,7 @@ dependencies = [
 [[package]]
 name = "connect-session-transport"
 version = "0.6.5"
-source = "git+ssh://git@github.com/beyond10x/connectors.git?rev=fe3541a6d866e84855dfdc19ec4d22a7e779b1e5#fe3541a6d866e84855dfdc19ec4d22a7e779b1e5"
+source = "git+ssh://git@github.com/beyond10x/connectors.git?rev=53ba51fb744e223e220523ff49f313e1d23d8673#53ba51fb744e223e220523ff49f313e1d23d8673"
 dependencies = [
  "base64 0.22.1",
  "connector-secrets",
@@ -491,7 +491,7 @@ dependencies = [
 [[package]]
 name = "connector-address"
 version = "0.6.5"
-source = "git+ssh://git@github.com/beyond10x/connectors.git?rev=fe3541a6d866e84855dfdc19ec4d22a7e779b1e5#fe3541a6d866e84855dfdc19ec4d22a7e779b1e5"
+source = "git+ssh://git@github.com/beyond10x/connectors.git?rev=53ba51fb744e223e220523ff49f313e1d23d8673#53ba51fb744e223e220523ff49f313e1d23d8673"
 dependencies = [
  "thiserror",
 ]
@@ -499,7 +499,7 @@ dependencies = [
 [[package]]
 name = "connector-oauth"
 version = "0.6.5"
-source = "git+ssh://git@github.com/beyond10x/connectors.git?rev=fe3541a6d866e84855dfdc19ec4d22a7e779b1e5#fe3541a6d866e84855dfdc19ec4d22a7e779b1e5"
+source = "git+ssh://git@github.com/beyond10x/connectors.git?rev=53ba51fb744e223e220523ff49f313e1d23d8673#53ba51fb744e223e220523ff49f313e1d23d8673"
 dependencies = [
  "base64 0.22.1",
  "getrandom 0.3.4",
@@ -512,7 +512,7 @@ dependencies = [
 [[package]]
 name = "connector-resolve"
 version = "0.6.5"
-source = "git+ssh://git@github.com/beyond10x/connectors.git?rev=fe3541a6d866e84855dfdc19ec4d22a7e779b1e5#fe3541a6d866e84855dfdc19ec4d22a7e779b1e5"
+source = "git+ssh://git@github.com/beyond10x/connectors.git?rev=53ba51fb744e223e220523ff49f313e1d23d8673#53ba51fb744e223e220523ff49f313e1d23d8673"
 dependencies = [
  "catalog",
  "catalog-reader",
@@ -527,7 +527,7 @@ dependencies = [
 [[package]]
 name = "connector-secrets"
 version = "0.6.5"
-source = "git+ssh://git@github.com/beyond10x/connectors.git?rev=fe3541a6d866e84855dfdc19ec4d22a7e779b1e5#fe3541a6d866e84855dfdc19ec4d22a7e779b1e5"
+source = "git+ssh://git@github.com/beyond10x/connectors.git?rev=53ba51fb744e223e220523ff49f313e1d23d8673#53ba51fb744e223e220523ff49f313e1d23d8673"
 dependencies = [
  "async-trait",
  "connector-address",
@@ -543,7 +543,7 @@ dependencies = [
 [[package]]
 name = "connector-state"
 version = "0.6.5"
-source = "git+ssh://git@github.com/beyond10x/connectors.git?rev=fe3541a6d866e84855dfdc19ec4d22a7e779b1e5#fe3541a6d866e84855dfdc19ec4d22a7e779b1e5"
+source = "git+ssh://git@github.com/beyond10x/connectors.git?rev=53ba51fb744e223e220523ff49f313e1d23d8673#53ba51fb744e223e220523ff49f313e1d23d8673"
 dependencies = [
  "thiserror",
 ]
@@ -551,7 +551,7 @@ dependencies = [
 [[package]]
 name = "connectors-config"
 version = "0.6.5"
-source = "git+ssh://git@github.com/beyond10x/connectors.git?rev=fe3541a6d866e84855dfdc19ec4d22a7e779b1e5#fe3541a6d866e84855dfdc19ec4d22a7e779b1e5"
+source = "git+ssh://git@github.com/beyond10x/connectors.git?rev=53ba51fb744e223e220523ff49f313e1d23d8673#53ba51fb744e223e220523ff49f313e1d23d8673"
 dependencies = [
  "connector-address",
  "domain",
@@ -567,7 +567,7 @@ dependencies = [
 [[package]]
 name = "connectors-runtime"
 version = "0.6.5"
-source = "git+ssh://git@github.com/beyond10x/connectors.git?rev=fe3541a6d866e84855dfdc19ec4d22a7e779b1e5#fe3541a6d866e84855dfdc19ec4d22a7e779b1e5"
+source = "git+ssh://git@github.com/beyond10x/connectors.git?rev=53ba51fb744e223e220523ff49f313e1d23d8673#53ba51fb744e223e220523ff49f313e1d23d8673"
 dependencies = [
  "async-trait",
  "axum",
@@ -785,7 +785,7 @@ dependencies = [
 
 [[package]]
 name = "devcenter-connectors"
-version = "0.8.26"
+version = "0.8.27"
 dependencies = [
  "agentide-generated-service",
  "anyhow",
@@ -838,7 +838,7 @@ dependencies = [
 [[package]]
 name = "domain"
 version = "0.6.5"
-source = "git+ssh://git@github.com/beyond10x/connectors.git?rev=fe3541a6d866e84855dfdc19ec4d22a7e779b1e5#fe3541a6d866e84855dfdc19ec4d22a7e779b1e5"
+source = "git+ssh://git@github.com/beyond10x/connectors.git?rev=53ba51fb744e223e220523ff49f313e1d23d8673#53ba51fb744e223e220523ff49f313e1d23d8673"
 dependencies = [
  "async-trait",
  "connector-state",
@@ -852,7 +852,7 @@ dependencies = [
 [[package]]
 name = "driver-audio"
 version = "0.6.5"
-source = "git+ssh://git@github.com/beyond10x/connectors.git?rev=fe3541a6d866e84855dfdc19ec4d22a7e779b1e5#fe3541a6d866e84855dfdc19ec4d22a7e779b1e5"
+source = "git+ssh://git@github.com/beyond10x/connectors.git?rev=53ba51fb744e223e220523ff49f313e1d23d8673#53ba51fb744e223e220523ff49f313e1d23d8673"
 dependencies = [
  "domain",
 ]
@@ -860,7 +860,7 @@ dependencies = [
 [[package]]
 name = "driver-cdp"
 version = "0.6.5"
-source = "git+ssh://git@github.com/beyond10x/connectors.git?rev=fe3541a6d866e84855dfdc19ec4d22a7e779b1e5#fe3541a6d866e84855dfdc19ec4d22a7e779b1e5"
+source = "git+ssh://git@github.com/beyond10x/connectors.git?rev=53ba51fb744e223e220523ff49f313e1d23d8673#53ba51fb744e223e220523ff49f313e1d23d8673"
 dependencies = [
  "base64 0.22.1",
  "domain",
@@ -877,7 +877,7 @@ dependencies = [
 [[package]]
 name = "driver-speech"
 version = "0.6.5"
-source = "git+ssh://git@github.com/beyond10x/connectors.git?rev=fe3541a6d866e84855dfdc19ec4d22a7e779b1e5#fe3541a6d866e84855dfdc19ec4d22a7e779b1e5"
+source = "git+ssh://git@github.com/beyond10x/connectors.git?rev=53ba51fb744e223e220523ff49f313e1d23d8673#53ba51fb744e223e220523ff49f313e1d23d8673"
 dependencies = [
  "domain",
  "driver-audio",
@@ -1335,7 +1335,7 @@ dependencies = [
 [[package]]
 name = "hosted-secrets"
 version = "0.6.5"
-source = "git+ssh://git@github.com/beyond10x/connectors.git?rev=fe3541a6d866e84855dfdc19ec4d22a7e779b1e5#fe3541a6d866e84855dfdc19ec4d22a7e779b1e5"
+source = "git+ssh://git@github.com/beyond10x/connectors.git?rev=53ba51fb744e223e220523ff49f313e1d23d8673#53ba51fb744e223e220523ff49f313e1d23d8673"
 dependencies = [
  "async-trait",
  "base64 0.22.1",
@@ -1355,7 +1355,7 @@ dependencies = [
 [[package]]
 name = "hosted-state"
 version = "0.6.5"
-source = "git+ssh://git@github.com/beyond10x/connectors.git?rev=fe3541a6d866e84855dfdc19ec4d22a7e779b1e5#fe3541a6d866e84855dfdc19ec4d22a7e779b1e5"
+source = "git+ssh://git@github.com/beyond10x/connectors.git?rev=53ba51fb744e223e220523ff49f313e1d23d8673#53ba51fb744e223e220523ff49f313e1d23d8673"
 dependencies = [
  "connector-state",
  "postgres",
@@ -1365,7 +1365,7 @@ dependencies = [
 [[package]]
 name = "hosted-vault"
 version = "0.6.5"
-source = "git+ssh://git@github.com/beyond10x/connectors.git?rev=fe3541a6d866e84855dfdc19ec4d22a7e779b1e5#fe3541a6d866e84855dfdc19ec4d22a7e779b1e5"
+source = "git+ssh://git@github.com/beyond10x/connectors.git?rev=53ba51fb744e223e220523ff49f313e1d23d8673#53ba51fb744e223e220523ff49f313e1d23d8673"
 dependencies = [
  "async-trait",
  "connector-secrets",
@@ -1634,7 +1634,7 @@ dependencies = [
 [[package]]
 name = "identity-http"
 version = "0.6.5"
-source = "git+ssh://git@github.com/beyond10x/connectors.git?rev=fe3541a6d866e84855dfdc19ec4d22a7e779b1e5#fe3541a6d866e84855dfdc19ec4d22a7e779b1e5"
+source = "git+ssh://git@github.com/beyond10x/connectors.git?rev=53ba51fb744e223e220523ff49f313e1d23d8673#53ba51fb744e223e220523ff49f313e1d23d8673"
 dependencies = [
  "async-trait",
  "hex",
@@ -1684,7 +1684,7 @@ dependencies = [
 [[package]]
 name = "integration-catalog"
 version = "0.6.5"
-source = "git+ssh://git@github.com/beyond10x/connectors.git?rev=fe3541a6d866e84855dfdc19ec4d22a7e779b1e5#fe3541a6d866e84855dfdc19ec4d22a7e779b1e5"
+source = "git+ssh://git@github.com/beyond10x/connectors.git?rev=53ba51fb744e223e220523ff49f313e1d23d8673#53ba51fb744e223e220523ff49f313e1d23d8673"
 dependencies = [
  "async-trait",
  "catalog",
@@ -1711,7 +1711,7 @@ dependencies = [
 [[package]]
 name = "integration-gitlab"
 version = "0.6.5"
-source = "git+ssh://git@github.com/beyond10x/connectors.git?rev=fe3541a6d866e84855dfdc19ec4d22a7e779b1e5#fe3541a6d866e84855dfdc19ec4d22a7e779b1e5"
+source = "git+ssh://git@github.com/beyond10x/connectors.git?rev=53ba51fb744e223e220523ff49f313e1d23d8673#53ba51fb744e223e220523ff49f313e1d23d8673"
 dependencies = [
  "async-trait",
  "base64 0.22.1",
@@ -1739,7 +1739,7 @@ dependencies = [
 [[package]]
 name = "integration-jira"
 version = "0.6.5"
-source = "git+ssh://git@github.com/beyond10x/connectors.git?rev=fe3541a6d866e84855dfdc19ec4d22a7e779b1e5#fe3541a6d866e84855dfdc19ec4d22a7e779b1e5"
+source = "git+ssh://git@github.com/beyond10x/connectors.git?rev=53ba51fb744e223e220523ff49f313e1d23d8673#53ba51fb744e223e220523ff49f313e1d23d8673"
 dependencies = [
  "async-trait",
  "base64 0.22.1",
@@ -1767,7 +1767,7 @@ dependencies = [
 [[package]]
 name = "integration-kubernetes"
 version = "0.6.5"
-source = "git+ssh://git@github.com/beyond10x/connectors.git?rev=fe3541a6d866e84855dfdc19ec4d22a7e779b1e5#fe3541a6d866e84855dfdc19ec4d22a7e779b1e5"
+source = "git+ssh://git@github.com/beyond10x/connectors.git?rev=53ba51fb744e223e220523ff49f313e1d23d8673#53ba51fb744e223e220523ff49f313e1d23d8673"
 dependencies = [
  "async-trait",
  "connector-resolve",
@@ -1794,7 +1794,7 @@ dependencies = [
 [[package]]
 name = "integration-mcp"
 version = "0.6.5"
-source = "git+ssh://git@github.com/beyond10x/connectors.git?rev=fe3541a6d866e84855dfdc19ec4d22a7e779b1e5#fe3541a6d866e84855dfdc19ec4d22a7e779b1e5"
+source = "git+ssh://git@github.com/beyond10x/connectors.git?rev=53ba51fb744e223e220523ff49f313e1d23d8673#53ba51fb744e223e220523ff49f313e1d23d8673"
 dependencies = [
  "async-trait",
  "b10x-mcp-client",
@@ -1823,7 +1823,7 @@ dependencies = [
 [[package]]
 name = "integration-monitoring"
 version = "0.6.5"
-source = "git+ssh://git@github.com/beyond10x/connectors.git?rev=fe3541a6d866e84855dfdc19ec4d22a7e779b1e5#fe3541a6d866e84855dfdc19ec4d22a7e779b1e5"
+source = "git+ssh://git@github.com/beyond10x/connectors.git?rev=53ba51fb744e223e220523ff49f313e1d23d8673#53ba51fb744e223e220523ff49f313e1d23d8673"
 dependencies = [
  "async-trait",
  "catalog",
@@ -1849,7 +1849,7 @@ dependencies = [
 [[package]]
 name = "integration-platform"
 version = "0.6.5"
-source = "git+ssh://git@github.com/beyond10x/connectors.git?rev=fe3541a6d866e84855dfdc19ec4d22a7e779b1e5#fe3541a6d866e84855dfdc19ec4d22a7e779b1e5"
+source = "git+ssh://git@github.com/beyond10x/connectors.git?rev=53ba51fb744e223e220523ff49f313e1d23d8673#53ba51fb744e223e220523ff49f313e1d23d8673"
 dependencies = [
  "async-trait",
  "base64 0.22.1",
@@ -1879,7 +1879,7 @@ dependencies = [
 [[package]]
 name = "integration-slack"
 version = "0.6.5"
-source = "git+ssh://git@github.com/beyond10x/connectors.git?rev=fe3541a6d866e84855dfdc19ec4d22a7e779b1e5#fe3541a6d866e84855dfdc19ec4d22a7e779b1e5"
+source = "git+ssh://git@github.com/beyond10x/connectors.git?rev=53ba51fb744e223e220523ff49f313e1d23d8673#53ba51fb744e223e220523ff49f313e1d23d8673"
 dependencies = [
  "async-trait",
  "base64 0.22.1",
@@ -2310,7 +2310,7 @@ dependencies = [
 [[package]]
 name = "monitoring-model"
 version = "0.6.5"
-source = "git+ssh://git@github.com/beyond10x/connectors.git?rev=fe3541a6d866e84855dfdc19ec4d22a7e779b1e5#fe3541a6d866e84855dfdc19ec4d22a7e779b1e5"
+source = "git+ssh://git@github.com/beyond10x/connectors.git?rev=53ba51fb744e223e220523ff49f313e1d23d8673#53ba51fb744e223e220523ff49f313e1d23d8673"
 dependencies = [
  "catalog",
  "connector-resolve",
@@ -2714,7 +2714,7 @@ dependencies = [
 [[package]]
 name = "protocol"
 version = "0.6.5"
-source = "git+ssh://git@github.com/beyond10x/connectors.git?rev=fe3541a6d866e84855dfdc19ec4d22a7e779b1e5#fe3541a6d866e84855dfdc19ec4d22a7e779b1e5"
+source = "git+ssh://git@github.com/beyond10x/connectors.git?rev=53ba51fb744e223e220523ff49f313e1d23d8673#53ba51fb744e223e220523ff49f313e1d23d8673"
 dependencies = [
  "domain",
  "schemars",
@@ -3425,7 +3425,7 @@ dependencies = [
 [[package]]
 name = "server"
 version = "0.6.5"
-source = "git+ssh://git@github.com/beyond10x/connectors.git?rev=fe3541a6d866e84855dfdc19ec4d22a7e779b1e5#fe3541a6d866e84855dfdc19ec4d22a7e779b1e5"
+source = "git+ssh://git@github.com/beyond10x/connectors.git?rev=53ba51fb744e223e220523ff49f313e1d23d8673#53ba51fb744e223e220523ff49f313e1d23d8673"
 dependencies = [
  "async-trait",
  "axum",
@@ -3455,7 +3455,7 @@ dependencies = [
 [[package]]
 name = "service"
 version = "0.6.5"
-source = "git+ssh://git@github.com/beyond10x/connectors.git?rev=fe3541a6d866e84855dfdc19ec4d22a7e779b1e5#fe3541a6d866e84855dfdc19ec4d22a7e779b1e5"
+source = "git+ssh://git@github.com/beyond10x/connectors.git?rev=53ba51fb744e223e220523ff49f313e1d23d8673#53ba51fb744e223e220523ff49f313e1d23d8673"
 dependencies = [
  "async-trait",
  "base64 0.22.1",
@@ -3713,7 +3713,7 @@ checksum = "6ce2be8dc25455e1f91df71bfa12ad37d7af1092ae736f3a6cd0e37bc7810596"
 [[package]]
 name = "state-sqlite"
 version = "0.6.5"
-source = "git+ssh://git@github.com/beyond10x/connectors.git?rev=fe3541a6d866e84855dfdc19ec4d22a7e779b1e5#fe3541a6d866e84855dfdc19ec4d22a7e779b1e5"
+source = "git+ssh://git@github.com/beyond10x/connectors.git?rev=53ba51fb744e223e220523ff49f313e1d23d8673#53ba51fb744e223e220523ff49f313e1d23d8673"
 dependencies = [
  "connector-state",
  "rusqlite",
@@ -3760,7 +3760,7 @@ dependencies = [
 [[package]]
 name = "subscription-custody"
 version = "0.6.5"
-source = "git+ssh://git@github.com/beyond10x/connectors.git?rev=fe3541a6d866e84855dfdc19ec4d22a7e779b1e5#fe3541a6d866e84855dfdc19ec4d22a7e779b1e5"
+source = "git+ssh://git@github.com/beyond10x/connectors.git?rev=53ba51fb744e223e220523ff49f313e1d23d8673#53ba51fb744e223e220523ff49f313e1d23d8673"
 dependencies = [
  "connector-oauth",
  "connector-secrets",
