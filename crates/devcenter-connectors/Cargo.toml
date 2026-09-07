@@ -21,14 +21,14 @@ anyhow = "1"
 clap = { version = "4.6", features = ["derive", "env"] }
 connectors-runtime = { git = "ssh://git@github.com/beyond10x/connectors.git", rev = "1c45d5bfbdc583738e90f2b93cf9c124ed2c5568", default-features = false }
 connectors-service = { package = "service", git = "ssh://git@github.com/beyond10x/connectors.git", rev = "1c45d5bfbdc583738e90f2b93cf9c124ed2c5568" }
-eventlog-postgres = { git = "https://github.com/beyond10x/eventlog.git", rev = "081815cdfcbf1c751e7ee91abd81af2ff7d460cb" }
+eventlog-postgres = { git = "https://github.com/beyond10x/eventlog.git", rev = "b7e8f0d87b01c403415546d311952cb155caf16f" }
 rustls = { version = "0.23", default-features = false, features = ["aws_lc_rs", "std"] }
 # Honor deployment-selected operating-system CA roots without disabling TLS verification.
 reqwest = { version = "0.12", default-features = false, features = ["rustls-tls-native-roots"] }
 serde = { version = "1", features = ["derive"] }
 serde_yaml = "0.9"
-service-catalog = { git = "ssh://git@github.com/beyond10x/service-sdk.git", rev = "2cc5d56c694b9081907c37d7c41cc404cbbe4bdd" }
-service-connectors = { git = "ssh://git@github.com/beyond10x/service-sdk.git", rev = "2cc5d56c694b9081907c37d7c41cc404cbbe4bdd" }
+service-catalog = { git = "ssh://git@github.com/beyond10x/service-sdk.git", rev = "6e4a257b0be3297ff726224f73910451de3da13e" }
+service-connectors = { git = "ssh://git@github.com/beyond10x/service-sdk.git", rev = "6e4a257b0be3297ff726224f73910451de3da13e" }
 todo-generated-service = { git = "https://github.com/beyond10x/todo.git", rev = "dba6069cfcdd145a1bf25ea63f7762e1cc0b7e75" }
 tokio = { version = "1", features = ["macros", "rt-multi-thread", "signal"] }
 
@@ -41,11 +41,11 @@ service = { git = "ssh://git@github.com/beyond10x/connectors.git", rev = "1c45d5
 
 # Generated applications retain their source manifests; the composition selects one SDK contract.
 [patch."https://github.com/beyond10x/service-sdk.git"]
-service-engine = { git = "ssh://git@github.com/beyond10x/service-sdk.git", rev = "2cc5d56c694b9081907c37d7c41cc404cbbe4bdd" }
-service-connectors = { git = "ssh://git@github.com/beyond10x/service-sdk.git", rev = "2cc5d56c694b9081907c37d7c41cc404cbbe4bdd" }
-service-catalog = { git = "ssh://git@github.com/beyond10x/service-sdk.git", rev = "2cc5d56c694b9081907c37d7c41cc404cbbe4bdd" }
-service-http = { git = "ssh://git@github.com/beyond10x/service-sdk.git", rev = "2cc5d56c694b9081907c37d7c41cc404cbbe4bdd" }
-service-host = { git = "ssh://git@github.com/beyond10x/service-sdk.git", rev = "2cc5d56c694b9081907c37d7c41cc404cbbe4bdd" }
+service-engine = { git = "ssh://git@github.com/beyond10x/service-sdk.git", rev = "6e4a257b0be3297ff726224f73910451de3da13e" }
+service-connectors = { git = "ssh://git@github.com/beyond10x/service-sdk.git", rev = "6e4a257b0be3297ff726224f73910451de3da13e" }
+service-catalog = { git = "ssh://git@github.com/beyond10x/service-sdk.git", rev = "6e4a257b0be3297ff726224f73910451de3da13e" }
+service-http = { git = "ssh://git@github.com/beyond10x/service-sdk.git", rev = "6e4a257b0be3297ff726224f73910451de3da13e" }
+service-host = { git = "ssh://git@github.com/beyond10x/service-sdk.git", rev = "6e4a257b0be3297ff726224f73910451de3da13e" }
 
 [workspace.lints.rust]
 unsafe_code = "forbid"

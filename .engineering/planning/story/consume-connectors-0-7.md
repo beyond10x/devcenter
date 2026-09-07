@@ -27,7 +27,7 @@ scope:
   path: frontend/tests/client.test.ts
 - confidence: cited
   path: openapi.json
-revision: 9
+revision: 11
 ---
 ## Outcome
 
@@ -59,3 +59,11 @@ The BFF consumes release commit e80b7ae1b2151d13aa9786cf67ea05e66717ee35. The co
 Final dependency resolution uses published Git revisions only; temporary local SDK patch configuration is excluded. Locked composed checks, clippy and tests pass. Root workspace checks and tests pass, including 31 BFF tests. Frontend verification passes 52 unit tests and 36 browser tests, with 18 existing applicability skips. Format, version consistency, chart lint, eight volume permission execution cases and confidential-marker checks pass. The organization documentation check remains refused by an unrelated repository manifest schema unsupported by current Atlas.
 
 This is source-level evidence. The actual 0.7 containers must still be installed and tested in k3d. Full live-model acceptance and remote promotion remain pending user-owned model authorization; no synthetic credential or mocked model result may satisfy that gate.
+
+## Container startup finding
+
+The first real 0.7 image build passed, but the composed Connector crashed on startup: the new Eventlog constructor requires an isolated loopback host. The adopted SDK main revision also introduces independent hosted persistence admission, migrations and role-budget requirements. Therefore this candidate is not accepted. Keep the deployed Eventlog and SDK persistence baseline; consume a published SDK compatibility revision applying the same reviewed 0.7 protocol factory correction on 0118bd3f9d63ead5d525fb39324b1e5e13c4ab1a. SDK main retains its new hosted persistence contract. Do not add an insecure transport bypass or pretend compilation proved the composition.
+
+## Corrected composition
+
+Published SDK compatibility source 6e4a257b0be3297ff726224f73910451de3da13e applies only the 0.7 factory adaptation to the already deployed SDK baseline; its complete repository gate passed. Devcenter consumes that immutable source and retains Eventlog b7e8f0d87b01c403415546d311952cb155caf16f. Final locked composed check, clippy and tests pass. The BFF and Connector runtime remain on the requested 0.7 release contract, with OAuth recovery preserved. Rebuild only the Connector image and use the already built 0.7 server image for the next real k3d run.
