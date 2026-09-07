@@ -23,6 +23,8 @@ connectors-runtime = { git = "ssh://git@github.com/beyond10x/connectors.git", re
 connectors-service = { package = "service", git = "ssh://git@github.com/beyond10x/connectors.git", rev = "53ba51fb744e223e220523ff49f313e1d23d8673" }
 eventlog-postgres = { git = "https://github.com/beyond10x/eventlog.git", rev = "b7e8f0d87b01c403415546d311952cb155caf16f" }
 rustls = { version = "0.23", default-features = false, features = ["aws_lc_rs", "std"] }
+# Honor deployment-selected operating-system CA roots without disabling TLS verification.
+reqwest = { version = "0.12", default-features = false, features = ["rustls-tls-native-roots"] }
 serde = { version = "1", features = ["derive"] }
 serde_yaml = "0.9"
 service-catalog = { git = "https://github.com/beyond10x/service-sdk.git", rev = "0118bd3f9d63ead5d525fb39324b1e5e13c4ab1a" }

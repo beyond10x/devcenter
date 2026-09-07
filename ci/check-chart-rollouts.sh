@@ -94,6 +94,8 @@ substrate_render() {
     | awk '/^# Source: .*\/substrate.yaml$/ { selected = 1; next } /^---$/ { selected = 0 } selected'
 }
 default_substrate=$(substrate_render)
+private_identity_ca=$(substrate_render --set substrate.hostedIdentity.caBundle.existingSecret=local-identity-trust)
+grep -Fq 'name: identity-ca, mountPath: /etc/substrate/identity/ca.crt, subPath: ca.crt, readOnly: true' <<<"$private_identity_ca"
 if grep -Eq 'add:.*SYS_ADMIN|--project-quota-ids|name: workspace-data|substrate-daemon-quota' <<<"$default_substrate"; then
   echo "default Substrate unexpectedly enables project quota authority" >&2
   exit 1

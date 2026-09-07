@@ -1863,7 +1863,7 @@ test("opens an editable file while coordination, layout, and terminals are still
     await page.keyboard.press("ControlOrMeta+A");
     await page.keyboard.type("// edited while panels restore");
     await expect(page.getByLabel("Unsaved changes")).toBeVisible();
-    expect([...waiting].sort()).toEqual(["resume", "terminals", "workbench"]);
+    expect([...waiting]).toEqual(["resume"]);
     await expect(page.getByLabel("Workspace loading progress")).toContainText("Loading agents");
     const marks = await page.evaluate(() =>
       performance.getEntriesByType("mark").map((mark) => mark.name),

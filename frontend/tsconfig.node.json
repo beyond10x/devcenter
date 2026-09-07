@@ -21,6 +21,8 @@
     "playwright.review.config.ts",
     "e2e/**/*.ts",
     "review-e2e/**/*.ts",
-    "review/**/*.ts"
+    "review/**/*.ts",
+    "acceptance/**/*.ts",
+    "playwright.acceptance.config.ts"
   ]
 }

@@ -140,7 +140,9 @@ spec:
             - {name: runtime, mountPath: /var/run/substrate}
             - {name: tls, mountPath: /etc/substrate/tls, readOnly: true}
             {{- if .Values.substrate.hostedIdentity.caBundle.existingSecret }}
-            - {name: identity-ca, mountPath: /etc/substrate/identity, readOnly: true}
+            # Substrate opens trust roots with O_NOFOLLOW. Mount the regular file rather than
+            # the Secret volume's atomic-writer symlink, as for the Git-fetch trust bundle.
+            - {name: identity-ca, mountPath: /etc/substrate/identity/ca.crt, subPath: ca.crt, readOnly: true}
             {{- end }}
             {{- if .Values.connectorsGitFetch.enabled }}
             - {name: connectors-git-fetch-ca, mountPath: /etc/substrate/git-fetch/ca.crt, subPath: ca.crt, readOnly: true}
