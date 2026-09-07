@@ -30,7 +30,7 @@ scope:
   path: frontend/src/features/connections
 - confidence: cited
   path: frontend/src/features/connectors
-revision: 12
+revision: 14
 ---
 ## Outcome
 
@@ -65,3 +65,15 @@ The generic hosted token CLI/client candidate reuses the existing owner-scoped C
 The candidate passed focused client and CLI boundary tests and all-target clippy. Native CA support was verified with TLS tests and then through actual normal Identity login against the retained local deployment. A fresh headless browser completed upstream login and the loopback callback; the CLI stored its session through the normal OS keyring and selected the local deployment in an isolated XDG state directory. A subsequent owner-scoped hosted connection list succeeded. The ordinary CLI metadata still selects the existing non-local deployment. The first browser helper attempt failed before browser startup because its TMPDIR was not set; after correcting that environment prerequisite, the normal login passed. Failed evidence is retained.
 
 The Grafana operation search still returned no admitted operations, and no provider token has been supplied. Thus actual token acquisition and external reads remain unverified. The candidate is published at acf8ef8c01e6a794860babd5d6df15a2d71b8014. Its full repository gate passed all twelve workspaces, both runtime feature configurations, catalog and documentation checks, and exact ESS projection. Client, CLI and console all-target clippy passed. The tested CLI binary matches the final implementation; only evidence updates followed its build. This is a client-only candidate compatible with the deployed endpoint/form runtime; no service image rebuild or shared deployment was performed.
+
+## Token refusal and private egress correction
+
+The operator supplied a service account token but both retained and freshly opened catalog forms returned a generic refusal. Source inspection found verification discards bounded failure categories and the form also hides expiry; that upstream diagnostic correction is delegated to the Connector owner.
+
+The composed Kubernetes NetworkPolicy allows public HTTPS while excluding private IPv4 ranges. The private observability target resolves inside an excluded range. The local bootstrap also replaces all private baseline extraEgress rules even in live mode, removing required private endpoint access. Correct live-mode preparation to preserve explicitly declared private egress and append the local ingress rule idempotently; fixture behavior remains scoped to its fixture. The downstream deployment supplies exact destination CIDRs and ports. Verify a pod governed by the same egress policy before and after the official CLI apply, and retain provider acquisition/read as unverified until an actual token attempt succeeds.
+
+## Credential custody collision
+
+The live owner retry reached provider verification successfully, then returned a generic503 during credential persistence. Read-only deployed metadata inspection confirmed a shared prepared-secret retirement watermark ahead of the catalog and another provider's independent generation counters. The catalog had no pending or completed connection. This is an upstream cross-provider transaction-domain defect; do not alter deployed counters manually or ask the owner to replay the credential until the runtime correction and recovery regression pass.
+
+The owning Connectors implementation must preserve pending recovery and retirement fences, cover interleaved native and catalog acquisitions, and expose only closed completion-stage/error classifications. Consume the published correction through the composed runtime and prove the complete custody path before another owner retry. Neither the network health probe nor a corrected form establishes provider acceptance. Retain the existing live private egress policy and component image selections during composition.

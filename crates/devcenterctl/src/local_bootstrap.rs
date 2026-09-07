@@ -129,6 +129,25 @@ fn immutable(image: &str) -> Result<(&str, &str)> {
     Ok((repository, digest))
 }
 
+fn local_extra_egress(baseline: &Value, mode: Mode) -> Result<Value> {
+    let mut rules = match (&baseline["networkPolicy"]["extraEgress"], mode) {
+        (Value::Array(rules), Mode::Live) => rules.clone(),
+        (Value::Null, _) | (_, Mode::Fixture) => Vec::new(),
+        _ => anyhow::bail!("live baseline networkPolicy.extraEgress must be an array"),
+    };
+    let ingress = json!({
+        "to":[{
+            "namespaceSelector":{"matchLabels":{"kubernetes.io/metadata.name":"kube-system"}},
+            "podSelector":{"matchLabels":{"app.kubernetes.io/name":"traefik"}}
+        }],
+        "ports":[{"protocol":"TCP","port":8443}]
+    });
+    if !rules.contains(&ingress) {
+        rules.push(ingress);
+    }
+    Ok(Value::Array(rules))
+}
+
 #[allow(clippy::too_many_lines)] // The deployment overlay is kept together for review.
 fn local_values(baseline: &Value, app: &str, provider: &str, mode: Mode) -> Result<Value> {
     let mut values = baseline.clone();
@@ -144,9 +163,7 @@ fn local_values(baseline: &Value, app: &str, provider: &str, mode: Mode) -> Resu
         json!({"kubernetes.io/metadata.name":"kube-system"});
     values["networkPolicy"]["ingressPodSelector"] = json!({"app.kubernetes.io/name":"traefik"});
     values["networkPolicy"]["allowExternalHttps"] = json!(true);
-    values["networkPolicy"]["extraEgress"] = json!([
-        {"to":[{"namespaceSelector":{"matchLabels":{"kubernetes.io/metadata.name":"kube-system"}},"podSelector":{"matchLabels":{"app.kubernetes.io/name":"traefik"}}}],"ports":[{"protocol":"TCP","port":8443}]}
-    ]);
+    values["networkPolicy"]["extraEgress"] = local_extra_egress(baseline, mode)?;
     values["connectorsKubernetesAccess"] = json!({"enabled":false});
     let components = values["components"]
         .as_object_mut()
@@ -730,13 +747,25 @@ oauth_client_id = "deployment-client"
 team_id = "workspace-test"
 public_origin = "https://app.example.test/api/connectors/v1"
 "#;
-        let baseline = json!({"components":{
+        let private_egress = json!({
+            "to":[{"ipBlock":{"cidr":"10.0.20.30/32"}}],
+            "ports":[{"protocol":"TCP","port":443}]
+        });
+        let baseline = json!({"networkPolicy":{"extraEgress":[private_egress]},"components":{
             "identity":{"env":{"IDENTITY_AUDIENCE_REGISTRY_JSON":"{\"access\":[]}"}},
             "connectors":{"configFiles":{"hosted.toml":config}},
             "agent-platform":{"args":["serve"]},
             "aep-service":{"args":[]}, "workspace":{}
         }});
         let overlay = local_values(&baseline, app, fixture, Mode::Live).unwrap();
+        let rules = overlay["networkPolicy"]["extraEgress"].as_array().unwrap();
+        assert_eq!(rules.len(), 2);
+        assert_eq!(rules[0], private_egress);
+        let repeated = local_values(&overlay, app, fixture, Mode::Live).unwrap();
+        assert_eq!(
+            repeated["networkPolicy"]["extraEgress"].as_array().unwrap(),
+            rules
+        );
         let actual: toml::Value = toml::from_str(
             overlay["components"]["connectors"]["configFiles"]["hosted.toml"]
                 .as_str()
@@ -761,7 +790,17 @@ public_origin = "https://app.example.test/api/connectors/v1"
             Some("https://monitoring.example.test")
         );
         let fixture_overlay = local_values(&baseline, app, fixture, Mode::Fixture).unwrap();
+        assert_eq!(
+            fixture_overlay["networkPolicy"]["extraEgress"],
+            json!([rules[1]])
+        );
         assert!(local_values(&fixture_overlay, app, fixture, Mode::Live).is_err());
+    }
+
+    #[test]
+    fn live_egress_refuses_a_malformed_baseline_rule_list() {
+        let baseline = json!({"networkPolicy":{"extraEgress":{}}});
+        assert!(local_extra_egress(&baseline, Mode::Live).is_err());
     }
 
     #[test]
