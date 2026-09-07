@@ -10,6 +10,7 @@ private. Devcenter does not publish native binary archives.
 
 Choose the path that matches what you are trying to do:
 
+- [Test the service composition in local k3d](docs/local-acceptance.md) — build and check the real engineer journey before deployment.
 - [Review the frontend locally](docs/frontend-review.md) — public, credential-free evaluation.
 - [Build the full service from source](docs/source-build.md) — preview access for approved evaluators.
 - [Understand the ESS deployment model](docs/ess-deployment-model.md) — how independently released

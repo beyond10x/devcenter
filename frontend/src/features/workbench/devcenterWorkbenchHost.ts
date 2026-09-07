@@ -116,6 +116,7 @@ export class DevcenterWorkbenchHost implements WorkbenchHostPort {
   #pollFailures = 0;
   #authorityFailure?: Error;
   #layoutPromise?: Promise<void>;
+  #coordinationPromise?: Promise<void>;
   #durableWorkbench?: AgentIdeWorkbenchView;
   #flushing = false;
   #focusTouched = false;
@@ -740,25 +741,11 @@ export class DevcenterWorkbenchHost implements WorkbenchHostPort {
       await this.tree(this.#treeProjection?.root ?? "", undefined, signal);
     });
     this.#runPart("coordination", async () => {
-      if (!this.#resumed) {
-        const resumed = await api.resumeCodingSession(this.#sessionId, signal);
-        this.#throwIfAborted(signal);
-        if (resumed.id !== this.#sessionId || resumed.project_id !== this.#projectId)
-          throw new WorkbenchRefusal(
-            "devcenter.workspace_route_refused",
-            "The resumed session does not belong to this project.",
-          );
-        if (resumed.coordination?.state !== "ready")
-          throw new Error(resumed.coordination?.failure_code ?? "coordination_unavailable");
-        this.#resumed = true;
-      }
-      const coordination = await api.codingCoordination(this.#sessionId, signal);
-      this.#throwIfAborted(signal);
-      if (coordination.summary.state !== "ready") throw new Error("coordination_unavailable");
-      this.#coordination = coordination;
-      markWorkspaceStage("coordination-ready");
+      this.#coordinationPromise = this.#loadCoordination(signal);
+      await this.#coordinationPromise;
     });
     this.#runPart("workbench", async () => {
+      // The BFF requires the coordination session before it can read or initialize layout.
       this.#layoutPromise = this.#hydrateWorkbench(signal);
       await this.#layoutPromise;
       void this.#flushMutations();
@@ -766,13 +753,34 @@ export class DevcenterWorkbenchHost implements WorkbenchHostPort {
     });
     if (this.#workbenchHydrated) this.#runPart("files", () => this.#hydrateFiles(signal));
     this.#runPart("terminals", async () => {
-      // Start the inventory read alongside layout and coordination. Only pane reconciliation waits for layout.
+      // Inventory also derives authority from the admitted coordination session.
+      await this.#coordinationPromise;
       const terminals = await api.terminals(this.#sessionId, signal);
       this.#throwIfAborted(signal);
       await this.#layoutPromise;
       await this.#hydrateTerminals(terminals, signal);
       markWorkspaceStage("terminal-ready");
     });
+  }
+
+  async #loadCoordination(signal: AbortSignal): Promise<void> {
+    if (!this.#resumed) {
+      const resumed = await api.resumeCodingSession(this.#sessionId, signal);
+      this.#throwIfAborted(signal);
+      if (resumed.id !== this.#sessionId || resumed.project_id !== this.#projectId)
+        throw new WorkbenchRefusal(
+          "devcenter.workspace_route_refused",
+          "The resumed session does not belong to this project.",
+        );
+      if (resumed.coordination?.state !== "ready")
+        throw new Error(resumed.coordination?.failure_code ?? "coordination_unavailable");
+      this.#resumed = true;
+    }
+    const coordination = await api.codingCoordination(this.#sessionId, signal);
+    this.#throwIfAborted(signal);
+    if (coordination.summary.state !== "ready") throw new Error("coordination_unavailable");
+    this.#coordination = coordination;
+    markWorkspaceStage("coordination-ready");
   }
 
   #runPart(part: StartupPart, load: () => Promise<void>): void {
@@ -836,6 +844,7 @@ export class DevcenterWorkbenchHost implements WorkbenchHostPort {
   }
 
   async #hydrateWorkbench(signal: AbortSignal): Promise<void> {
+    await this.#coordinationPromise;
     let workbench: AgentIdeWorkbenchView;
     try {
       workbench = await api.codingWorkbench(this.#sessionId, signal);

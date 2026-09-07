@@ -413,6 +413,49 @@ describe("progressive workspace startup", () => {
     host.destroy();
   });
 
+  it("waits for coordination admission before layout and terminal inventory while the tree stays usable", async () => {
+    const resume = deferred<CodingSession>();
+    vi.spyOn(api, "resumeCodingSession").mockReturnValue(resume.promise);
+    let admitted = false;
+    const layout = vi.spyOn(api, "codingWorkbench").mockImplementation(() => {
+      if (!admitted) throw new ApiError(503, "agentide_coordination_unavailable");
+      return Promise.resolve(savedWorkbench([]));
+    });
+    const terminals = vi.spyOn(api, "terminals").mockImplementation(() => {
+      if (!admitted) throw new ApiError(503, "agentide_coordination_unavailable");
+      return Promise.resolve([]);
+    });
+    let progress: StartupProgress[] = [];
+    const host = new DevcenterWorkbenchHost(
+      "project-1",
+      "session-1",
+      useWorkspaceStore(),
+      (next) => {
+        progress = next;
+      },
+    );
+    try {
+      await host.snapshot(new AbortController().signal);
+      await vi.waitFor(async () =>
+        expect((await host.snapshot(new AbortController().signal)).tree?.entries).toHaveLength(1),
+      );
+      expect(layout).not.toHaveBeenCalled();
+      expect(terminals).not.toHaveBeenCalled();
+      admitted = true;
+      resume.resolve({
+        ...session,
+        coordination: { state: "ready", through_version: 1, failure_code: null, retryable: false },
+      });
+      await vi.waitFor(() =>
+        expect(progress.length > 0 && progress.every((part) => part.state === "ready")).toBe(true),
+      );
+      expect(layout).toHaveBeenCalledOnce();
+      expect(terminals).toHaveBeenCalledOnce();
+    } finally {
+      host.destroy();
+    }
+  });
+
   it("loads the focused file first and restores the rest with at most four requests in flight", async () => {
     const paths = Array.from({ length: 8 }, (_, i) => `src/file${String(i)}.rs`);
     const focused = "src/file6.rs";

@@ -16,6 +16,9 @@ struct Cli {
 
 #[derive(Debug, Subcommand)]
 enum Action {
+    /// Build and exercise a disposable local Kubernetes composition.
+    #[command(subcommand)]
+    Local(devcenterctl::local::LocalAction),
     LeakCheck(LeakCheck),
     Render(HelmTarget),
     Preflight(ClusterTarget),
@@ -176,6 +179,7 @@ struct BundleValidate {
 
 fn main() -> Result<()> {
     match Cli::parse().command {
+        Action::Local(args) => devcenterctl::local::run(args),
         Action::LeakCheck(args) => leak_check(&args),
         Action::Render(args) => render(&args),
         Action::Preflight(args) => preflight(&args),

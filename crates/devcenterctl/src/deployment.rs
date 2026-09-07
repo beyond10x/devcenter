@@ -184,7 +184,7 @@ fn validate_rendered_image(
     Ok(())
 }
 
-fn canonical_image_reference(reference: &str) -> String {
+pub(crate) fn canonical_image_reference(reference: &str) -> String {
     let first = reference.split('/').next().unwrap_or_default();
     if reference.contains('/')
         && (first.contains('.') || first.contains(':') || first == "localhost")

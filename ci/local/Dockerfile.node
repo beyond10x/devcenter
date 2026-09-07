@@ -1,0 +1,12 @@
+# Local infrastructure only; neither stage is an application release.
+ARG SUBSTRATE_IMAGE
+ARG K3S_IMAGE
+FROM ${SUBSTRATE_IMAGE} AS tools
+FROM ${K3S_IMAGE}
+COPY --from=tools /lib/x86_64-linux-gnu/ /lib/x86_64-linux-gnu/
+COPY --from=tools /lib64/ld-linux-x86-64.so.2 /lib64/ld-linux-x86-64.so.2
+COPY --from=tools /sbin/apparmor_parser /sbin/apparmor_parser
+COPY --from=tools /usr/sbin/mkfs.ext4 /sbin/mkfs.ext4
+COPY --from=tools /etc/apparmor.d /etc/apparmor.d
+COPY --from=tools /etc/mke2fs.conf /etc/mke2fs.conf
+COPY --chmod=755 local-node /bin/k3d-entrypoint-devcenter-storage.sh

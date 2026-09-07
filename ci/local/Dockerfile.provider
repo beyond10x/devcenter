@@ -1,0 +1,8 @@
+# This external-provider fixture is never a release artifact.
+ARG RUNTIME_IMAGE
+FROM ${RUNTIME_IMAGE}
+USER 0
+RUN apt-get update && apt-get install --no-install-recommends -y git && rm -rf /var/lib/apt/lists/*
+COPY local-provider /usr/local/bin/local-provider
+USER 65532:65532
+ENTRYPOINT ["/usr/local/bin/local-provider"]
