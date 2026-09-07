@@ -1810,6 +1810,17 @@ export interface components {
         };
     };
     responses: {
+        /** @description The Connector is rate limiting this operation */
+        RateLimited: {
+            headers: {
+                /** @description Trusted retry delay in seconds, when supplied by the Connector */
+                "Retry-After"?: string;
+                [name: string]: unknown;
+            };
+            content: {
+                "application/json": components["schemas"]["Problem"];
+            };
+        };
         /** @description Request refused */
         Problem: {
             headers: {
@@ -2161,6 +2172,8 @@ export interface operations {
             };
             401: components["responses"]["Problem"];
             403: components["responses"]["Problem"];
+            409: components["responses"]["Problem"];
+            429: components["responses"]["RateLimited"];
             502: components["responses"]["Problem"];
             503: components["responses"]["Unavailable"];
         };
@@ -2191,7 +2204,9 @@ export interface operations {
             401: components["responses"]["Problem"];
             403: components["responses"]["Problem"];
             404: components["responses"]["Problem"];
+            409: components["responses"]["Problem"];
             422: components["responses"]["Problem"];
+            429: components["responses"]["RateLimited"];
             502: components["responses"]["Problem"];
             503: components["responses"]["Unavailable"];
         };
@@ -2224,6 +2239,7 @@ export interface operations {
             404: components["responses"]["Problem"];
             409: components["responses"]["Problem"];
             422: components["responses"]["Problem"];
+            429: components["responses"]["RateLimited"];
             502: components["responses"]["Problem"];
             503: components["responses"]["Unavailable"];
         };

@@ -1706,30 +1706,48 @@ async fn invoke_connector_operation(
     }
 }
 
-fn operation_refusal(error: Option<&operation::OperationError>, fallback: &str) -> Response {
+fn operation_refusal(error: Option<&operation::v3::OperationError>, fallback: &str) -> Response {
     let Some(error) = error else {
         return problem(StatusCode::BAD_GATEWAY, fallback);
     };
     match error.code {
-        operation::OperationErrorCode::NotFound => {
+        operation::v3::OperationErrorCode::NotFound => {
             problem(StatusCode::NOT_FOUND, "service_operation_not_found")
         }
-        operation::OperationErrorCode::InvalidInput => problem(
+        operation::v3::OperationErrorCode::InvalidInput => problem(
             StatusCode::UNPROCESSABLE_ENTITY,
             "service_operation_input_invalid",
         ),
-        operation::OperationErrorCode::NotGranted => {
+        operation::v3::OperationErrorCode::NotGranted => {
             problem(StatusCode::FORBIDDEN, "service_operation_not_granted")
         }
-        operation::OperationErrorCode::StaleAuthority
-        | operation::OperationErrorCode::ApprovalRequired
-        | operation::OperationErrorCode::ApprovalDenied => {
+        operation::v3::OperationErrorCode::StaleAuthority
+        | operation::v3::OperationErrorCode::ApprovalRequired
+        | operation::v3::OperationErrorCode::ApprovalDenied => {
             problem(StatusCode::CONFLICT, "service_operation_conflict")
         }
-        operation::OperationErrorCode::Unavailable => unavailable("service_operation_unavailable"),
-        operation::OperationErrorCode::ResultTooLarge
-        | operation::OperationErrorCode::Protocol
-        | operation::OperationErrorCode::OutcomeUnknown => {
+        operation::v3::OperationErrorCode::RateLimited => {
+            let mut response = problem(
+                StatusCode::TOO_MANY_REQUESTS,
+                "service_operation_rate_limited",
+            );
+            if let Some(seconds) = error.retry_after_seconds {
+                response
+                    .headers_mut()
+                    .insert(header::RETRY_AFTER, HeaderValue::from(seconds));
+            }
+            response
+        }
+        operation::v3::OperationErrorCode::AuthenticationRequired => problem(
+            StatusCode::CONFLICT,
+            "service_connection_authentication_required",
+        ),
+        operation::v3::OperationErrorCode::Unavailable => {
+            unavailable("service_operation_unavailable")
+        }
+        operation::v3::OperationErrorCode::ResultTooLarge
+        | operation::v3::OperationErrorCode::Protocol
+        | operation::v3::OperationErrorCode::OutcomeUnknown => {
             problem(StatusCode::BAD_GATEWAY, fallback)
         }
     }
@@ -6905,6 +6923,42 @@ mod tests {
         assert_eq!(body, r#"{"code":"workflow_not_configured"}"#);
     }
 
+    #[tokio::test]
+    async fn connector_v3_refusals_preserve_rate_delay_and_connection_authentication() {
+        let mut limited = operation::v3::OperationError::new(
+            operation::v3::OperationErrorCode::RateLimited,
+            "upstream diagnostic must remain private",
+            true,
+        );
+        limited.retry_after_seconds = Some(17);
+        let response = operation_refusal(Some(&limited), "fallback");
+        assert_eq!(response.status(), StatusCode::TOO_MANY_REQUESTS);
+        assert_eq!(response.headers()[header::RETRY_AFTER], "17");
+        let body = response.into_body().collect().await.unwrap().to_bytes();
+        assert_eq!(body, r#"{"code":"service_operation_rate_limited"}"#);
+
+        let authentication = operation::v3::OperationError::authentication_required(
+            operation::v3::AuthenticationRequired {
+                operation_ref: "gitlab.projects.list".into(),
+                connection_ref: "connection:personal".into(),
+                integration_ref: "gitlab".into(),
+                auth_profile: "gitlab.oauth_user".into(),
+                need: operation::v3::AuthenticationNeed::ReauthorizeExisting,
+                attempt: operation::v3::AuthenticationAttemptState::NotAttempted,
+                next_action: operation::v3::AuthenticationNextAction::StartTrustedRemediation,
+            },
+        );
+        authentication.validate().unwrap();
+        let response = operation_refusal(Some(&authentication), "fallback");
+        assert_eq!(response.status(), StatusCode::CONFLICT);
+        assert!(!response.headers().contains_key(header::RETRY_AFTER));
+        let body = response.into_body().collect().await.unwrap().to_bytes();
+        assert_eq!(
+            body,
+            r#"{"code":"service_connection_authentication_required"}"#
+        );
+    }
+
     #[test]
     fn starter_workflow_bundle_has_stable_names_and_complete_linear_graphs() {
         let starters = starter_workflows();
@@ -7189,6 +7243,7 @@ mod tests {
     #[test]
     fn published_projection_may_be_stricter_but_never_weaker_than_connector_approval() {
         let description = operation::OperationDescription {
+            rate_advice: None,
             operation_ref: "git/issue.get".to_owned(),
             title: "Get issue".to_owned(),
             description: "Read one issue".to_owned(),

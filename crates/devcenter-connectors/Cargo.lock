@@ -344,8 +344,8 @@ checksum = "fc652a48c352aef3ea3aed32080501cf3ef6ed5da78602a020c991775b0aff04"
 
 [[package]]
 name = "catalog"
-version = "0.6.5"
-source = "git+ssh://git@github.com/beyond10x/connectors.git?rev=94dfc009a3637e33cb6ad54e5c4cf1779068700e#94dfc009a3637e33cb6ad54e5c4cf1779068700e"
+version = "0.7.0"
+source = "git+ssh://git@github.com/beyond10x/connectors.git?rev=1c45d5bfbdc583738e90f2b93cf9c124ed2c5568#1c45d5bfbdc583738e90f2b93cf9c124ed2c5568"
 dependencies = [
  "catalog-reader",
  "serde",
@@ -354,8 +354,8 @@ dependencies = [
 
 [[package]]
 name = "catalog-reader"
-version = "0.6.5"
-source = "git+ssh://git@github.com/beyond10x/connectors.git?rev=94dfc009a3637e33cb6ad54e5c4cf1779068700e#94dfc009a3637e33cb6ad54e5c4cf1779068700e"
+version = "0.7.0"
+source = "git+ssh://git@github.com/beyond10x/connectors.git?rev=1c45d5bfbdc583738e90f2b93cf9c124ed2c5568#1c45d5bfbdc583738e90f2b93cf9c124ed2c5568"
 
 [[package]]
 name = "cc"
@@ -477,29 +477,32 @@ dependencies = [
 
 [[package]]
 name = "connect-session-transport"
-version = "0.6.5"
-source = "git+ssh://git@github.com/beyond10x/connectors.git?rev=94dfc009a3637e33cb6ad54e5c4cf1779068700e#94dfc009a3637e33cb6ad54e5c4cf1779068700e"
+version = "0.7.0"
+source = "git+ssh://git@github.com/beyond10x/connectors.git?rev=1c45d5bfbdc583738e90f2b93cf9c124ed2c5568#1c45d5bfbdc583738e90f2b93cf9c124ed2c5568"
 dependencies = [
  "base64 0.22.1",
+ "connector-oauth",
  "connector-secrets",
  "rustix",
+ "serde_json",
  "thiserror",
  "tokio",
+ "url",
  "zeroize",
 ]
 
 [[package]]
 name = "connector-address"
-version = "0.6.5"
-source = "git+ssh://git@github.com/beyond10x/connectors.git?rev=94dfc009a3637e33cb6ad54e5c4cf1779068700e#94dfc009a3637e33cb6ad54e5c4cf1779068700e"
+version = "0.7.0"
+source = "git+ssh://git@github.com/beyond10x/connectors.git?rev=1c45d5bfbdc583738e90f2b93cf9c124ed2c5568#1c45d5bfbdc583738e90f2b93cf9c124ed2c5568"
 dependencies = [
  "thiserror",
 ]
 
 [[package]]
 name = "connector-oauth"
-version = "0.6.5"
-source = "git+ssh://git@github.com/beyond10x/connectors.git?rev=94dfc009a3637e33cb6ad54e5c4cf1779068700e#94dfc009a3637e33cb6ad54e5c4cf1779068700e"
+version = "0.7.0"
+source = "git+ssh://git@github.com/beyond10x/connectors.git?rev=1c45d5bfbdc583738e90f2b93cf9c124ed2c5568#1c45d5bfbdc583738e90f2b93cf9c124ed2c5568"
 dependencies = [
  "base64 0.22.1",
  "getrandom 0.3.4",
@@ -511,13 +514,14 @@ dependencies = [
 
 [[package]]
 name = "connector-resolve"
-version = "0.6.5"
-source = "git+ssh://git@github.com/beyond10x/connectors.git?rev=94dfc009a3637e33cb6ad54e5c4cf1779068700e#94dfc009a3637e33cb6ad54e5c4cf1779068700e"
+version = "0.7.0"
+source = "git+ssh://git@github.com/beyond10x/connectors.git?rev=1c45d5bfbdc583738e90f2b93cf9c124ed2c5568#1c45d5bfbdc583738e90f2b93cf9c124ed2c5568"
 dependencies = [
  "catalog",
  "catalog-reader",
  "connector-address",
  "connector-secrets",
+ "jsonschema 0.49.9",
  "serde",
  "serde_json",
  "thiserror",
@@ -526,8 +530,8 @@ dependencies = [
 
 [[package]]
 name = "connector-secrets"
-version = "0.6.5"
-source = "git+ssh://git@github.com/beyond10x/connectors.git?rev=94dfc009a3637e33cb6ad54e5c4cf1779068700e#94dfc009a3637e33cb6ad54e5c4cf1779068700e"
+version = "0.7.0"
+source = "git+ssh://git@github.com/beyond10x/connectors.git?rev=1c45d5bfbdc583738e90f2b93cf9c124ed2c5568#1c45d5bfbdc583738e90f2b93cf9c124ed2c5568"
 dependencies = [
  "async-trait",
  "connector-address",
@@ -542,16 +546,16 @@ dependencies = [
 
 [[package]]
 name = "connector-state"
-version = "0.6.5"
-source = "git+ssh://git@github.com/beyond10x/connectors.git?rev=94dfc009a3637e33cb6ad54e5c4cf1779068700e#94dfc009a3637e33cb6ad54e5c4cf1779068700e"
+version = "0.7.0"
+source = "git+ssh://git@github.com/beyond10x/connectors.git?rev=1c45d5bfbdc583738e90f2b93cf9c124ed2c5568#1c45d5bfbdc583738e90f2b93cf9c124ed2c5568"
 dependencies = [
  "thiserror",
 ]
 
 [[package]]
 name = "connectors-config"
-version = "0.6.5"
-source = "git+ssh://git@github.com/beyond10x/connectors.git?rev=94dfc009a3637e33cb6ad54e5c4cf1779068700e#94dfc009a3637e33cb6ad54e5c4cf1779068700e"
+version = "0.7.0"
+source = "git+ssh://git@github.com/beyond10x/connectors.git?rev=1c45d5bfbdc583738e90f2b93cf9c124ed2c5568#1c45d5bfbdc583738e90f2b93cf9c124ed2c5568"
 dependencies = [
  "connector-address",
  "domain",
@@ -566,8 +570,8 @@ dependencies = [
 
 [[package]]
 name = "connectors-runtime"
-version = "0.6.5"
-source = "git+ssh://git@github.com/beyond10x/connectors.git?rev=94dfc009a3637e33cb6ad54e5c4cf1779068700e#94dfc009a3637e33cb6ad54e5c4cf1779068700e"
+version = "0.7.0"
+source = "git+ssh://git@github.com/beyond10x/connectors.git?rev=1c45d5bfbdc583738e90f2b93cf9c124ed2c5568#1c45d5bfbdc583738e90f2b93cf9c124ed2c5568"
 dependencies = [
  "async-trait",
  "axum",
@@ -748,8 +752,21 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "e7c1832837b905bbfb5101e07cc24c8deddf52f93225eee6ead5f4d63d53ddcb"
 dependencies = [
  "const-oid 0.9.6",
+ "der_derive",
+ "flagset",
  "pem-rfc7468",
  "zeroize",
+]
+
+[[package]]
+name = "der_derive"
+version = "0.7.3"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "8034092389675178f570469e6c3b0465d3d30b4505c294a6550db47f3c17ad18"
+dependencies = [
+ "proc-macro2",
+ "quote",
+ "syn 2.0.119",
 ]
 
 [[package]]
@@ -838,8 +855,8 @@ dependencies = [
 
 [[package]]
 name = "domain"
-version = "0.6.5"
-source = "git+ssh://git@github.com/beyond10x/connectors.git?rev=94dfc009a3637e33cb6ad54e5c4cf1779068700e#94dfc009a3637e33cb6ad54e5c4cf1779068700e"
+version = "0.7.0"
+source = "git+ssh://git@github.com/beyond10x/connectors.git?rev=1c45d5bfbdc583738e90f2b93cf9c124ed2c5568#1c45d5bfbdc583738e90f2b93cf9c124ed2c5568"
 dependencies = [
  "async-trait",
  "connector-state",
@@ -852,16 +869,16 @@ dependencies = [
 
 [[package]]
 name = "driver-audio"
-version = "0.6.5"
-source = "git+ssh://git@github.com/beyond10x/connectors.git?rev=94dfc009a3637e33cb6ad54e5c4cf1779068700e#94dfc009a3637e33cb6ad54e5c4cf1779068700e"
+version = "0.7.0"
+source = "git+ssh://git@github.com/beyond10x/connectors.git?rev=1c45d5bfbdc583738e90f2b93cf9c124ed2c5568#1c45d5bfbdc583738e90f2b93cf9c124ed2c5568"
 dependencies = [
  "domain",
 ]
 
 [[package]]
 name = "driver-cdp"
-version = "0.6.5"
-source = "git+ssh://git@github.com/beyond10x/connectors.git?rev=94dfc009a3637e33cb6ad54e5c4cf1779068700e#94dfc009a3637e33cb6ad54e5c4cf1779068700e"
+version = "0.7.0"
+source = "git+ssh://git@github.com/beyond10x/connectors.git?rev=1c45d5bfbdc583738e90f2b93cf9c124ed2c5568#1c45d5bfbdc583738e90f2b93cf9c124ed2c5568"
 dependencies = [
  "base64 0.22.1",
  "domain",
@@ -877,8 +894,8 @@ dependencies = [
 
 [[package]]
 name = "driver-speech"
-version = "0.6.5"
-source = "git+ssh://git@github.com/beyond10x/connectors.git?rev=94dfc009a3637e33cb6ad54e5c4cf1779068700e#94dfc009a3637e33cb6ad54e5c4cf1779068700e"
+version = "0.7.0"
+source = "git+ssh://git@github.com/beyond10x/connectors.git?rev=1c45d5bfbdc583738e90f2b93cf9c124ed2c5568#1c45d5bfbdc583738e90f2b93cf9c124ed2c5568"
 dependencies = [
  "domain",
  "driver-audio",
@@ -978,7 +995,7 @@ dependencies = [
 [[package]]
 name = "eventlog-core"
 version = "0.1.0-dev.1"
-source = "git+https://github.com/beyond10x/eventlog.git?rev=b7e8f0d87b01c403415546d311952cb155caf16f#b7e8f0d87b01c403415546d311952cb155caf16f"
+source = "git+https://github.com/beyond10x/eventlog.git?rev=081815cdfcbf1c751e7ee91abd81af2ff7d460cb#081815cdfcbf1c751e7ee91abd81af2ff7d460cb"
 dependencies = [
  "serde",
  "serde_json",
@@ -991,20 +1008,24 @@ dependencies = [
 [[package]]
 name = "eventlog-postgres"
 version = "0.1.0-dev.1"
-source = "git+https://github.com/beyond10x/eventlog.git?rev=b7e8f0d87b01c403415546d311952cb155caf16f#b7e8f0d87b01c403415546d311952cb155caf16f"
+source = "git+https://github.com/beyond10x/eventlog.git?rev=081815cdfcbf1c751e7ee91abd81af2ff7d460cb#081815cdfcbf1c751e7ee91abd81af2ff7d460cb"
 dependencies = [
  "eventlog-core",
+ "rustls",
+ "serde",
  "serde_json",
+ "sha2 0.10.9",
  "time",
  "tokio",
  "tokio-postgres",
+ "tokio-postgres-rustls",
  "uuid",
 ]
 
 [[package]]
 name = "eventlog-sqlite"
 version = "0.1.0-dev.1"
-source = "git+https://github.com/beyond10x/eventlog.git?rev=b7e8f0d87b01c403415546d311952cb155caf16f#b7e8f0d87b01c403415546d311952cb155caf16f"
+source = "git+https://github.com/beyond10x/eventlog.git?rev=081815cdfcbf1c751e7ee91abd81af2ff7d460cb#081815cdfcbf1c751e7ee91abd81af2ff7d460cb"
 dependencies = [
  "eventlog-core",
  "rusqlite",
@@ -1064,6 +1085,12 @@ name = "find-msvc-tools"
 version = "0.1.12"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "3e0f1c7c3a72c66fd80abe965175f7523475c0489a87d3ff9d6e8c87d87a9d2d"
+
+[[package]]
+name = "flagset"
+version = "0.4.7"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "b7ac824320a75a52197e8f2d787f6a38b6718bb6897a35142d749af3c0e8f4fe"
 
 [[package]]
 name = "fluent-uri"
@@ -1335,8 +1362,8 @@ dependencies = [
 
 [[package]]
 name = "hosted-secrets"
-version = "0.6.5"
-source = "git+ssh://git@github.com/beyond10x/connectors.git?rev=94dfc009a3637e33cb6ad54e5c4cf1779068700e#94dfc009a3637e33cb6ad54e5c4cf1779068700e"
+version = "0.7.0"
+source = "git+ssh://git@github.com/beyond10x/connectors.git?rev=1c45d5bfbdc583738e90f2b93cf9c124ed2c5568#1c45d5bfbdc583738e90f2b93cf9c124ed2c5568"
 dependencies = [
  "async-trait",
  "base64 0.22.1",
@@ -1355,8 +1382,8 @@ dependencies = [
 
 [[package]]
 name = "hosted-state"
-version = "0.6.5"
-source = "git+ssh://git@github.com/beyond10x/connectors.git?rev=94dfc009a3637e33cb6ad54e5c4cf1779068700e#94dfc009a3637e33cb6ad54e5c4cf1779068700e"
+version = "0.7.0"
+source = "git+ssh://git@github.com/beyond10x/connectors.git?rev=1c45d5bfbdc583738e90f2b93cf9c124ed2c5568#1c45d5bfbdc583738e90f2b93cf9c124ed2c5568"
 dependencies = [
  "connector-state",
  "postgres",
@@ -1365,8 +1392,8 @@ dependencies = [
 
 [[package]]
 name = "hosted-vault"
-version = "0.6.5"
-source = "git+ssh://git@github.com/beyond10x/connectors.git?rev=94dfc009a3637e33cb6ad54e5c4cf1779068700e#94dfc009a3637e33cb6ad54e5c4cf1779068700e"
+version = "0.7.0"
+source = "git+ssh://git@github.com/beyond10x/connectors.git?rev=1c45d5bfbdc583738e90f2b93cf9c124ed2c5568#1c45d5bfbdc583738e90f2b93cf9c124ed2c5568"
 dependencies = [
  "async-trait",
  "connector-secrets",
@@ -1634,8 +1661,8 @@ dependencies = [
 
 [[package]]
 name = "identity-http"
-version = "0.6.5"
-source = "git+ssh://git@github.com/beyond10x/connectors.git?rev=94dfc009a3637e33cb6ad54e5c4cf1779068700e#94dfc009a3637e33cb6ad54e5c4cf1779068700e"
+version = "0.7.0"
+source = "git+ssh://git@github.com/beyond10x/connectors.git?rev=1c45d5bfbdc583738e90f2b93cf9c124ed2c5568#1c45d5bfbdc583738e90f2b93cf9c124ed2c5568"
 dependencies = [
  "async-trait",
  "hex",
@@ -1684,12 +1711,14 @@ dependencies = [
 
 [[package]]
 name = "integration-catalog"
-version = "0.6.5"
-source = "git+ssh://git@github.com/beyond10x/connectors.git?rev=94dfc009a3637e33cb6ad54e5c4cf1779068700e#94dfc009a3637e33cb6ad54e5c4cf1779068700e"
+version = "0.7.0"
+source = "git+ssh://git@github.com/beyond10x/connectors.git?rev=1c45d5bfbdc583738e90f2b93cf9c124ed2c5568#1c45d5bfbdc583738e90f2b93cf9c124ed2c5568"
 dependencies = [
  "async-trait",
  "catalog",
+ "connect-session-transport",
  "connector-address",
+ "connector-oauth",
  "connector-resolve",
  "connector-secrets",
  "connector-state",
@@ -1703,6 +1732,7 @@ dependencies = [
  "serde_json",
  "service",
  "sha2 0.10.9",
+ "state-sqlite",
  "thiserror",
  "tokio",
  "url",
@@ -1711,8 +1741,8 @@ dependencies = [
 
 [[package]]
 name = "integration-gitlab"
-version = "0.6.5"
-source = "git+ssh://git@github.com/beyond10x/connectors.git?rev=94dfc009a3637e33cb6ad54e5c4cf1779068700e#94dfc009a3637e33cb6ad54e5c4cf1779068700e"
+version = "0.7.0"
+source = "git+ssh://git@github.com/beyond10x/connectors.git?rev=1c45d5bfbdc583738e90f2b93cf9c124ed2c5568#1c45d5bfbdc583738e90f2b93cf9c124ed2c5568"
 dependencies = [
  "async-trait",
  "base64 0.22.1",
@@ -1739,8 +1769,8 @@ dependencies = [
 
 [[package]]
 name = "integration-jira"
-version = "0.6.5"
-source = "git+ssh://git@github.com/beyond10x/connectors.git?rev=94dfc009a3637e33cb6ad54e5c4cf1779068700e#94dfc009a3637e33cb6ad54e5c4cf1779068700e"
+version = "0.7.0"
+source = "git+ssh://git@github.com/beyond10x/connectors.git?rev=1c45d5bfbdc583738e90f2b93cf9c124ed2c5568#1c45d5bfbdc583738e90f2b93cf9c124ed2c5568"
 dependencies = [
  "async-trait",
  "base64 0.22.1",
@@ -1767,8 +1797,8 @@ dependencies = [
 
 [[package]]
 name = "integration-kubernetes"
-version = "0.6.5"
-source = "git+ssh://git@github.com/beyond10x/connectors.git?rev=94dfc009a3637e33cb6ad54e5c4cf1779068700e#94dfc009a3637e33cb6ad54e5c4cf1779068700e"
+version = "0.7.0"
+source = "git+ssh://git@github.com/beyond10x/connectors.git?rev=1c45d5bfbdc583738e90f2b93cf9c124ed2c5568#1c45d5bfbdc583738e90f2b93cf9c124ed2c5568"
 dependencies = [
  "async-trait",
  "connector-resolve",
@@ -1794,8 +1824,8 @@ dependencies = [
 
 [[package]]
 name = "integration-mcp"
-version = "0.6.5"
-source = "git+ssh://git@github.com/beyond10x/connectors.git?rev=94dfc009a3637e33cb6ad54e5c4cf1779068700e#94dfc009a3637e33cb6ad54e5c4cf1779068700e"
+version = "0.7.0"
+source = "git+ssh://git@github.com/beyond10x/connectors.git?rev=1c45d5bfbdc583738e90f2b93cf9c124ed2c5568#1c45d5bfbdc583738e90f2b93cf9c124ed2c5568"
 dependencies = [
  "async-trait",
  "b10x-mcp-client",
@@ -1823,8 +1853,8 @@ dependencies = [
 
 [[package]]
 name = "integration-monitoring"
-version = "0.6.5"
-source = "git+ssh://git@github.com/beyond10x/connectors.git?rev=94dfc009a3637e33cb6ad54e5c4cf1779068700e#94dfc009a3637e33cb6ad54e5c4cf1779068700e"
+version = "0.7.0"
+source = "git+ssh://git@github.com/beyond10x/connectors.git?rev=1c45d5bfbdc583738e90f2b93cf9c124ed2c5568#1c45d5bfbdc583738e90f2b93cf9c124ed2c5568"
 dependencies = [
  "async-trait",
  "catalog",
@@ -1849,8 +1879,8 @@ dependencies = [
 
 [[package]]
 name = "integration-platform"
-version = "0.6.5"
-source = "git+ssh://git@github.com/beyond10x/connectors.git?rev=94dfc009a3637e33cb6ad54e5c4cf1779068700e#94dfc009a3637e33cb6ad54e5c4cf1779068700e"
+version = "0.7.0"
+source = "git+ssh://git@github.com/beyond10x/connectors.git?rev=1c45d5bfbdc583738e90f2b93cf9c124ed2c5568#1c45d5bfbdc583738e90f2b93cf9c124ed2c5568"
 dependencies = [
  "async-trait",
  "base64 0.22.1",
@@ -1879,8 +1909,8 @@ dependencies = [
 
 [[package]]
 name = "integration-slack"
-version = "0.6.5"
-source = "git+ssh://git@github.com/beyond10x/connectors.git?rev=94dfc009a3637e33cb6ad54e5c4cf1779068700e#94dfc009a3637e33cb6ad54e5c4cf1779068700e"
+version = "0.7.0"
+source = "git+ssh://git@github.com/beyond10x/connectors.git?rev=1c45d5bfbdc583738e90f2b93cf9c124ed2c5568#1c45d5bfbdc583738e90f2b93cf9c124ed2c5568"
 dependencies = [
  "async-trait",
  "base64 0.22.1",
@@ -2310,8 +2340,8 @@ dependencies = [
 
 [[package]]
 name = "monitoring-model"
-version = "0.6.5"
-source = "git+ssh://git@github.com/beyond10x/connectors.git?rev=94dfc009a3637e33cb6ad54e5c4cf1779068700e#94dfc009a3637e33cb6ad54e5c4cf1779068700e"
+version = "0.7.0"
+source = "git+ssh://git@github.com/beyond10x/connectors.git?rev=1c45d5bfbdc583738e90f2b93cf9c124ed2c5568#1c45d5bfbdc583738e90f2b93cf9c124ed2c5568"
 dependencies = [
  "catalog",
  "connector-resolve",
@@ -2714,10 +2744,11 @@ dependencies = [
 
 [[package]]
 name = "protocol"
-version = "0.6.5"
-source = "git+ssh://git@github.com/beyond10x/connectors.git?rev=94dfc009a3637e33cb6ad54e5c4cf1779068700e#94dfc009a3637e33cb6ad54e5c4cf1779068700e"
+version = "0.7.0"
+source = "git+ssh://git@github.com/beyond10x/connectors.git?rev=1c45d5bfbdc583738e90f2b93cf9c124ed2c5568#1c45d5bfbdc583738e90f2b93cf9c124ed2c5568"
 dependencies = [
  "domain",
+ "fluent-uri 0.4.1",
  "schemars",
  "serde",
  "serde_json",
@@ -3149,6 +3180,15 @@ dependencies = [
 ]
 
 [[package]]
+name = "rustls-pemfile"
+version = "2.2.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "dce314e5fee3f39953d46bb63bb8a46d40c2f8fb7cc5a3b6cab2bde9721d6e50"
+dependencies = [
+ "rustls-pki-types",
+]
+
+[[package]]
 name = "rustls-pki-types"
 version = "1.15.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -3426,8 +3466,8 @@ dependencies = [
 
 [[package]]
 name = "server"
-version = "0.6.5"
-source = "git+ssh://git@github.com/beyond10x/connectors.git?rev=94dfc009a3637e33cb6ad54e5c4cf1779068700e#94dfc009a3637e33cb6ad54e5c4cf1779068700e"
+version = "0.7.0"
+source = "git+ssh://git@github.com/beyond10x/connectors.git?rev=1c45d5bfbdc583738e90f2b93cf9c124ed2c5568#1c45d5bfbdc583738e90f2b93cf9c124ed2c5568"
 dependencies = [
  "async-trait",
  "axum",
@@ -3438,6 +3478,7 @@ dependencies = [
  "futures-util",
  "getrandom 0.3.4",
  "hex",
+ "jsonschema 0.49.9",
  "protocol",
  "reqwest 0.12.28",
  "rustix",
@@ -3456,11 +3497,12 @@ dependencies = [
 
 [[package]]
 name = "service"
-version = "0.6.5"
-source = "git+ssh://git@github.com/beyond10x/connectors.git?rev=94dfc009a3637e33cb6ad54e5c4cf1779068700e#94dfc009a3637e33cb6ad54e5c4cf1779068700e"
+version = "0.7.0"
+source = "git+ssh://git@github.com/beyond10x/connectors.git?rev=1c45d5bfbdc583738e90f2b93cf9c124ed2c5568#1c45d5bfbdc583738e90f2b93cf9c124ed2c5568"
 dependencies = [
  "async-trait",
  "base64 0.22.1",
+ "catalog",
  "connector-resolve",
  "connector-secrets",
  "connector-state",
@@ -3477,7 +3519,7 @@ dependencies = [
 [[package]]
 name = "service-catalog"
 version = "0.5.11"
-source = "git+https://github.com/beyond10x/service-sdk.git?rev=0118bd3f9d63ead5d525fb39324b1e5e13c4ab1a#0118bd3f9d63ead5d525fb39324b1e5e13c4ab1a"
+source = "git+ssh://git@github.com/beyond10x/service-sdk.git?rev=2cc5d56c694b9081907c37d7c41cc404cbbe4bdd#2cc5d56c694b9081907c37d7c41cc404cbbe4bdd"
 dependencies = [
  "async-trait",
  "hex",
@@ -3492,7 +3534,7 @@ dependencies = [
 [[package]]
 name = "service-connectors"
 version = "0.5.11"
-source = "git+https://github.com/beyond10x/service-sdk.git?rev=0118bd3f9d63ead5d525fb39324b1e5e13c4ab1a#0118bd3f9d63ead5d525fb39324b1e5e13c4ab1a"
+source = "git+ssh://git@github.com/beyond10x/service-sdk.git?rev=2cc5d56c694b9081907c37d7c41cc404cbbe4bdd#2cc5d56c694b9081907c37d7c41cc404cbbe4bdd"
 dependencies = [
  "async-trait",
  "eventlog-core",
@@ -3511,7 +3553,7 @@ dependencies = [
 [[package]]
 name = "service-engine"
 version = "0.5.11"
-source = "git+https://github.com/beyond10x/service-sdk.git?rev=0118bd3f9d63ead5d525fb39324b1e5e13c4ab1a#0118bd3f9d63ead5d525fb39324b1e5e13c4ab1a"
+source = "git+ssh://git@github.com/beyond10x/service-sdk.git?rev=2cc5d56c694b9081907c37d7c41cc404cbbe4bdd#2cc5d56c694b9081907c37d7c41cc404cbbe4bdd"
 dependencies = [
  "hex",
  "serde",
@@ -3525,7 +3567,7 @@ dependencies = [
 [[package]]
 name = "service-eventlog"
 version = "0.5.11"
-source = "git+https://github.com/beyond10x/service-sdk.git?rev=0118bd3f9d63ead5d525fb39324b1e5e13c4ab1a#0118bd3f9d63ead5d525fb39324b1e5e13c4ab1a"
+source = "git+ssh://git@github.com/beyond10x/service-sdk.git?rev=2cc5d56c694b9081907c37d7c41cc404cbbe4bdd#2cc5d56c694b9081907c37d7c41cc404cbbe4bdd"
 dependencies = [
  "eventlog-core",
  "hex",
@@ -3542,12 +3584,19 @@ dependencies = [
 [[package]]
 name = "service-host"
 version = "0.5.11"
-source = "git+https://github.com/beyond10x/service-sdk.git?rev=0118bd3f9d63ead5d525fb39324b1e5e13c4ab1a#0118bd3f9d63ead5d525fb39324b1e5e13c4ab1a"
+source = "git+ssh://git@github.com/beyond10x/service-sdk.git?rev=2cc5d56c694b9081907c37d7c41cc404cbbe4bdd#2cc5d56c694b9081907c37d7c41cc404cbbe4bdd"
 dependencies = [
  "anyhow",
  "axum",
+ "eventlog-core",
+ "eventlog-postgres",
  "eventlog-sqlite",
+ "rustls",
+ "rustls-pemfile",
+ "serde_json",
  "service-connectors",
+ "service-engine",
+ "service-eventlog",
  "service-http",
  "tokio",
 ]
@@ -3555,7 +3604,7 @@ dependencies = [
 [[package]]
 name = "service-http"
 version = "0.5.11"
-source = "git+https://github.com/beyond10x/service-sdk.git?rev=0118bd3f9d63ead5d525fb39324b1e5e13c4ab1a#0118bd3f9d63ead5d525fb39324b1e5e13c4ab1a"
+source = "git+ssh://git@github.com/beyond10x/service-sdk.git?rev=2cc5d56c694b9081907c37d7c41cc404cbbe4bdd#2cc5d56c694b9081907c37d7c41cc404cbbe4bdd"
 dependencies = [
  "axum",
  "bytes",
@@ -3573,7 +3622,7 @@ dependencies = [
 [[package]]
 name = "service-runtime"
 version = "0.5.11"
-source = "git+https://github.com/beyond10x/service-sdk.git?rev=0118bd3f9d63ead5d525fb39324b1e5e13c4ab1a#0118bd3f9d63ead5d525fb39324b1e5e13c4ab1a"
+source = "git+ssh://git@github.com/beyond10x/service-sdk.git?rev=2cc5d56c694b9081907c37d7c41cc404cbbe4bdd#2cc5d56c694b9081907c37d7c41cc404cbbe4bdd"
 dependencies = [
  "serde",
  "serde_json",
@@ -3714,8 +3763,8 @@ checksum = "6ce2be8dc25455e1f91df71bfa12ad37d7af1092ae736f3a6cd0e37bc7810596"
 
 [[package]]
 name = "state-sqlite"
-version = "0.6.5"
-source = "git+ssh://git@github.com/beyond10x/connectors.git?rev=94dfc009a3637e33cb6ad54e5c4cf1779068700e#94dfc009a3637e33cb6ad54e5c4cf1779068700e"
+version = "0.7.0"
+source = "git+ssh://git@github.com/beyond10x/connectors.git?rev=1c45d5bfbdc583738e90f2b93cf9c124ed2c5568#1c45d5bfbdc583738e90f2b93cf9c124ed2c5568"
 dependencies = [
  "connector-state",
  "rusqlite",
@@ -3761,8 +3810,8 @@ dependencies = [
 
 [[package]]
 name = "subscription-custody"
-version = "0.6.5"
-source = "git+ssh://git@github.com/beyond10x/connectors.git?rev=94dfc009a3637e33cb6ad54e5c4cf1779068700e#94dfc009a3637e33cb6ad54e5c4cf1779068700e"
+version = "0.7.0"
+source = "git+ssh://git@github.com/beyond10x/connectors.git?rev=1c45d5bfbdc583738e90f2b93cf9c124ed2c5568#1c45d5bfbdc583738e90f2b93cf9c124ed2c5568"
 dependencies = [
  "connector-oauth",
  "connector-secrets",
@@ -3902,6 +3951,27 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "1f3ccbac311fea05f86f61904b462b55fb3df8837a366dfc601a0161d0532f20"
 
 [[package]]
+name = "tls_codec"
+version = "0.4.2"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "0de2e01245e2bb89d6f05801c564fa27624dbd7b1846859876c7dad82e90bf6b"
+dependencies = [
+ "tls_codec_derive",
+ "zeroize",
+]
+
+[[package]]
+name = "tls_codec_derive"
+version = "0.4.2"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "2d2e76690929402faae40aebdda620a2c0e25dd6d3b9afe48867dfd95991f4bd"
+dependencies = [
+ "proc-macro2",
+ "quote",
+ "syn 2.0.119",
+]
+
+[[package]]
 name = "todo-generated-service"
 version = "0.1.0"
 source = "git+https://github.com/beyond10x/todo.git?rev=dba6069cfcdd145a1bf25ea63f7762e1cc0b7e75#dba6069cfcdd145a1bf25ea63f7762e1cc0b7e75"
@@ -3967,6 +4037,20 @@ dependencies = [
  "tokio",
  "tokio-util",
  "whoami",
+]
+
+[[package]]
+name = "tokio-postgres-rustls"
+version = "0.14.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "4c2ad44aa0ae96db89c4742212ed41645b2f597311ff6e1945542a4d9fadc2fb"
+dependencies = [
+ "rustls",
+ "sha2 0.11.0",
+ "tokio",
+ "tokio-postgres",
+ "tokio-rustls",
+ "x509-cert",
 ]
 
 [[package]]
@@ -4737,6 +4821,18 @@ name = "writeable"
 version = "0.6.4"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "3ad82d2a33cdc9674dc7465672f271e096168fcdbe0f799d9e6db8c5892679dc"
+
+[[package]]
+name = "x509-cert"
+version = "0.2.5"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "1301e935010a701ae5f8655edc0ad17c44bad3ac5ce8c39185f75453b720ae94"
+dependencies = [
+ "const-oid 0.9.6",
+ "der",
+ "spki",
+ "tls_codec",
+]
 
 [[package]]
 name = "yoke"

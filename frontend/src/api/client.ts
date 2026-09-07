@@ -786,6 +786,10 @@ const FRIENDLY_ERRORS: Record<string, string> = {
   workflow_access_refused: "Your current authority does not admit this workflow.",
   workflow_not_found: "That workflow is no longer visible.",
   agent_platform_unavailable: "Agent Platform is temporarily unavailable.",
+  service_operation_rate_limited:
+    "The connection is rate limiting requests. Wait before trying again.",
+  service_connection_authentication_required:
+    "This connection needs authorization. Open Connections to reconnect it.",
   connectors_unavailable: "The connection service is temporarily unavailable.",
   connectors_invalid_response: "The connection service returned an invalid response.",
   connector_approval_refused:

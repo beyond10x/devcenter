@@ -321,6 +321,8 @@
           },
           "401": { "$ref": "#/components/responses/Problem" },
           "403": { "$ref": "#/components/responses/Problem" },
+          "409": { "$ref": "#/components/responses/Problem" },
+          "429": { "$ref": "#/components/responses/RateLimited" },
           "502": { "$ref": "#/components/responses/Problem" },
           "503": { "$ref": "#/components/responses/Unavailable" }
         }
@@ -358,6 +360,8 @@
           "403": { "$ref": "#/components/responses/Problem" },
           "404": { "$ref": "#/components/responses/Problem" },
           "422": { "$ref": "#/components/responses/Problem" },
+          "409": { "$ref": "#/components/responses/Problem" },
+          "429": { "$ref": "#/components/responses/RateLimited" },
           "502": { "$ref": "#/components/responses/Problem" },
           "503": { "$ref": "#/components/responses/Unavailable" }
         }
@@ -397,6 +401,7 @@
           "404": { "$ref": "#/components/responses/Problem" },
           "409": { "$ref": "#/components/responses/Problem" },
           "422": { "$ref": "#/components/responses/Problem" },
+          "429": { "$ref": "#/components/responses/RateLimited" },
           "502": { "$ref": "#/components/responses/Problem" },
           "503": { "$ref": "#/components/responses/Unavailable" }
         }
@@ -2105,6 +2110,18 @@
       }
     },
     "responses": {
+      "RateLimited": {
+        "description": "The Connector is rate limiting this operation",
+        "headers": {
+          "Retry-After": {
+            "description": "Trusted retry delay in seconds, when supplied by the Connector",
+            "schema": { "type": "string", "pattern": "^[0-9]+$" }
+          }
+        },
+        "content": {
+          "application/json": { "schema": { "$ref": "#/components/schemas/Problem" } }
+        }
+      },
       "Problem": {
         "description": "Request refused",
         "content": {
