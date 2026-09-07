@@ -27,7 +27,7 @@ scope:
   path: frontend/tests/client.test.ts
 - confidence: cited
   path: openapi.json
-revision: 11
+revision: 12
 ---
 ## Outcome
 
@@ -67,3 +67,9 @@ The first real 0.7 image build passed, but the composed Connector crashed on sta
 ## Corrected composition
 
 Published SDK compatibility source 6e4a257b0be3297ff726224f73910451de3da13e applies only the 0.7 factory adaptation to the already deployed SDK baseline; its complete repository gate passed. Devcenter consumes that immutable source and retains Eventlog b7e8f0d87b01c403415546d311952cb155caf16f. Final locked composed check, clippy and tests pass. The BFF and Connector runtime remain on the requested 0.7 release contract, with OAuth recovery preserved. Rebuild only the Connector image and use the already built 0.7 server image for the next real k3d run.
+
+## Generated invocation regression
+
+The corrected persistence composition started successfully, but live generated service invocation was refused under both operation v2 and v3. Connector remediation routing required an owner of the separate Connection API; generated services only own operations with reviewed Connection bindings. Upstream source 097b1c581e4031538b1590bf85d3d35cba6beabf preserves their unsupported-remediation path without combining split owners or bypassing normal grant, binding and approval checks. All 37 runtime tests, including the actual composed wrapper and adversarial routing matrix, plus all-target clippy pass. Devcenter consumes the published runtime correction and passes its locked composed checks and tests before the next actual container run.
+
+The failed local workspace session reached filesystem closure but coordination cleanup remains degraded until generated invocation is restored. Do not treat HTTP 200 cleanup or ready containers as full acceptance.
