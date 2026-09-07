@@ -16,7 +16,7 @@ Create a private run directory and private Docker configuration. Supply registry
 
 ## Build, compose and test
 
-```console
+```bash
 cargo build --locked -p devcenterctl
 ./target/debug/devcenterctl local up \
   --state "$LOCAL_ACCEPTANCE_STATE" \
@@ -47,7 +47,7 @@ A successful command writes `last-acceptance.json` pointing to the evidence dire
 
 To run just the journey with an existing local session and project:
 
-```console
+```bash
 ./target/debug/devcenterctl local test \
   --state "$LOCAL_ACCEPTANCE_STATE" --source "$DEVCENTER_CHECKOUT" \
   --origin https://devcenter.localhost:18443 \
