@@ -19,16 +19,16 @@ path = "src/main.rs"
 agentide-generated-service = { git = "https://github.com/beyond10x/agentide.git", rev = "176a57f58457a7c16f105584c66964263b3c2e41" }
 anyhow = "1"
 clap = { version = "4.6", features = ["derive", "env"] }
-connectors-runtime = { git = "ssh://git@github.com/beyond10x/connectors.git", rev = "53ba51fb744e223e220523ff49f313e1d23d8673", default-features = false }
-connectors-service = { package = "service", git = "ssh://git@github.com/beyond10x/connectors.git", rev = "53ba51fb744e223e220523ff49f313e1d23d8673" }
+connectors-runtime = { git = "ssh://git@github.com/beyond10x/connectors.git", rev = "097b1c581e4031538b1590bf85d3d35cba6beabf", default-features = false }
+connectors-service = { package = "service", git = "ssh://git@github.com/beyond10x/connectors.git", rev = "097b1c581e4031538b1590bf85d3d35cba6beabf" }
 eventlog-postgres = { git = "https://github.com/beyond10x/eventlog.git", rev = "b7e8f0d87b01c403415546d311952cb155caf16f" }
 rustls = { version = "0.23", default-features = false, features = ["aws_lc_rs", "std"] }
 # Honor deployment-selected operating-system CA roots without disabling TLS verification.
 reqwest = { version = "0.12", default-features = false, features = ["rustls-tls-native-roots"] }
 serde = { version = "1", features = ["derive"] }
 serde_yaml = "0.9"
-service-catalog = { git = "https://github.com/beyond10x/service-sdk.git", rev = "0118bd3f9d63ead5d525fb39324b1e5e13c4ab1a" }
-service-connectors = { git = "https://github.com/beyond10x/service-sdk.git", rev = "0118bd3f9d63ead5d525fb39324b1e5e13c4ab1a" }
+service-catalog = { git = "ssh://git@github.com/beyond10x/service-sdk.git", rev = "6e4a257b0be3297ff726224f73910451de3da13e" }
+service-connectors = { git = "ssh://git@github.com/beyond10x/service-sdk.git", rev = "6e4a257b0be3297ff726224f73910451de3da13e" }
 todo-generated-service = { git = "https://github.com/beyond10x/todo.git", rev = "dba6069cfcdd145a1bf25ea63f7762e1cc0b7e75" }
 tokio = { version = "1", features = ["macros", "rt-multi-thread", "signal"] }
 
@@ -36,8 +36,16 @@ tokio = { version = "1", features = ["macros", "rt-multi-thread", "signal"] }
 # Unify its shared contracts with the repaired runtime at the same exact source.
 # Cargo requires a distinct source URL for a Git patch; delivery authenticates both transports.
 [patch."https://github.com/beyond10x/connectors.git"]
-protocol = { git = "ssh://git@github.com/beyond10x/connectors.git", rev = "53ba51fb744e223e220523ff49f313e1d23d8673" }
-service = { git = "ssh://git@github.com/beyond10x/connectors.git", rev = "53ba51fb744e223e220523ff49f313e1d23d8673" }
+protocol = { git = "ssh://git@github.com/beyond10x/connectors.git", rev = "097b1c581e4031538b1590bf85d3d35cba6beabf" }
+service = { git = "ssh://git@github.com/beyond10x/connectors.git", rev = "097b1c581e4031538b1590bf85d3d35cba6beabf" }
+
+# Generated applications retain their source manifests; the composition selects one SDK contract.
+[patch."https://github.com/beyond10x/service-sdk.git"]
+service-engine = { git = "ssh://git@github.com/beyond10x/service-sdk.git", rev = "6e4a257b0be3297ff726224f73910451de3da13e" }
+service-connectors = { git = "ssh://git@github.com/beyond10x/service-sdk.git", rev = "6e4a257b0be3297ff726224f73910451de3da13e" }
+service-catalog = { git = "ssh://git@github.com/beyond10x/service-sdk.git", rev = "6e4a257b0be3297ff726224f73910451de3da13e" }
+service-http = { git = "ssh://git@github.com/beyond10x/service-sdk.git", rev = "6e4a257b0be3297ff726224f73910451de3da13e" }
+service-host = { git = "ssh://git@github.com/beyond10x/service-sdk.git", rev = "6e4a257b0be3297ff726224f73910451de3da13e" }
 
 [workspace.lints.rust]
 unsafe_code = "forbid"

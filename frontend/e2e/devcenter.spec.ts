@@ -1693,6 +1693,65 @@ test("keeps catalog and connection custody usable on a mobile viewport", async (
   });
 });
 
+for (const initiallyConnected of [false, true]) {
+  test(`Claude OAuth rate-limit recovery preserves the connection (${String(initiallyConnected)})`, async ({
+    page,
+  }) => {
+    await mockAuthenticatedWorkspace(page);
+    await page.addInitScript(() => {
+      window.open = () => null;
+    });
+    let connected = initiallyConnected;
+    let starts = 0;
+    let revokes = 0;
+    const submissions: unknown[] = [];
+    await page.route("**/api/connectors/claude-code", async (route) => {
+      if (route.request().method() === "DELETE") revokes += 1;
+      await route.fulfill({ json: { provider: "claude-code", connected } });
+    });
+    await page.route("**/api/connectors/claude-code/oauth/start", async (route) => {
+      await route.fulfill({
+        json: {
+          authorization_url: "https://provider.example.test/authorize",
+          flow_id: `flow-${String(++starts)}`,
+          expires_at: Math.floor(Date.now() / 1000) + 600,
+        },
+      });
+    });
+    await page.route("**/api/connectors/claude-code/oauth/complete", async (route) => {
+      submissions.push(route.request().postDataJSON());
+      if (submissions.length === 1) {
+        await route.fulfill({ status: 429, json: { code: "claude_connection_rate_limited" } });
+      } else {
+        connected = true;
+        await route.fulfill({ json: { provider: "claude-code", connected } });
+      }
+    });
+    await page.goto("/connectors?tab=connections");
+    const start = page.getByRole("button", {
+      name: initiallyConnected ? "Reconnect Claude" : "Connect Claude",
+      exact: true,
+    });
+    await start.click();
+    await page.getByLabel("One-time code").fill("  synthetic-code#state  ");
+    await page.getByRole("button", { name: "Finish connection" }).click();
+    await expect(
+      page.getByRole("alert").filter({ hasText: "Claude is rate limiting" }),
+    ).toBeVisible();
+    await expect(page.getByLabel("One-time code")).toHaveCount(0);
+    await expect(start).toBeEnabled();
+    await start.click();
+    await page.getByLabel("One-time code").fill("fresh-code#new-state");
+    await page.getByRole("button", { name: "Finish connection" }).click();
+    await expect(page.getByText("Subscription authorization saved", { exact: true })).toBeVisible();
+    expect(submissions).toEqual([
+      { flow_id: "flow-1", code: "synthetic-code#state" },
+      { flow_id: "flow-2", code: "fresh-code#new-state" },
+    ]);
+    expect(revokes).toBe(0);
+  });
+}
+
 test("makes capability posture explicit and applies bulk changes atomically", async ({ page }) => {
   await mockAuthenticatedWorkspace(page);
   await page.goto("/profiles");

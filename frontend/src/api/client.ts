@@ -786,6 +786,10 @@ const FRIENDLY_ERRORS: Record<string, string> = {
   workflow_access_refused: "Your current authority does not admit this workflow.",
   workflow_not_found: "That workflow is no longer visible.",
   agent_platform_unavailable: "Agent Platform is temporarily unavailable.",
+  service_operation_rate_limited:
+    "The connection is rate limiting requests. Wait before trying again.",
+  service_connection_authentication_required:
+    "This connection needs authorization. Open Connections to reconnect it.",
   connectors_unavailable: "The connection service is temporarily unavailable.",
   connectors_invalid_response: "The connection service returned an invalid response.",
   connector_approval_refused:
@@ -795,7 +799,14 @@ const FRIENDLY_ERRORS: Record<string, string> = {
   capability_search_refused: "Capabilities could not be read with your current grant.",
   identity_access_unavailable: "Identity could not authorize this operation.",
   claude_connection_start_refused: "Claude authorization could not be started.",
-  claude_connection_refused: "The authorization code was refused or expired.",
+  claude_connection_refused:
+    "Claude authorization was refused. Start a new connection and paste the complete code from that authorization window.",
+  claude_connection_rate_limited:
+    "Claude is rate limiting authorization requests. Wait a few minutes, then start a new connection.",
+  claude_connection_flow_expired:
+    "This authorization attempt has expired or was already submitted. Start a new connection to get a fresh code.",
+  claude_connection_unavailable:
+    "Claude authorization could not be completed because a service was unavailable. Start a new connection when it recovers.",
   claude_connection_code_invalid: "Enter the complete one-time authorization code.",
   agent_platform_capability_profiles_unavailable:
     "Capability profile publication is waiting for the released Agent Platform profile client.",

@@ -24,12 +24,13 @@ const fileSchema = z.object({
 const terminalSchema = z.object({ id: z.string(), state: z.string() });
 const taskSchema = z.object({ status: z.string(), output: z.string().nullable().optional() });
 const messageSchema = z.object({ sequence: z.number(), role: z.string(), content: z.string() });
-const prompt =
-  "Diagnostic check: reply with exactly WORKSPACE_SMOKE_OK. Do not use tools or modify files.";
+const expectedReply = `WORKSPACE_${randomBytes(12).toString("hex")}_OK`;
+const prompt = `Diagnostic check: reply with exactly ${expectedReply}. Do not use tools or modify files.`;
 const hash = (value: string) => createHash("sha256").update(value).digest("hex");
 
 test("Files, real PTY and both agent surfaces", async ({ page, context }, testInfo) => {
   process.umask(0o077);
+  expect(process.env.DEVCENTER_PROVIDER_MODE).toBe("live");
   const origin = z.url().parse(process.env.DEVCENTER_ORIGIN);
   const projectId = z
     .string()
@@ -342,8 +343,7 @@ test("Files, real PTY and both agent surfaces", async ({ page, context }, testIn
           const result = await api("GET", `/api/tasks/${task.id}`, taskSchema);
           if (["failed", "cancelled", "canceled"].includes(result.status))
             throw new Error(`agent_${result.status}`);
-          if (result.status === "succeeded")
-            expect(result.output?.trim()).toBe("WORKSPACE_SMOKE_OK");
+          if (result.status === "succeeded") expect(result.output?.trim()).toBe(expectedReply);
           return result.status;
         },
         { timeout: 120_000, intervals: [1000] },
@@ -411,7 +411,7 @@ test("Files, real PTY and both agent surfaces", async ({ page, context }, testIn
             );
             if (reply) {
               expect(reply.role).toBe("assistant");
-              expect(reply.content.trim()).toBe("WORKSPACE_SMOKE_OK");
+              expect(reply.content.trim()).toBe(expectedReply);
             }
             return Boolean(reply);
           },

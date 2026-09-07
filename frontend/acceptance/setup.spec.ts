@@ -46,14 +46,6 @@ test("normal Identity login and Connector custody", async ({ page, context }) =>
   const access = z.object({ access_token: z.string() }).parse(await tokenResponse.json());
   const headers = { Authorization: `Bearer ${access.access_token}`, Origin: origin };
   await provisionCredentials(context.request, origin, headers);
-  const model = await context.request.put(
-    `${origin}/api/connectors/v1/subscription-credentials/claude-code`,
-    {
-      headers,
-      data: { credential: "local-model-fixture-credential" },
-    },
-  );
-  expect(model.ok()).toBe(true);
   const agentsResponse = await context.request.get(`${origin}/api/agents`);
   expect(agentsResponse.ok()).toBe(true);
   const agents = z

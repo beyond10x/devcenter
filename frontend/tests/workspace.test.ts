@@ -123,6 +123,7 @@ describe("workspace store", () => {
     );
     const workspace = useWorkspaceStore();
     await workspace.startOAuth();
+    await workspace.loadConnection();
     expect(workspace.oauthFlow?.flow_id).toBe("flow-1");
     await workspace.completeOAuth("one-time-code");
     expect(workspace.oauthFlow).toBeUndefined();

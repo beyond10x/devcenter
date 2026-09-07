@@ -18,6 +18,8 @@ mod bootstrap;
 #[path = "local_build.rs"]
 mod build;
 
+const LIVE_MODEL_ENDPOINT: &str = "https://api.anthropic.com/v1";
+
 #[derive(Debug, Subcommand)]
 pub enum LocalAction {
     /// Build selected candidates, prepare the real local stack, and run browser acceptance.
@@ -102,13 +104,14 @@ pub struct Test {
     target: Target,
     #[arg(long)]
     source: PathBuf,
-    #[arg(long)]
+    #[arg(long, default_value = "https://devcenter.localhost:18443")]
     origin: String,
-    /// Owner-only browser session issued through this local Identity's normal flow.
+    /// Owner-only local browser session; defaults to the last successful setup.
     #[arg(long)]
-    storage_state: PathBuf,
+    storage_state: Option<PathBuf>,
+    /// Local project; defaults to the last successful setup on this exact node.
     #[arg(long)]
-    project: String,
+    project: Option<String>,
 }
 
 #[derive(Debug, Serialize, Deserialize)]

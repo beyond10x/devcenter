@@ -11,14 +11,28 @@ scope:
 - confidence: cited
   path: crates/devcenter-connectors
 - confidence: cited
+  path: crates/devcenter-connectors/Cargo.toml
+- confidence: cited
   path: crates/devcenter-http
 - confidence: cited
+  path: crates/devcenterctl/examples/local-provider.rs
+- confidence: cited
+  path: frontend/acceptance
+- confidence: cited
   path: frontend/e2e
+- confidence: cited
+  path: frontend/src/api
 - confidence: cited
   path: frontend/src/features/agents
 - confidence: cited
   path: frontend/src/features/connections
-revision: 5
+- confidence: cited
+  path: frontend/src/stores/workspace.ts
+- confidence: cited
+  path: frontend/tests
+- confidence: cited
+  path: openapi.json
+revision: 8
 ---
 ## Outcome
 
@@ -35,3 +49,7 @@ Before admitting a new task, the system refreshes or validates the user-bound mo
 ## Scope
 
 Connector model-credential readiness, task-admission credential redemption, Devcenter's model status projection and recovery UI, and an authenticated agent-turn smoke check.
+
+## Local acceptance correction
+
+The operator rejected mocked model acceptance. story:live-model-local-acceptance now removes automatic fake model custody and the model fixture route, selects the real provider in k3d, and requires actual replies across all Agent surfaces. Its first live-mode run stopped at missing authorization; this is an incomplete test, not a deployment pass. The composed Connector is pinned to 94dfc009a3637e33cb6ad54e5c4cf1779068700e, preserving the deployed protocol and including only OAuth recovery plus previously reviewed exact source-digest secret-scan baseline corrections.

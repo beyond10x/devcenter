@@ -1,14 +1,18 @@
 import { test, expect } from "@playwright/test";
-import { readFileSync, writeFileSync } from "node:fs";
+import { writeFileSync } from "node:fs";
 import { z } from "zod";
 
 // Small explicit pages exercise the real service's cursor and filtered-row contract.
 // The BFF's production page bound and refusal cases are covered by its Rust gate.
 test("closed coordination history can be read beyond the first page", async ({ request }) => {
   const root = z.string().parse(process.env.DEVCENTER_EVIDENCE_ROOT);
+  const projectId = z.string().min(1).parse(process.env.DEVCENTER_PROJECT_ID);
+  const response = await request.get(`/api/projects/${encodeURIComponent(projectId)}`);
+  expect(response.ok()).toBe(true);
   const project = z
     .object({ id: z.string(), pinned_commit: z.string().optional() })
-    .parse(JSON.parse(readFileSync(`${root}/project.json`, "utf8")));
+    .parse(await response.json());
+  expect(project.id).toBe(projectId);
   const catalog = await request.post("/api/services/catalog", {
     data: { service_ref: "service:agentide" },
   });

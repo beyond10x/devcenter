@@ -372,13 +372,16 @@ onMounted(() => void loadProviderConnections());
             Try again
           </button>
         </div>
-        <div v-else-if="workspace.connected" class="connection-state connected-state">
+        <div
+          v-else-if="workspace.connected && !workspace.oauthFlow"
+          class="connection-state connected-state"
+        >
           <span class="success-seal"><Check :size="27" /></span>
           <div>
-            <strong>Ready for governed attempts</strong>
+            <strong>Subscription authorization saved</strong>
             <p>
-              Connectors owns refresh, replacement, and revocation. Devcenter receives presence
-              metadata only.
+              Claude access is checked when an attempt starts. If an attempt cannot use this
+              connection, reconnect to replace its authorization.
             </p>
           </div>
         </div>
@@ -415,9 +418,6 @@ onMounted(() => void loadProviderConnections());
                 required
               />
             </div>
-            <p v-if="workspace.connectionError" class="form-error" role="alert">
-              {{ workspace.connectionError }}
-            </p>
             <div class="oauth-actions">
               <button
                 class="button quiet"
@@ -444,6 +444,14 @@ onMounted(() => void loadProviderConnections());
           </div>
         </div>
 
+        <p
+          v-if="workspace.connectionState === 'ready' && workspace.connectionError"
+          class="form-error"
+          role="alert"
+        >
+          {{ workspace.connectionError }}
+        </p>
+
         <footer v-if="workspace.connectionState === 'ready'" class="provider-actions">
           <button
             v-if="!workspace.connected && !workspace.oauthFlow"
@@ -454,7 +462,15 @@ onMounted(() => void loadProviderConnections());
           >
             <KeyRound :size="17" /> {{ starting ? "Starting…" : "Connect Claude" }}
           </button>
-          <template v-else-if="workspace.connected">
+          <template v-else-if="workspace.connected && !workspace.oauthFlow">
+            <button
+              class="button primary"
+              type="button"
+              :disabled="starting"
+              @click="startAuthorization"
+            >
+              <KeyRound :size="17" /> {{ starting ? "Starting…" : "Reconnect Claude" }}
+            </button>
             <button
               v-if="!confirmRevoke"
               class="button danger-quiet"
