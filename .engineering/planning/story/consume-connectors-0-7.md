@@ -2,7 +2,7 @@
 format: aep.planning-md/1
 id: story:consume-connectors-0-7
 kind: story
-status: active
+status: implemented
 title: Use released Connectors 0.7 across the Devcenter composition
 relations:
 - decomposes: epic:independent-component-delivery
@@ -27,7 +27,7 @@ scope:
   path: frontend/tests/client.test.ts
 - confidence: cited
   path: openapi.json
-revision: 12
+revision: 14
 ---
 ## Outcome
 
@@ -73,3 +73,9 @@ Published SDK compatibility source 6e4a257b0be3297ff726224f73910451de3da13e appl
 The corrected persistence composition started successfully, but live generated service invocation was refused under both operation v2 and v3. Connector remediation routing required an owner of the separate Connection API; generated services only own operations with reviewed Connection bindings. Upstream source 097b1c581e4031538b1590bf85d3d35cba6beabf preserves their unsupported-remediation path without combining split owners or bypassing normal grant, binding and approval checks. All 37 runtime tests, including the actual composed wrapper and adversarial routing matrix, plus all-target clippy pass. Devcenter consumes the published runtime correction and passes its locked composed checks and tests before the next actual container run.
 
 The failed local workspace session reached filesystem closure but coordination cleanup remains degraded until generated invocation is restored. Do not treat HTTP 200 cleanup or ready containers as full acceptance.
+
+## Released and verified
+
+The final composition is published and deployed as publication 0.8.35 from source 2b809d23e5de6845a49e8f30f69d788b4c8f718a. Its BFF client/protocol consume released Connectors 0.7.0 commit e80b7ae1b2151d13aa9786cf67ea05e66717ee35. Its runtime consumes published 097b1c581e4031538b1590bf85d3d35cba6beabf on that release baseline, retaining OAuth recovery and the generated operation-routing correction. SDK compatibility revision 6e4a257b0be3297ff726224f73910451de3da13e retains the deployed persistence contract and Eventlog b7e8f0d87b01c403415546d311952cb155caf16f. The official engineering integration CLI is verified Connectors 0.7.0.
+
+The exact immutable published images passed local k3d acceptance with actual Claude replies across all three Agent surfaces, Files editing/exact restoration and real PTY behavior before promotion. Fresh independent deployed acceptance also passed after normal owner reconnect on 2026-09-07. Main, coding and project Agent replies all matched new nonce values; Projects and the complete workspace journey passed and the owned test workspace closed both states. Evidence: local-evidence:devcenter-local-k3d-20260906/acceptance-1788775473223370378 and local-evidence:devcenter-claude-20260907/remote-reconnected. Earlier failed candidates above remain historical evidence and are not the accepted composition.
