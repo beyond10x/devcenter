@@ -523,6 +523,7 @@ fn browser(args: &Up) -> Result<()> {
         .and_then(|bytes| serde_json::from_slice::<Value>(&bytes).ok())
         .filter(|value| value["node_id"] == owned.container_id);
     let spki = tls_spki(state)?;
+    let mut failures = Vec::new();
     for spec in [
         "setup.spec.ts",
         "model.spec.ts",
@@ -570,17 +571,12 @@ fn browser(args: &Up) -> Result<()> {
                         .context("fixture project ID missing")?,
                 );
         }
-        capture(state, &format!("browser-{spec}"), &mut command).with_context(|| {
-            let action = if spec == "model.spec.ts" {
-                "check Claude at https://devcenter.localhost:18443/connectors?tab=connections; "
-            } else {
-                ""
-            };
-            format!(
-                "Local acceptance incomplete at {spec}; {action}inspect {} before retrying",
-                evidence.display()
-            )
-        })?;
+        if let Err(error) = capture(state, &format!("browser-{spec}"), &mut command) {
+            if spec == "setup.spec.ts" {
+                return Err(error).context("Local setup failed; dependent acceptance cannot run");
+            }
+            failures.push(spec);
+        }
         if spec == "setup.spec.ts" {
             let project: Value = serde_json::from_slice(&fs::read(evidence.join("project.json"))?)?;
             write_private(
@@ -594,7 +590,29 @@ fn browser(args: &Up) -> Result<()> {
             );
         }
     }
-    acceptance_status(state, "pass", Some(&evidence))?;
+    finish_acceptance(state, &evidence, &failures)
+}
+
+fn finish_acceptance(state: &Path, evidence: &Path, failures: &[&str]) -> Result<()> {
+    write_private(
+        &evidence.join("checks.json"),
+        &serde_json::to_vec(&json!({"failed":failures}))?,
+    )?;
+    acceptance_status(
+        state,
+        if failures.is_empty() {
+            "pass"
+        } else {
+            "not_completed"
+        },
+        Some(evidence),
+    )?;
+    ensure!(
+        failures.is_empty(),
+        "Local acceptance incomplete in {}; inspect {}. Model authorization is available at https://devcenter.localhost:18443/connectors?tab=connections",
+        failures.join(", "),
+        evidence.display()
+    );
     Ok(())
 }
 
@@ -758,8 +776,9 @@ pub(super) fn test(args: &super::Test) -> Result<()> {
     fs::create_dir(&output)?;
     acceptance_status(state, "not_completed", Some(&output))?;
     record_composition(state, &args.source, &[], &output)?;
+    let mut failures = Vec::new();
     for spec in ["model.spec.ts", "history.spec.ts", "workspace.spec.ts"] {
-        capture(
+        let result = capture(
             state,
             &format!("browser-{spec}"),
             Command::new("pnpm")
@@ -780,9 +799,12 @@ pub(super) fn test(args: &super::Test) -> Result<()> {
                 .env("DEVCENTER_PROJECT_ID", &project)
                 .env("DEVCENTER_PROVIDER_MODE", "live")
                 .env("DEVCENTER_EVIDENCE_ROOT", &output),
-        )?;
+        );
+        if result.is_err() {
+            failures.push(spec);
+        }
     }
-    acceptance_status(state, "pass", Some(&output))?;
+    finish_acceptance(state, &output, &failures)?;
     println!(
         "browser acceptance with live Claude passed: {}",
         output.display()
@@ -936,6 +958,23 @@ mod tests {
         assert_eq!(status["result"], "not_completed");
         assert_eq!(status["provider_mode"], "live");
         assert!(status["evidence"].is_null());
+    }
+
+    #[test]
+    fn independent_successes_do_not_hide_a_failed_acceptance_suite() {
+        let directory = tempfile::tempdir().unwrap();
+        let state = directory.path();
+        acceptance_status(state, "pass", Some(Path::new("old-evidence"))).unwrap();
+        assert!(finish_acceptance(state, state, &["model.spec.ts", "workspace.spec.ts"]).is_err());
+        let status: Value =
+            serde_json::from_slice(&fs::read(state.join("last-acceptance.json")).unwrap()).unwrap();
+        let checks: Value =
+            serde_json::from_slice(&fs::read(state.join("checks.json")).unwrap()).unwrap();
+        assert_eq!(status["result"], "not_completed");
+        assert_eq!(
+            checks["failed"],
+            json!(["model.spec.ts", "workspace.spec.ts"])
+        );
     }
 
     #[test]

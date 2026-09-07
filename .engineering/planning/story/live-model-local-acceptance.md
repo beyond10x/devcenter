@@ -20,12 +20,14 @@ scope:
 - confidence: cited
   path: docs/local-acceptance.md
 - confidence: cited
+  path: frontend/acceptance/history.spec.ts
+- confidence: cited
   path: frontend/acceptance/model.spec.ts
 - confidence: cited
   path: frontend/acceptance/setup.spec.ts
 - confidence: cited
   path: frontend/acceptance/workspace.spec.ts
-revision: 5
+revision: 9
 ---
 ## Outcome
 
@@ -55,3 +57,13 @@ The updated CLI rebuilt only the composed Connector candidate in 35.6 seconds, r
 The new main Agents gate returned nonzero with AUTHORIZATION_REQUIRED and recorded provider_mode=live plus result=not_completed. Setup preserved its actual Identity session and project so the operator can authorize through the retained local Connections page, then rerun local test without a build or installation. No successful live model reply is claimed. A bounded invalid-code browser diagnostic exercised the local OAuth start (200), refusal (422) and consumed-flow replay (410); it does not establish valid authorization. The actual running model endpoint and image digests are retained in composition.json.
 
 Credential-free evidence: local-evidence:devcenter-claude-20260907/local-live-up.log, local-live-oauth-diagnostic.json and local-model-fixture-retired.json. Source checks passed: frontend check (51 tests), full Rust workspace tests and clippy, composed Connector tests (4) and clippy, formatting, version consistency, chart lint, eight volume rollout checks and confidential-marker scan. Browser regression CI remains separate from live-provider acceptance.
+
+## Independent checks after model refusal
+
+Local 0.7 testing exposed two composition failures while model authorization was pending. The CLI now runs history and workspace checks after an independent model failure and aggregates every failed suite without marking acceptance passed. Setup remains a prerequisite. Browser-only retry obtains the current project through the authenticated API rather than requiring a setup-only project.json file in its new evidence directory. A unit regression verifies independent successes cannot hide a failed suite or retain an older pass.
+
+## Real provider acceptance passed
+
+The corrected Connectors 0.7 composition passed actual local k3d acceptance, followed by a second browser-only retry without a rebuild or rollout. Both runs obtained fresh nonce-checked Claude replies in main Agents, project chat and coding chat, exercised history pagination, edited and exactly restored a workspace file, executed a real PTY command and closed their owned workspaces. The running model endpoint was https://api.anthropic.com/v1. Model authorization became available during execution; no assertion is made about who completed it.
+
+Evidence: local-evidence:devcenter-local-k3d-20260906/acceptance-1788773149796210203 and acceptance-1788773500893271555. The retry records checks.json with an empty failed list and provider_mode=live/result=pass. The setup-only project.json file is absent from the retry directory, proving the new API lookup is exercised. Targeted devcenterctl tests and clippy plus frontend check passed after the runner correction. Upstream OIDC and Git forge remain explicit fixtures. Remote promotion still requires published artifact verification and remote user-journey evidence.
