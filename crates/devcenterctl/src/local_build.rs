@@ -1,7 +1,7 @@
 //! Cached local builds and the complete acceptance cycle.
 use super::{
-    Apply, Create, Target, bootstrap, capture, container_id, create, doctor, kube, load_owned,
-    private_file, write_private,
+    Apply, Create, LIVE_MODEL_ENDPOINT, Target, bootstrap, capture, container_id, create, doctor,
+    kube, load_owned, private_file, write_private,
 };
 use anyhow::{Context, Result, ensure};
 use base64::{Engine, engine::general_purpose::STANDARD};
@@ -55,6 +55,7 @@ pub fn up(args: &Up) -> Result<()> {
     let state = &args.target.state;
     fs::create_dir_all(state)?;
     fs::set_permissions(state, fs::Permissions::from_mode(0o700))?;
+    acceptance_status(state, "not_completed", None)?;
     private_file(&args.docker_config.join("config.json"))?;
     ensure!(
         args.k3s_image.contains("@sha256:"),
@@ -143,7 +144,7 @@ pub fn up(args: &Up) -> Result<()> {
         timeout: "3m".into(),
     })?;
     browser(args)?;
-    println!("Local fixture acceptance passed: https://devcenter.localhost:18443");
+    println!("Local acceptance with live Claude passed: https://devcenter.localhost:18443");
     Ok(())
 }
 
@@ -514,14 +515,20 @@ fn browser(args: &Up) -> Result<()> {
         .as_nanos();
     let evidence = state.join(format!("acceptance-{at}"));
     fs::create_dir(&evidence)?;
+    acceptance_status(state, "not_completed", Some(&evidence))?;
     let owned = load_owned(state)?;
-    record_composition(args, &evidence)?;
+    record_composition(state, &args.source, &args.build, &evidence)?;
     let previous = fs::read(state.join("last-project.json"))
         .ok()
         .and_then(|bytes| serde_json::from_slice::<Value>(&bytes).ok())
         .filter(|value| value["node_id"] == owned.container_id);
     let spki = tls_spki(state)?;
-    for spec in ["setup.spec.ts", "history.spec.ts", "workspace.spec.ts"] {
+    for spec in [
+        "setup.spec.ts",
+        "model.spec.ts",
+        "history.spec.ts",
+        "workspace.spec.ts",
+    ] {
         let mut command = Command::new("pnpm");
         command
             .arg("--dir")
@@ -536,7 +543,7 @@ fn browser(args: &Up) -> Result<()> {
             ])
             .env("NODE_EXTRA_CA_CERTS", state.join("ca.crt"))
             .env("DEVCENTER_LOCAL_TLS_SPKI", &spki)
-            .env("DEVCENTER_PROVIDER_MODE", "fixture")
+            .env("DEVCENTER_PROVIDER_MODE", "live")
             .env(
                 "DEVCENTER_PROVISIONING_FILE",
                 state.join("fixture-provisioning.json"),
@@ -563,24 +570,49 @@ fn browser(args: &Up) -> Result<()> {
                         .context("fixture project ID missing")?,
                 );
         }
-        capture(state, &format!("browser-{spec}"), &mut command)?;
+        capture(state, &format!("browser-{spec}"), &mut command).with_context(|| {
+            let action = if spec == "model.spec.ts" {
+                "check Claude at https://devcenter.localhost:18443/connectors?tab=connections; "
+            } else {
+                ""
+            };
+            format!(
+                "Local acceptance incomplete at {spec}; {action}inspect {} before retrying",
+                evidence.display()
+            )
+        })?;
+        if spec == "setup.spec.ts" {
+            let project: Value = serde_json::from_slice(&fs::read(evidence.join("project.json"))?)?;
+            write_private(
+                &state.join("last-project.json"),
+                &serde_json::to_vec(
+                    &json!({"node_id":owned.container_id,"project_id":project["id"],"storage_state":evidence.join("storage-state.json")}),
+                )?,
+            )?;
+            println!(
+                "Local setup available at https://devcenter.localhost:18443/connectors?tab=connections; live model acceptance follows"
+            );
+        }
     }
-    let project: Value = serde_json::from_slice(&fs::read(evidence.join("project.json"))?)?;
-    write_private(
-        &state.join("last-project.json"),
-        &serde_json::to_vec(&json!({"node_id":owned.container_id,"project_id":project["id"]}))?,
-    )?;
-    write_private(
-        &state.join("last-acceptance.json"),
-        &serde_json::to_vec(
-            &json!({"result":"pass","provider_mode":"fixture","evidence":evidence,"origin":"https://devcenter.localhost:18443"}),
-        )?,
-    )?;
+    acceptance_status(state, "pass", Some(&evidence))?;
     Ok(())
 }
 
-fn record_composition(args: &Up, evidence: &Path) -> Result<()> {
-    let state = &args.target.state;
+fn acceptance_status(state: &Path, result: &str, evidence: Option<&Path>) -> Result<()> {
+    write_private(
+        &state.join("last-acceptance.json"),
+        &serde_json::to_vec(
+            &json!({"result":result,"provider_mode":"live","evidence":evidence,"origin":"https://devcenter.localhost:18443"}),
+        )?,
+    )
+}
+
+fn record_composition(
+    state: &Path,
+    source: &Path,
+    selected_builds: &[String],
+    evidence: &Path,
+) -> Result<()> {
     let lock = crate::deployment::DeploymentLock::read(&state.join("deployment.local.lock.toml"))?;
     let mut admitted = lock
         .images
@@ -611,7 +643,11 @@ fn record_composition(args: &Up, evidence: &Path) -> Result<()> {
         ]),
     )?)?;
     let mut running = Vec::new();
+    let mut model_endpoint_observed = false;
     for pod in pods["items"].as_array().context("running pods missing")? {
+        if terminal_pod(pod) {
+            continue;
+        }
         for container in pod["spec"]["containers"]
             .as_array()
             .context("pod containers missing")?
@@ -622,6 +658,10 @@ fn record_composition(args: &Up, evidence: &Path) -> Result<()> {
                 )),
                 "running workload differs from selected lock; replace its outdated pod before acceptance"
             );
+            if pod["metadata"]["labels"]["app.kubernetes.io/component"] == "agent-platform" {
+                validate_live_model_arguments(&container["args"])?;
+                model_endpoint_observed = true;
+            }
         }
         let statuses = pod["status"]["containerStatuses"]
             .as_array()
@@ -633,15 +673,49 @@ fn record_composition(args: &Up, evidence: &Path) -> Result<()> {
         running.push(json!({"pod":pod["metadata"]["name"],"uid":pod["metadata"]["uid"],"images":statuses.iter().map(|status| json!({"name":status["name"],"image":status["image"],"image_id":status["imageID"]})).collect::<Vec<_>>()}));
     }
     ensure!(!running.is_empty(), "no application workloads observed");
+    ensure!(
+        model_endpoint_observed,
+        "live model endpoint was not observed in Agent Platform"
+    );
     for name in ["deployment.local.lock.toml", "local.json"] {
         write_private(&evidence.join(name), &fs::read(state.join(name))?)?;
     }
     write_private(
         &evidence.join("composition.json"),
         &serde_json::to_vec_pretty(
-            &json!({"running":running,"source":args.source,"selected_builds":args.build,"provider_mode":"fixture"}),
+            &json!({"running":running,"source":source,"selected_builds":selected_builds,"provider_mode":"live","model_endpoint":LIVE_MODEL_ENDPOINT}),
         )?,
     )?;
+    Ok(())
+}
+
+fn terminal_pod(pod: &Value) -> bool {
+    matches!(
+        pod["status"]["phase"].as_str(),
+        Some("Succeeded" | "Failed")
+    )
+}
+
+fn validate_live_model_arguments(args: &Value) -> Result<()> {
+    let args = args
+        .as_array()
+        .context("Agent Platform arguments missing")?;
+    let endpoints = args
+        .iter()
+        .enumerate()
+        .filter_map(|(index, arg)| {
+            let arg = arg.as_str()?;
+            if arg == "--model-endpoint-base" {
+                Some(args.get(index + 1).and_then(Value::as_str).unwrap_or(""))
+            } else {
+                arg.strip_prefix("--model-endpoint-base=")
+            }
+        })
+        .collect::<Vec<_>>();
+    ensure!(
+        endpoints == [LIVE_MODEL_ENDPOINT],
+        "local acceptance requires the real Claude model endpoint; fixture or ambiguous model configuration cannot pass"
+    );
     Ok(())
 }
 
@@ -668,38 +742,77 @@ fn tls_spki(state: &Path) -> Result<String> {
 
 pub(super) fn test(args: &super::Test) -> Result<()> {
     let state = &args.target.state;
-    load_owned(state)?;
+    let owned = load_owned(state)?;
     super::validate_local_origin(&args.origin)?;
-    private_file(&args.storage_state)?;
+    ensure!(
+        owned.https_port == 18443
+            && args.origin.trim_end_matches('/') == "https://devcenter.localhost:18443",
+        "browser acceptance must target the same owned local composition whose images are verified"
+    );
+    let (storage_state, project) = test_session(args, &owned.container_id)?;
+    private_file(&storage_state)?;
     let at = std::time::SystemTime::now()
         .duration_since(std::time::UNIX_EPOCH)?
         .as_nanos();
     let output = state.join(format!("acceptance-{at}"));
     fs::create_dir(&output)?;
-    capture(
-        state,
-        "browser-workspace",
-        Command::new("pnpm")
-            .arg("--dir")
-            .arg(args.source.join("frontend"))
-            .args([
-                "exec",
-                "playwright",
-                "test",
-                "--config",
-                "playwright.acceptance.config.ts",
-                "workspace.spec.ts",
-            ])
-            .env("NODE_EXTRA_CA_CERTS", state.join("ca.crt"))
-            .env("DEVCENTER_LOCAL_TLS_SPKI", tls_spki(state)?)
-            .env("DEVCENTER_ORIGIN", &args.origin)
-            .env("PROJECTS_STORAGE_STATE", &args.storage_state)
-            .env("DEVCENTER_PROJECT_ID", &args.project)
-            .env("DEVCENTER_PROVIDER_MODE", "fixture")
-            .env("DEVCENTER_EVIDENCE_ROOT", &output),
-    )?;
-    println!("browser acceptance passed: {}", output.display());
+    acceptance_status(state, "not_completed", Some(&output))?;
+    record_composition(state, &args.source, &[], &output)?;
+    for spec in ["model.spec.ts", "history.spec.ts", "workspace.spec.ts"] {
+        capture(
+            state,
+            &format!("browser-{spec}"),
+            Command::new("pnpm")
+                .arg("--dir")
+                .arg(args.source.join("frontend"))
+                .args([
+                    "exec",
+                    "playwright",
+                    "test",
+                    "--config",
+                    "playwright.acceptance.config.ts",
+                    spec,
+                ])
+                .env("NODE_EXTRA_CA_CERTS", state.join("ca.crt"))
+                .env("DEVCENTER_LOCAL_TLS_SPKI", tls_spki(state)?)
+                .env("DEVCENTER_ORIGIN", &args.origin)
+                .env("PROJECTS_STORAGE_STATE", &storage_state)
+                .env("DEVCENTER_PROJECT_ID", &project)
+                .env("DEVCENTER_PROVIDER_MODE", "live")
+                .env("DEVCENTER_EVIDENCE_ROOT", &output),
+        )?;
+    }
+    acceptance_status(state, "pass", Some(&output))?;
+    println!(
+        "browser acceptance with live Claude passed: {}",
+        output.display()
+    );
     Ok(())
+}
+
+fn test_session(args: &super::Test, node_id: &str) -> Result<(PathBuf, String)> {
+    if let (Some(storage), Some(project)) = (&args.storage_state, &args.project) {
+        return Ok((storage.clone(), project.clone()));
+    }
+    let record: Value = serde_json::from_slice(
+        &fs::read(args.target.state.join("last-project.json"))
+            .context("run local up first, or provide --storage-state and --project")?,
+    )?;
+    ensure!(
+        record["node_id"] == node_id,
+        "saved setup belongs to a different node; run local up again"
+    );
+    let storage = args
+        .storage_state
+        .clone()
+        .or_else(|| record["storage_state"].as_str().map(PathBuf::from))
+        .context("saved setup predates session reuse; run local up or provide --storage-state")?;
+    let project = args
+        .project
+        .clone()
+        .or_else(|| record["project_id"].as_str().map(str::to_owned))
+        .context("saved local project missing")?;
+    Ok((storage, project))
 }
 
 pub(super) fn down(state: &Path) -> Result<()> {
@@ -742,6 +855,88 @@ pub(super) fn down(state: &Path) -> Result<()> {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn automatic_session_reuse_refuses_a_replaced_node() {
+        let directory = tempfile::tempdir().unwrap();
+        let state = directory.path();
+        write_private(&state.join("last-project.json"), &serde_json::to_vec(&json!({
+            "node_id":"original-node", "project_id":"project-local", "storage_state":"private-session.json"
+        })).unwrap()).unwrap();
+        let args = super::super::Test {
+            target: Target {
+                state: state.to_path_buf(),
+            },
+            source: state.to_path_buf(),
+            origin: "https://devcenter.localhost:18443".into(),
+            storage_state: None,
+            project: None,
+        };
+        assert_eq!(
+            test_session(&args, "original-node").unwrap(),
+            (
+                PathBuf::from("private-session.json"),
+                "project-local".into()
+            )
+        );
+        assert!(test_session(&args, "replacement-node").is_err());
+    }
+
+    #[test]
+    fn acceptance_refuses_fixture_ambiguous_and_missing_model_endpoints() {
+        for args in [
+            json!(["serve"]),
+            json!([
+                "serve",
+                "--model-endpoint-base",
+                "http://provider.localhost/v1"
+            ]),
+            json!([
+                "--model-endpoint-base",
+                LIVE_MODEL_ENDPOINT,
+                "--model-endpoint-base=http://provider.localhost/v1"
+            ]),
+        ] {
+            assert!(validate_live_model_arguments(&args).is_err());
+        }
+        assert!(
+            validate_live_model_arguments(&json!([
+                "serve",
+                "--model-endpoint-base",
+                LIVE_MODEL_ENDPOINT
+            ]))
+            .is_ok()
+        );
+        assert!(
+            validate_live_model_arguments(&json!([format!(
+                "--model-endpoint-base={LIVE_MODEL_ENDPOINT}"
+            )]))
+            .is_ok()
+        );
+    }
+
+    #[test]
+    fn historical_pods_are_excluded_but_pending_workloads_still_require_readiness() {
+        for phase in ["Succeeded", "Failed"] {
+            assert!(terminal_pod(&json!({"status":{"phase":phase}})));
+        }
+        for phase in ["Running", "Pending", "Unknown"] {
+            assert!(!terminal_pod(&json!({"status":{"phase":phase}})));
+        }
+    }
+
+    #[test]
+    fn new_attempt_invalidates_an_older_pass() {
+        let directory = tempfile::tempdir().unwrap();
+        let state = directory.path();
+        acceptance_status(state, "pass", Some(Path::new("old-evidence"))).unwrap();
+        acceptance_status(state, "not_completed", None).unwrap();
+        let status: Value =
+            serde_json::from_slice(&fs::read(state.join("last-acceptance.json")).unwrap()).unwrap();
+        assert_eq!(status["result"], "not_completed");
+        assert_eq!(status["provider_mode"], "live");
+        assert!(status["evidence"].is_null());
+    }
 
     #[test]
     fn application_candidate_updates_the_devcenter_lock_entry() {

@@ -1,7 +1,7 @@
 //! External provider fixtures for the disposable local composition.
 //!
-//! This example is not a release output. It serves synthetic OIDC, GitLab and model
-//! responses; Identity, Connectors, Workspace and all browser APIs remain real.
+//! This example is not a release output. It serves synthetic OIDC and GitLab
+//! responses; model traffic uses the real provider, and Identity, Connectors, Workspace and all browser APIs remain real.
 
 use anyhow::{Context, Result, ensure};
 use axum::Router;
@@ -369,59 +369,6 @@ fn dispatch(
     }
     if path.starts_with("/fixture/workspace.git/") {
         return git_http(provider, method, uri, headers, body);
-    }
-    if path == "/v1/messages" {
-        ensure!(*method == Method::POST, "model method");
-        ensure!(
-            headers.get("authorization").and_then(|v| v.to_str().ok())
-                == Some("Bearer local-model-fixture-credential")
-                || headers.get("x-api-key").and_then(|v| v.to_str().ok())
-                    == Some("local-model-fixture-credential"),
-            "model credential custody was not exercised"
-        );
-        let request: Value = serde_json::from_slice(body)?;
-        let expected = "WORKSPACE_SMOKE_OK";
-        if request.get("stream").and_then(Value::as_bool) == Some(true) {
-            let events = [
-                (
-                    "message_start",
-                    json!({"type":"message_start","message":{"id":"msg_local_fixture","type":"message","role":"assistant","model":"local-fixture","content":[],"stop_reason":null,"stop_sequence":null,"usage":{"input_tokens":1,"output_tokens":0}}}),
-                ),
-                (
-                    "content_block_start",
-                    json!({"type":"content_block_start","index":0,"content_block":{"type":"text","text":""}}),
-                ),
-                (
-                    "content_block_delta",
-                    json!({"type":"content_block_delta","index":0,"delta":{"type":"text_delta","text":expected}}),
-                ),
-                (
-                    "content_block_stop",
-                    json!({"type":"content_block_stop","index":0}),
-                ),
-                (
-                    "message_delta",
-                    json!({"type":"message_delta","delta":{"stop_reason":"end_turn","stop_sequence":null},"usage":{"output_tokens":1}}),
-                ),
-                ("message_stop", json!({"type":"message_stop"})),
-            ];
-            let mut stream = String::new();
-            for (event, data) in events {
-                use std::fmt::Write;
-                write!(stream, "event: {event}\ndata: {data}\n\n")?;
-            }
-            return Ok((
-                [
-                    ("content-type", "text/event-stream"),
-                    ("cache-control", "no-store"),
-                ],
-                stream,
-            )
-                .into_response());
-        }
-        return Ok(json_response(
-            json!({"id":"msg_local_fixture","type":"message","role":"assistant","model":"local-fixture","content":[{"type":"text","text":expected}],"stop_reason":"end_turn","stop_sequence":null,"usage":{"input_tokens":1,"output_tokens":1}}),
-        ));
     }
     Ok((StatusCode::NOT_FOUND, "unknown local provider route").into_response())
 }

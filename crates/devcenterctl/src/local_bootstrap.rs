@@ -1,6 +1,6 @@
 //! Private local deployment inputs. No upstream credentials are copied into this environment.
 
-use super::{Target, capture, kube, load_owned, write_private};
+use super::{LIVE_MODEL_ENDPOINT, Target, capture, kube, load_owned, write_private};
 use anyhow::{Context, Result, ensure};
 use base64::{Engine, engine::general_purpose::STANDARD};
 use clap::Args;
@@ -100,7 +100,9 @@ pub fn prepare(args: &Prepare) -> Result<()> {
     )?;
     configure_dns(state, owned.https_port)?;
     configure_token_review(state)?;
-    println!("prepared local composition at {app}; model provider: deterministic fixture");
+    println!(
+        "prepared local composition at {app}; model provider: live Claude; authorize at {app}/connectors?tab=connections"
+    );
     Ok(())
 }
 
@@ -132,7 +134,7 @@ fn local_values(baseline: &Value, app: &str, provider: &str) -> Result<Value> {
     values["networkPolicy"]["ingressNamespaceSelector"] =
         json!({"kubernetes.io/metadata.name":"kube-system"});
     values["networkPolicy"]["ingressPodSelector"] = json!({"app.kubernetes.io/name":"traefik"});
-    values["networkPolicy"]["allowExternalHttps"] = json!(false);
+    values["networkPolicy"]["allowExternalHttps"] = json!(true);
     values["networkPolicy"]["extraEgress"] = json!([
         {"to":[{"namespaceSelector":{"matchLabels":{"kubernetes.io/metadata.name":"kube-system"}},"podSelector":{"matchLabels":{"app.kubernetes.io/name":"traefik"}}}],"ports":[{"protocol":"TCP","port":8443}]}
     ]);
@@ -208,7 +210,7 @@ fn local_values(baseline: &Value, app: &str, provider: &str) -> Result<Value> {
             .as_array_mut()
             .context("Agent arguments missing")?,
         "--model-endpoint-base",
-        "http://devcenter-local-provider.devcenter.svc.cluster.local:8080/v1",
+        LIVE_MODEL_ENDPOINT,
     )?;
     let aep_args = components["aep-service"]["args"]
         .as_array_mut()

@@ -1,8 +1,8 @@
 # Local deployment acceptance
 
-`devcenterctl local up` builds selected components and runs the actual Helm composition in a dedicated k3d cluster. It then checks normal Identity login, Connector credential custody and authorization, Git materialization, Files navigation, editor layout and edit/save/restore/reload, actual PTY input/output and termination, replies on both agent surfaces, and history pagination beyond the first page. A healthy pod alone does not pass acceptance.
+`devcenterctl local up` builds selected components and runs the actual Helm composition in a dedicated k3d cluster. It then checks normal Identity login, Connector credential custody and authorization, Git materialization, Files navigation, editor layout and edit/save/restore/reload, actual PTY input/output and termination, real Claude replies in main Agents, project chat and coding chat, and history pagination beyond the first page. A healthy pod alone does not pass acceptance.
 
-The external OIDC, Git forge and model endpoints are deterministic fixtures. Identity, Connectors, Secrets, Workspace, Substrate, Agent Platform and the BFF run their real service implementations. This proves their composition with the selected artifacts; live provider credentials and upstream provider behavior still need a separate deployment check.
+Claude authorization and model requests use the real provider. No synthetic model credential is inserted and the fixture server has no model route. Identity, Connectors, Secrets, Workspace, Substrate, Agent Platform and the BFF run their real service implementations. Only upstream OIDC and the Git forge remain local fixtures; their production integrations still require separate verification. Real provider errors fail local acceptance before promotion.
 
 ## Inputs and prerequisites
 
@@ -41,17 +41,15 @@ The dedicated names are `devcenter-acceptance`, `k3d-devcenter-registry.localhos
 
 Open **https://devcenter.localhost:18443** and use the normal sign-in link. The synthetic upstream signs in the local fixture engineer. Browser automation is always headless and trusts only the generated fixture certificate's public-key fingerprint. For manual viewing, trust the run directory's `ca.crt` in your test browser; the CLI does not change host or browser trust stores. Never install the private key.
 
-Setup creates the fixture agent through the normal UI and reuses the existing project on repeated runs. The history check seeds 40 closed coordination records through the admitted BFF service API and follows real cursors until a record absent from the first page is found.
+Setup creates the acceptance agent through the normal UI and reuses the existing project on repeated runs. Open **Connections**, select **Connect Claude** (or **Reconnect Claude**), and finish the real provider authorization flow there. Never paste authorization codes into chat or command arguments. Setup preserves an existing connection. Until actual model requests succeed, the command returns nonzero and the local installation stays available for diagnosis. The history check seeds 40 closed coordination records through the admitted BFF service API and follows real cursors until a record absent from the first page is found.
 
-A successful command writes `last-acceptance.json` pointing to the evidence directory. Each journey writes `result.json`, screenshots, individual HTTP statuses, observed startup timing, binary PTY transport evidence and acknowledged cleanup. A failure returns nonzero and keeps its phase logs. Browser session files remain private and must not be published.
+Every attempt replaces `last-acceptance.json` with an incomplete result before running checks; a previous pass cannot survive a new failed attempt. A successful command records `provider_mode: live` and points to the evidence directory. `composition.json` verifies the running Agent Platform uses the real model endpoint, and `model.json` records the actual main Agents task outcome. Each journey writes `result.json`, screenshots, individual HTTP statuses, observed startup timing, binary PTY transport evidence and acknowledged cleanup. A failure returns nonzero and keeps its phase logs. Browser session files remain private and must not be published.
 
-To run just the journey with an existing local session and project:
+After authorization, rerun acceptance without building or reinstalling. The CLI reuses the private Identity session and project recorded by setup, verifies they belong to this exact node, and checks the actual composition, main Agents, history, and workspace journey:
 
 ```bash
 ./target/debug/devcenterctl local test \
-  --state "$LOCAL_ACCEPTANCE_STATE" --source "$DEVCENTER_CHECKOUT" \
-  --origin https://devcenter.localhost:18443 \
-  --storage-state "$PRIVATE_BROWSER_STATE" --project "$LOCAL_PROJECT_ID"
+  --state "$LOCAL_ACCEPTANCE_STATE" --source "$DEVCENTER_CHECKOUT"
 ```
 
 ## Programmatic Connector setup

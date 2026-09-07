@@ -46,55 +46,6 @@ test("normal Identity login and Connector custody", async ({ page, context }) =>
   const access = z.object({ access_token: z.string() }).parse(await tokenResponse.json());
   const headers = { Authorization: `Bearer ${access.access_token}`, Origin: origin };
   await provisionCredentials(context.request, origin, headers);
-  const model = await context.request.put(
-    `${origin}/api/connectors/v1/subscription-credentials/claude-code`,
-    {
-      headers,
-      data: { credential: "local-model-fixture-credential" },
-    },
-  );
-  expect(model.ok()).toBe(true);
-  // Exercise the real BFF -> Identity -> Connector OAuth path as well as custody setup.
-  // The incomplete fixture code is rejected before any external provider request.
-  await page.goto("/connectors?tab=connections");
-  await page.evaluate(() => {
-    window.open = () => null;
-  });
-  const started = page.waitForResponse(
-    (response) => new URL(response.url()).pathname === "/api/connectors/claude-code/oauth/start",
-  );
-  await page.getByRole("button", { name: "Reconnect Claude", exact: true }).click();
-  const flow = z.object({ flow_id: z.string() }).parse(await (await started).json());
-  await page.getByLabel("One-time code").fill("incomplete-fixture-code");
-  const completed = page.waitForResponse(
-    (response) => new URL(response.url()).pathname === "/api/connectors/claude-code/oauth/complete",
-  );
-  await page.getByRole("button", { name: "Finish connection" }).click();
-  expect((await completed).status()).toBe(422);
-  await expect(
-    page.getByRole("alert").filter({ hasText: "Claude authorization was refused" }),
-  ).toBeVisible();
-  await expect(page.getByLabel("One-time code")).toHaveCount(0);
-  await expect(page.getByRole("button", { name: "Reconnect Claude", exact: true })).toBeEnabled();
-  const replay = await context.request.post(`${origin}/api/connectors/claude-code/oauth/complete`, {
-    headers: { Origin: origin },
-    data: { flow_id: flow.flow_id, code: "incomplete-fixture-code" },
-  });
-  expect(replay.status()).toBe(410);
-  expect(await replay.json()).toEqual({ code: "claude_connection_flow_expired" });
-  writeFileSync(
-    `${root}/oauth-recovery.json`,
-    JSON.stringify(
-      {
-        incomplete_code_status: 422,
-        replay_status: 410,
-        reconnect_available: true,
-        provider_exchange_attempted: false,
-      },
-      null,
-      2,
-    ),
-  );
   const agentsResponse = await context.request.get(`${origin}/api/agents`);
   expect(agentsResponse.ok()).toBe(true);
   const agents = z
