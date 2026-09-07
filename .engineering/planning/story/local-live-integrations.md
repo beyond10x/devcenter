@@ -30,7 +30,7 @@ scope:
   path: frontend/src/features/connections
 - confidence: cited
   path: frontend/src/features/connectors
-revision: 14
+revision: 16
 ---
 ## Outcome
 
@@ -77,3 +77,15 @@ The composed Kubernetes NetworkPolicy allows public HTTPS while excluding privat
 The live owner retry reached provider verification successfully, then returned a generic503 during credential persistence. Read-only deployed metadata inspection confirmed a shared prepared-secret retirement watermark ahead of the catalog and another provider's independent generation counters. The catalog had no pending or completed connection. This is an upstream cross-provider transaction-domain defect; do not alter deployed counters manually or ask the owner to replay the credential until the runtime correction and recovery regression pass.
 
 The owning Connectors implementation must preserve pending recovery and retirement fences, cover interleaved native and catalog acquisitions, and expose only closed completion-stage/error classifications. Consume the published correction through the composed runtime and prove the complete custody path before another owner retry. Neither the network health probe nor a corrected form establishes provider acceptance. Retain the existing live private egress policy and component image selections during composition.
+
+## Credential custody correction verification
+
+The shared custody correction is published upstream at df875e22dc9eb95b009d7626966c11a3d587b4f4 and consumed by the standalone composed Connector manifest and lock. Only that Connector revision changed in the lock; the separately selected SDK, Eventlog, Agent Platform and other source pins remain intact.
+
+Upstream verification passed all twelve source workspaces, both runtime feature configurations, all-workspace formatting, root/runtime all-target clippy with denied warnings, and final catalog/docs/ESS checks. Five composed journal regressions exercise the actual PreparedVaultStore with controlled state/value adapters and provider HTTP. Eight shared-helper regressions include FileStore recovery; eighteen actual Chromium cases exercise the source completion script against controlled responses. These are not live provider acceptance. A separate test-owned live Secrets sentinel roundtrip passed stage/read/publish/read/delete and confirmed both addresses absent; the diagnostic pod was removed.
+
+The consuming standalone workspace passed locked clippy, tests and formatting. Documentation formatting, version consistency, leak checks and diff checks pass; the preceding root workspace checks remain applicable because its implementation and dependencies did not change. The actual Connector image was built, pushed to the retained local registry, and applied through the official local CLI with the matching private values and lock. Only the Connector image changed and the previously corrected private egress declarations were preserved.
+
+The running image digest matches the built and pushed candidate. All twelve other running pods retained their identities, image digests and restart counts; the owner-scoped connection list is unchanged. The new Connector needed two startup retries with a database connection error, then became ready and stayed at two restarts through verification. The node reports Ready with all pressure conditions false. A first image-verification helper assertion confused the runtime configuration digest with a manifest reference; the corrected check independently matches the pod specification, runtime imageID and local image configuration digest.
+
+An actual headless browser verified the newly served Grafana token form, SSO guidance, required data-source permission and five-minute deadline. Advancing the browser clock cleared and disabled the field and submit button without any POST. No owner credential was accessed or replayed. Real Grafana credential persistence and a freshly admitted provider read still require a new owner submission through the deployed form. Other live provider reads and the previously recorded real conversation refusal remain incomplete; no release or shared deployment is claimed.

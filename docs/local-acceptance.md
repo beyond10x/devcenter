@@ -126,6 +126,8 @@ Private provider origins need both Connector destination admission and Kubernete
 
 The integration suite derives its required providers from the composed private configuration (native GitLab, Slack and Grafana sections and generic catalogue bindings). For each provider it searches admitted operations, obtains a fresh description, and invokes a read-only operation that accepts an empty input object. Missing authorization, a missing suitable read, or an upstream refusal fails that provider check. Evidence retains only statuses and Connector audit references, never provider response bodies. This is additional to repository materialization and model acceptance.
 
+For credential-custody changes, include interleaved acquisitions and interrupted-save recovery against populated state. A fresh empty store cannot reveal retirement or recovery conflicts between providers. A rendered Connect form and an unauthenticated health response do not establish successful acquisition: verify credential persistence and an admitted provider read. If a real provider credential is unavailable, record that gap and keep that provider acceptance incomplete.
+
 The lifecycle suite uses the deployed APIs and browser UI, including real Claude turns to prove that a conversation remembers its own previous turn and that a new or cleared conversation does not. Test-created agents and profiles are removed through the normal APIs. Re-run browser acceptance against unchanged candidate images with `local test`; retain the private session file it references.
 
 ## Cleanup and iteration
