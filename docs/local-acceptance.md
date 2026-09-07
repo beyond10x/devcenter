@@ -4,6 +4,34 @@
 
 Claude authorization and model requests use the real provider. No synthetic model credential is inserted and the fixture server has no model route. Identity, Connectors, Secrets, Workspace, Substrate, Agent Platform and the BFF run their real service implementations. Only upstream OIDC and the Git forge remain local fixtures; their production integrations still require separate verification. Real provider errors fail local acceptance before promotion.
 
+## Resume an existing development session
+
+Read `AGENTS.md` and, when present, the private `.devcenter/local-development.md` handoff before creating resources. Reuse its managed source checkout, local state directory, CLI and Buildx builder. The state directory owns the cluster identity, registry, certificate authority, databases and saved Identity session; changing the directory or recreating the cluster loses that continuity. Do not start a fresh installation merely because a conversation was compacted or closed.
+
+Set these paths from the existing handoff or your own explicit setup. Use an already built CLI whose source matches the local orchestration you intend to test; rebuild it when that source changes.
+
+```bash
+"$DEVCENTERCTL" local doctor --state "$LOCAL_ACCEPTANCE_STATE"
+"$DEVCENTERCTL" local test \
+  --state "$LOCAL_ACCEPTANCE_STATE" --source "$DEVCENTER_CHECKOUT"
+```
+
+`local test` checks the running composition and runs the current checkout's browser acceptance suites. It does not build edited application source, reinstall the chart or repeat setup. It reuses `last-project.json` and its private storage-state file only for the recorded node. Keep the referenced storage-state file when cleaning old evidence directories. If the session or node is no longer valid, diagnose that refusal and renew setup through the normal flow.
+
+Choose the next action from what actually changed:
+
+| Change or observation | Next action |
+| --- | --- |
+| Owner reconnects Claude; runtime is unchanged | Run `local test` against the retained installation. |
+| Acceptance assertions or browser readiness change | Run the changed acceptance against existing images with `local test`; preserve the real behavior assertions. |
+| Frontend or BFF application code changes | Run focused source checks, then `local up` with `--build server`. |
+| Composed Connector code or dependencies change | Run its locked source checks, then `local up` with `--build connectors`. Select both builds when both are affected. |
+| CLI orchestration, chart or composition values change | Rebuild the CLI if needed, then rerun `local up` with matching baseline inputs and only necessary application builds. |
+| Immutable released images need verification | Supply the released image selections in matching private baseline values and lock; omit application build flags to exercise those published images. Retain the documented fixture-CA requirements. |
+| Documentation or planning changes only | Check the text, links, planning store when changed, and required repository gates; retain prior runtime evidence without a new application build or deployment. |
+
+Every `local up` starts from its supplied baseline. Omitting `--build server`, for example, selects the server in that baseline; it does not mean "keep whichever server is currently running." Carry forward the other validated candidate digests in matching private inputs when rebuilding only one component. Keep the same builder and its caches. `--identity-source` requests an Identity build, so omit it on ordinary repeats once the baseline retains the required Identity image.
+
 ## Inputs and prerequisites
 
 Use the repository-pinned Node and pnpm versions, Rust, Docker with Buildx, k3d, kubectl, Helm, OpenSSL and Git on an amd64 Linux host with AppArmor and loop-device support. Install frontend dependencies with `pnpm --dir frontend install --frozen-lockfile` and Chromium with `pnpm --dir frontend exec playwright install chromium`.
@@ -62,6 +90,14 @@ The local fixture writes a provisioning manifest containing integration names, c
 
 ## Cleanup and iteration
 
+Follow a short feedback loop: reproduce one failing phase, make the bounded correction, run the relevant source checks, rebuild only changed components, and exercise the affected journey locally. Run the complete required source gate and local acceptance before publishing a changed application. After publication, verify the actual immutable images locally, render the matching private deployment inputs, promote through the existing deployment workflow and verify the remote journey. A compilation pass cannot establish service startup, authorization or browser usability.
+
+Report which phase failed and what passed independently. The acceptance runner continues independent model, history and workspace checks after setup, but any failed suite leaves the overall result failed. A missing credential requires the normal Connections authorization flow followed by fresh replies; repeating a build does not repair it. Record build, rollout, workspace-readiness and reply durations separately so a slow phase gets investigated directly.
+
+For workspace automation, wait for an actual repository file such as the README before switching panes. An API Ready result can precede the browser's next poll; the initial explorer also contains a Load workspace placeholder. Hidden progress and network-idle checks alone do not prove the editor has initialized. Preserve the exact save/restore, fresh nonce reply and binary PTY assertions when correcting timing.
+
 Use `devcenterctl local doctor --state "$LOCAL_ACCEPTANCE_STATE"` to inspect node readiness and resource pressure. Use `devcenterctl local down --state "$LOCAL_ACCEPTANCE_STATE"` to remove only recorded local resources. This deletes the local test databases and workspaces. Logs, evidence and the protected node-profile verification files stay in the run directory. Keep the latter while its versioned AppArmor profile remains installed in the shared host kernel. A later `local up` creates a fresh installation from the same explicit inputs.
 
 Cold builds include dependency compilation and image pulls. Subsequent builds reuse caches; select only changed components, then rerun the same real-service journey. Keep failed evidence when diagnosing regressions. Remove ephemeral build credentials after use, and review specific inactive build caches before reclaiming space. Avoid broad volume or system pruning.
+
+Before pausing, update the already ignored `.devcenter/local-development.md` in the checkout the next session will open. Record the retained state path, managed source checkout, CLI executable and provenance, builder, private baseline paths, latest evidence/result, any protected or owned resources, and the exact next command. Store paths and non-secret observations only; never copy cookies, authorization codes, tokens, rendered Secrets or private keys into the note. Keep this machine-specific handoff outside Git and the public documentation allowlist. Version reusable process changes in this guide and link them from `AGENTS.md`.

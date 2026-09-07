@@ -10,6 +10,8 @@ relations:
 - informed_by: story:refresh-user-bound-model-credential
 scope:
 - confidence: cited
+  path: AGENTS.md
+- confidence: cited
   path: crates/devcenterctl/examples/local-provider.rs
 - confidence: cited
   path: crates/devcenterctl/src/local.rs
@@ -27,7 +29,7 @@ scope:
   path: frontend/acceptance/setup.spec.ts
 - confidence: cited
   path: frontend/acceptance/workspace.spec.ts
-revision: 13
+revision: 16
 ---
 ## Outcome
 
@@ -87,3 +89,11 @@ Publication 0.8.35, application source 2b809d23e5de6845a49e8f30f69d788b4c8f718a,
 On 2026-09-07, after the owner reported completing normal remote reconnect, independent headless acceptance passed the deployed composition without another build or rollout. Fresh main Agents, coding chat and project chat all produced the expected nonce replies. Projects discovery/open/reopen, Files entry and repeated pane navigation, editor geometry/save/exact restoration, binary PTY execution/termination and owned workspace closure passed. The operator's existing workspace remained ready and unchanged. Evidence: local-evidence:devcenter-claude-20260907/remote-reconnected/remote-agents.json, remote-projects.json, deployment-acceptance-iCBsXv/result.json and operator-workspace-after.json. The workspace result is DEPLOYMENT_ACCEPTANCE_PASS with provider_mode=live.
 
 The source gate and affected-image checks passed in CI34106698022 before PR62 merged. The acceptance readiness correction passed CI34111466199 and merged in PR63; it changes no runtime image. This story's live-provider local acceptance and failure-reporting requirements are implemented.
+
+## Persistent development guidance
+
+The operator requested repository memory before compaction so subsequent sessions preserve the proven local development speed. AGENTS.md now directs sessions to docs/local-acceptance.md and the already ignored .devcenter/local-development.md. The guide records the resume-first path, a change-to-action table, real-provider acceptance criteria, observed browser readiness, selective rebuilding, immutable promotion and safe cache/state preservation. Omitting a build selects the supplied baseline image; it does not retain an arbitrary running candidate. This small documentation follow-up belongs to the existing implemented live-acceptance story.
+
+Machine-specific resumption pointers were saved in the ignored handoff, outside the public documentation allowlist and Git history. It identifies the retained state, released executable/provenance, managed source checkout, builder, private baseline paths, successful evidence and cleanup state without credential values. Preserve the older evidence directory referenced by last-project.json because it holds the reusable Identity session.
+
+Validation: commands match the released CLI help and local_build.rs; local doctor reports Ready with no memory, disk or PID pressure; documentation links resolve; the handoff is ignored and owner-only; diff and confidential-marker checks pass. The release impact classifier selects no OCI builds. Existing application acceptance remains valid because runtime behavior is unchanged. Current clean Atlas main still refuses organization docs collection on another repository's unsupported b10x-docs/v4 manifest; this known unrelated failure is recorded, not bypassed.
