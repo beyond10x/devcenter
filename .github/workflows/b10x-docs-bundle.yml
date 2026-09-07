@@ -11,6 +11,7 @@ on:
       - 'changes/**/*.yaml'
       - 'docs/ess-deployment-model.md'
       - 'docs/frontend-review.md'
+      - 'docs/local-acceptance.md'
       - 'docs/production-deployment.md'
       - 'docs/source-build.md'
       - 'openapi.json'
