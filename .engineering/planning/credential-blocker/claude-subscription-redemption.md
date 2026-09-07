@@ -2,13 +2,13 @@
 format: aep.planning-md/1
 id: credential-blocker:claude-subscription-redemption
 kind: credential-blocker
-status: open
+status: cleared
 title: Restore a redeemable Claude subscription credential for Agent acceptance
 relations:
 - blocks: story:projects-connection-recovery
 - blocks: story:refresh-user-bound-model-credential
 withholds: test_result
-revision: 3
+revision: 5
 ---
 ## Missing credential evidence
 
@@ -27,3 +27,7 @@ Repository discovery, Git checkout, file transport and workspace/coordination cl
 After publication 0.8.34 and the successful private validate/deploy/verify pipeline, fresh requests through personal Agents, project Agent and coding Agent still fail at the model credential boundary. The coding request returns model_credential_unavailable after about three seconds; the independent main Agents task returns the same code. Projects, materialization, Files/editor, real terminal execution, original-workspace preservation and owned-session cleanup all pass independently. Evidence is retained at local-evidence:devcenter-remote-20260907/deployment-acceptance-st0yMO/result.json and remote-agents.json.
 
 The current Claude UI offers Disconnect and then Connect Claude, followed by provider approval and submission of the one-time code in Devcenter. The previously requested reconnect action refers to this sequence; there is no button literally named Reconnect Claude. The owner has not reported completion. Keep this blocker open until real provider-backed replies pass on all three Agent surfaces.
+
+## Resolution
+
+The owner reported completing the normal reconnect and successfully testing the deployed application on 2026-09-07. Independent fresh headless acceptance then confirmed exact nonce replies in main Agents, coding chat and project chat on publication 0.8.35. Files, real PTY execution and owned workspace cleanup also passed. Evidence: local-evidence:devcenter-claude-20260907/remote-reconnected/remote-agents.json and deployment-acceptance-iCBsXv/result.json. This observed redemption clears the credential blocker. It does not establish the broader readiness-projection and pre-admission validation requirements of story:refresh-user-bound-model-credential, which remains active.

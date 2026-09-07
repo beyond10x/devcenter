@@ -2,7 +2,7 @@
 format: aep.planning-md/1
 id: story:live-model-local-acceptance
 kind: story
-status: active
+status: implemented
 title: Require real Claude authorization and model replies before deployment
 relations:
 - decomposes: epic:independent-component-delivery
@@ -27,7 +27,7 @@ scope:
   path: frontend/acceptance/setup.spec.ts
 - confidence: cited
   path: frontend/acceptance/workspace.spec.ts
-revision: 11
+revision: 13
 ---
 ## Outcome
 
@@ -79,3 +79,11 @@ A bounded remote diagnostic awaited the actual README entry, then observed layou
 After the readiness correction, frontend check passed and the complete local run against published 0.8.35 passed again with actual Claude replies across all three surfaces, Files edit/restore, PTY execution and history checks. Evidence: local-evidence:devcenter-local-k3d-20260906/acceptance-1788776449880916246.
 
 The corrected remote run passed Files entry, repeated navigation, editor editing/save/exact restoration, binary PTY input/output, terminal termination and normal owned workspace closure. Evidence: local-evidence:devcenter-claude-20260907/remote-readiness-retry/deployment-acceptance-JCmH9g/result.json. Coding and project replies still failed, so that run correctly records DEPLOYMENT_ACCEPTANCE_FAILED. The separate main Agents attempt also failed model_credential_unavailable. The connection owner has been asked to complete the normal deployed reconnect flow; no full remote acceptance is asserted.
+
+## Delivered acceptance
+
+Publication 0.8.35, application source 2b809d23e5de6845a49e8f30f69d788b4c8f718a, passed exact published-image local k3d acceptance with actual Claude requests before promotion. The readiness-corrected repeat at local-evidence:devcenter-local-k3d-20260906/acceptance-1788776449880916246 also passed with no failed checks. The model is real; local upstream OIDC and Git forge remain explicit fixtures.
+
+On 2026-09-07, after the owner reported completing normal remote reconnect, independent headless acceptance passed the deployed composition without another build or rollout. Fresh main Agents, coding chat and project chat all produced the expected nonce replies. Projects discovery/open/reopen, Files entry and repeated pane navigation, editor geometry/save/exact restoration, binary PTY execution/termination and owned workspace closure passed. The operator's existing workspace remained ready and unchanged. Evidence: local-evidence:devcenter-claude-20260907/remote-reconnected/remote-agents.json, remote-projects.json, deployment-acceptance-iCBsXv/result.json and operator-workspace-after.json. The workspace result is DEPLOYMENT_ACCEPTANCE_PASS with provider_mode=live.
+
+The source gate and affected-image checks passed in CI34106698022 before PR62 merged. The acceptance readiness correction passed CI34111466199 and merged in PR63; it changes no runtime image. This story's live-provider local acceptance and failure-reporting requirements are implemented.
