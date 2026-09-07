@@ -29,6 +29,35 @@ agreement with beyond10x.
    Vue and TypeScript, built by the repository-pinned Node and pnpm toolchain.
 8. The chart uses immutable image references in deployment values and never embeds credentials.
 
+## Local development and acceptance
+
+Read [docs/local-acceptance.md](docs/local-acceptance.md) before changing or testing the composed
+application. If present, read `.devcenter/local-development.md` for this machine's retained state,
+CLI, managed checkout and evidence paths. Keep that ignored handoff private and current when pausing.
+
+- Reuse the existing k3d state, Buildx cache and real user-owned model connection. Start with
+  `devcenterctl local doctor --state "$LOCAL_ACCEPTANCE_STATE"`; use `local test --state
+  "$LOCAL_ACCEPTANCE_STATE" --source "$DEVCENTER_CHECKOUT"` for browser-only retries, acceptance
+  changes and verification after reconnect. Rebuild the CLI only when its source changed.
+- Choose `local up` build flags from the changed component: frontend/BFF uses `--build server`,
+  composed Connector uses `--build connectors`. Unselected images come from the supplied baseline,
+  so use matching values and lock that retain every candidate needed by the test. A passing old
+  image does not validate edited application source. Preserve the cluster between ordinary retries.
+- Before publication, run the required source gate and the actual local Helm composition with real
+  Claude replies in main Agents, project chat and coding chat, Files edit/save/exact restoration,
+  real PTY execution/termination and acknowledged cleanup of owned workspaces. Only upstream OIDC
+  and the Git forge are fixtures. Credential presence, healthy pods and mocked browser tests cannot
+  substitute for this acceptance.
+- Wait for real repository content in the browser before pane navigation. API readiness, a hidden
+  progress indicator or the explorer's initial Load workspace button does not establish UI readiness.
+- Publish the validated candidate, verify immutable published images locally, then promote through
+  the private deployment workflow and prove the remote journey with fresh model replies. Run checks
+  again for changed behavior or unresolved failures; docs-only edits need no application rollout.
+- Keep credentials in normal custody and private state; retain failed evidence and protect the
+  operator's existing workspace. Before pausing, record the next command, source/image provenance,
+  latest result and any owned resources in the ignored handoff. Review specific cache usage before
+  reclaiming disk; preserve active images, databases, quota volumes, CA and node profiles.
+
 ## Gate
 
 ```console
