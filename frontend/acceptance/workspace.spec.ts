@@ -200,7 +200,13 @@ test("Files, real PTY and both agent surfaces", async ({ page, context }, testIn
       .toBe("ready");
     evidence.ready_ms = Date.now() - started;
     await api("GET", `/api/project-sessions/${sessionId}/tree?path=&limit=500`, z.unknown());
-    await page.locator(".explorer button").first().waitFor();
+    // The API can become ready before the browser polls again. Its initial
+    // explorer also has a "Load workspace" button, so require a real file.
+    const readme = page
+      .locator(".explorer")
+      .getByRole("button", { name: /^README\.md(?:\s*◫)?$/i })
+      .first();
+    await readme.waitFor({ timeout: 100_000 });
     await page.getByLabel("Workspace loading progress").waitFor({ state: "hidden" });
     await page.waitForLoadState("networkidle");
     step("Files_navigation");
@@ -215,10 +221,6 @@ test("Files, real PTY and both agent surfaces", async ({ page, context }, testIn
     }
     evidence.files_navigation = "FILES_NAVIGATION_PASS";
     await page.screenshot({ path: `${root}/files-entry.png`, animations: "disabled" });
-    const readme = page
-      .locator(".explorer")
-      .getByRole("button", { name: /^README\.md(?:\s*◫)?$/i })
-      .first();
     await readme.click();
     const editor = page.locator(".editor-leaf .monaco-editor");
     await editor.waitFor();
