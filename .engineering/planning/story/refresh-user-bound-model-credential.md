@@ -11,14 +11,28 @@ scope:
 - confidence: cited
   path: crates/devcenter-connectors
 - confidence: cited
+  path: crates/devcenter-connectors/Cargo.toml
+- confidence: cited
   path: crates/devcenter-http
 - confidence: cited
+  path: crates/devcenterctl/examples/local-provider.rs
+- confidence: cited
+  path: frontend/acceptance
+- confidence: cited
   path: frontend/e2e
+- confidence: cited
+  path: frontend/src/api
 - confidence: cited
   path: frontend/src/features/agents
 - confidence: cited
   path: frontend/src/features/connections
-revision: 5
+- confidence: cited
+  path: frontend/src/stores/workspace.ts
+- confidence: cited
+  path: frontend/tests
+- confidence: cited
+  path: openapi.json
+revision: 7
 ---
 ## Outcome
 

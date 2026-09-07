@@ -3945,7 +3945,7 @@ async fn complete_claude_oauth(
             "provider": status.provider,
             "connected": status.connected
         })),
-        Err(error) => connector_error(&error, "claude_connection_refused"),
+        Err(error) => claude_oauth_error(&error),
     }
 }
 
@@ -6051,6 +6051,20 @@ fn valid_opaque_id(value: &str) -> bool {
             .all(|byte| byte.is_ascii_alphanumeric() || matches!(byte, b'_' | b'-'))
 }
 
+fn claude_oauth_error(error: &ConnectorsError) -> Response {
+    match error {
+        ConnectorsError::SubscriptionRefused(429) => problem(
+            StatusCode::TOO_MANY_REQUESTS,
+            "claude_connection_rate_limited",
+        ),
+        ConnectorsError::SubscriptionRefused(410) => {
+            problem(StatusCode::GONE, "claude_connection_flow_expired")
+        }
+        ConnectorsError::HostedUnavailable => unavailable("claude_connection_unavailable"),
+        _ => connector_error(error, "claude_connection_refused"),
+    }
+}
+
 fn connector_error(error: &ConnectorsError, refused_code: &str) -> Response {
     match error {
         ConnectorsError::SubscriptionRefused(_) => {
@@ -6935,6 +6949,36 @@ mod tests {
 
     #[tokio::test]
     async fn downstream_refusals_are_classified_without_relaying_bodies() {
+        for (error, status, code) in [
+            (
+                ConnectorsError::SubscriptionRefused(429),
+                StatusCode::TOO_MANY_REQUESTS,
+                "claude_connection_rate_limited",
+            ),
+            (
+                ConnectorsError::SubscriptionRefused(410),
+                StatusCode::GONE,
+                "claude_connection_flow_expired",
+            ),
+            (
+                ConnectorsError::HostedUnavailable,
+                StatusCode::SERVICE_UNAVAILABLE,
+                "claude_connection_unavailable",
+            ),
+            (
+                ConnectorsError::SubscriptionRefused(400),
+                StatusCode::UNPROCESSABLE_ENTITY,
+                "claude_connection_refused",
+            ),
+        ] {
+            let response = claude_oauth_error(&error);
+            assert_eq!(response.status(), status);
+            let body = response.into_body().collect().await.unwrap().to_bytes();
+            assert_eq!(
+                serde_json::from_slice::<serde_json::Value>(&body).unwrap(),
+                json!({"code":code})
+            );
+        }
         let response = connector_error(
             &ConnectorsError::SubscriptionRefused(400),
             "claude_connection_refused",

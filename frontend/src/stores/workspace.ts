@@ -124,7 +124,6 @@ export const useWorkspaceStore = defineStore("workspace", () => {
       const status = await api.connection();
       connected.value = status.connected;
       connectionState.value = "ready";
-      if (status.connected) oauthFlow.value = undefined;
     } catch (error) {
       connectionState.value = "error";
       connectionError.value = errorMessage(error);
@@ -147,11 +146,14 @@ export const useWorkspaceStore = defineStore("workspace", () => {
     if (!flowId) throw new Error("oauth_flow_missing");
     connectionError.value = "";
     try {
-      const status = await api.completeOAuth(flowId, code);
+      const status = await api.completeOAuth(flowId, code.trim());
       connected.value = status.connected;
       oauthFlow.value = undefined;
-      notice.value = "Claude Code is connected and ready for governed attempts.";
+      notice.value = "Claude Code authorization saved.";
     } catch (error) {
+      // Connectors consumes the pending flow before exchanging the one-time code. Even if
+      // the network response is lost, replaying this flow cannot safely complete it.
+      oauthFlow.value = undefined;
       connectionError.value = errorMessage(error);
       throw error;
     }

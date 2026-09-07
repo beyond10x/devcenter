@@ -4,6 +4,7 @@ import { HttpResponse, http } from "msw";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import type { ConnectorProviderDescription } from "@/api/client";
 import ConnectionsView from "@/features/connections/ConnectionsView.vue";
+import { useWorkspaceStore } from "@/stores/workspace";
 import { server } from "./setup";
 
 vi.mock("vue-router", () => ({
@@ -90,6 +91,81 @@ describe("curated connection recovery", () => {
     vi.useRealTimers();
     vi.restoreAllMocks();
   });
+
+  it.each([
+    [429, "claude_connection_rate_limited", "rate limiting"],
+    [410, "claude_connection_flow_expired", "already submitted"],
+    [503, "claude_connection_unavailable", "service was unavailable"],
+    [422, "claude_connection_refused", "authorization was refused"],
+  ])(
+    "recovers from Claude completion HTTP %i without revoking saved authorization",
+    async (status, code, message) => {
+      useProviderHandlers();
+      vi.spyOn(window, "open").mockReturnValue(null);
+      let starts = 0;
+      let revokes = 0;
+      const submitted: unknown[] = [];
+      server.use(
+        http.get("/api/connectors/claude-code", () =>
+          HttpResponse.json({ provider: "claude-code", connected: true }),
+        ),
+        http.delete("/api/connectors/claude-code", () => {
+          revokes += 1;
+          return HttpResponse.json({ provider: "claude-code", connected: false });
+        }),
+        http.post("/api/connectors/claude-code/oauth/start", () =>
+          HttpResponse.json({
+            authorization_url: "https://provider.example.test/authorize",
+            flow_id: `flow-${String(++starts)}`,
+            expires_at: Math.floor(Date.now() / 1000) + 600,
+          }),
+        ),
+        http.post("/api/connectors/claude-code/oauth/complete", async ({ request }) => {
+          submitted.push(await request.json());
+          return submitted.length === 1
+            ? HttpResponse.json({ code }, { status })
+            : HttpResponse.json({ provider: "claude-code", connected: true });
+        }),
+      );
+      const pinia = createPinia();
+      const workspace = useWorkspaceStore(pinia);
+      await workspace.loadConnection();
+      const wrapper = mount(ConnectionsView, {
+        props: { embedded: true },
+        global: { plugins: [pinia] },
+      });
+      await flushPromises();
+      const reconnect = () => {
+        const button = wrapper
+          .findAll(".featured button")
+          .find((candidate) => candidate.text().includes("Reconnect Claude"));
+        if (!button) throw new Error("Reconnect action missing");
+        return button;
+      };
+      await reconnect().trigger("click");
+      await flushPromises();
+      await wrapper.get("#oauth-code").setValue("  synthetic-code#synthetic-state  \n");
+      await wrapper.get(".oauth-form").trigger("submit");
+      await flushPromises();
+      expect(wrapper.get(".featured [role='alert']").text()).toContain(message);
+      expect(wrapper.find("#oauth-code").exists()).toBe(false);
+      expect(workspace.oauthFlow).toBeUndefined();
+      expect(workspace.connected).toBe(true);
+      await reconnect().trigger("click");
+      await flushPromises();
+      await wrapper.get("#oauth-code").setValue("new-code#new-state");
+      await wrapper.get(".oauth-form").trigger("submit");
+      await flushPromises();
+      expect(submitted).toEqual([
+        { flow_id: "flow-1", code: "synthetic-code#synthetic-state" },
+        { flow_id: "flow-2", code: "new-code#new-state" },
+      ]);
+      expect(revokes).toBe(0);
+      expect(wrapper.find(".featured [role='alert']").exists()).toBe(false);
+      expect(wrapper.text()).not.toContain("Ready for governed attempts");
+      wrapper.unmount();
+    },
+  );
 
   it("shows callability, recovery actions, and deployment setup requirements", async () => {
     useProviderHandlers();

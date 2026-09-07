@@ -189,6 +189,12 @@
           }
         },
         "responses": {
+        "410": {
+          "$ref": "#/components/responses/Problem"
+        },
+        "429": {
+          "$ref": "#/components/responses/Problem"
+        },
           "200": {
             "description": "Provider credentials accepted into connector custody",
             "headers": {
