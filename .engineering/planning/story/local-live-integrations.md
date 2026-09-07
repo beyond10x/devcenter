@@ -30,7 +30,7 @@ scope:
   path: frontend/src/features/connections
 - confidence: cited
   path: frontend/src/features/connectors
-revision: 8
+revision: 9
 ---
 ## Outcome
 
@@ -60,3 +60,9 @@ The local CLI now retains explicit fixture/live selection, preserves private pro
 Full source checks passed: frontend formatting/lint/types/unit/build, generated API consistency, browser regression, root Rust fmt/clippy/tests, composed Connector fmt/clippy/tests, chart checks, version and leak checks. Actual local agent/profile lifecycle checks passed, and the provider forms opened through the real Connector. The generic catalog form now consumes credential-specific guidance from upstream candidate 129aece1ef6ae3717229cf1505a40106cdee92c1, whose full upstream gate passed. Browser verification of that latest form image is pending.
 
 Actual reads from all configured external providers remain blocked by missing normal authorization. Generic catalog service-account credentials currently have only the principal-owned Connect Session path; the existing administrative provisioning endpoint cannot provision them. This is an explicit remaining gap for deployment-managed setup, not a credential supplied by a URL binding. Real model acceptance also remains incomplete: a complete conversation run passed once, but a later composed run received a terminal provider refusal with partial output. The separately gated provider-diagnostic candidate is being composed; no refusal has been suppressed or counted as success. No release or shared-environment promotion is ready.
+
+## Deployed candidate observations
+
+Actual headless browser checks passed for the corrected catalog credential forms: the configured observability provider shows its declared service-account-token field, SSO distinction and official setup link. The form contract applies generically to the selected catalog profile. This does not establish provider authorization or a successful external read.
+
+The separately published Agent Platform candidate now replays main-agent history as typed conversation roles. Its unchanged live conversation test still failed with provider refusal category reasoning_extraction. This remains incomplete acceptance. Programmatic catalog token acquisition through the existing owner-scoped Connect Session is being inspected as the smallest way to supply deployment-managed credentials without inventing shared authority.
