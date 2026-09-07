@@ -17,6 +17,8 @@ use crate::deployment::{DeploymentLock, validate_rendered};
 mod bootstrap;
 #[path = "local_build.rs"]
 mod build;
+#[path = "local_integrations.rs"]
+mod integrations;
 
 const LIVE_MODEL_ENDPOINT: &str = "https://api.anthropic.com/v1";
 
@@ -325,6 +327,7 @@ fn doctor(target: &Target) -> Result<()> {
 
 fn apply(args: &Apply) -> Result<()> {
     load_owned(&args.target.state)?;
+    build::invalidate_acceptance(&args.target.state)?;
     let values: serde_yaml::Value = serde_yaml::from_slice(&fs::read(&args.values)?)?;
     validate_local_origin(
         values["global"]["publicOrigin"]

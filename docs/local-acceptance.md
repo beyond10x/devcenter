@@ -1,8 +1,8 @@
 # Local deployment acceptance
 
-`devcenterctl local up` builds selected components and runs the actual Helm composition in a dedicated k3d cluster. It then checks normal Identity login, Connector credential custody and authorization, Git materialization, Files navigation, editor layout and edit/save/restore/reload, actual PTY input/output and termination, real Claude replies in main Agents, project chat and coding chat, and history pagination beyond the first page. A healthy pod alone does not pass acceptance.
+`devcenterctl local up` builds selected components and runs the actual Helm composition in a dedicated k3d cluster. It then checks normal Identity login, Connector credential custody and authorization, Git materialization, Files navigation, editor layout and edit/save/restore/reload, actual PTY input/output and termination, real Claude replies in main Agents, project chat and coding chat, history pagination beyond the first page, agent/profile editing and removal, and separate durable conversations with real model context isolation. A healthy pod alone does not pass acceptance.
 
-Claude authorization and model requests use the real provider. No synthetic model credential is inserted and the fixture server has no model route. Identity, Connectors, Secrets, Workspace, Substrate, Agent Platform and the BFF run their real service implementations. Only upstream OIDC and the Git forge remain local fixtures; their production integrations still require separate verification. Real provider errors fail local acceptance before promotion.
+Claude authorization and model requests use the real provider. No synthetic model credential is inserted and the fixture server has no model route. Identity, Connectors, Secrets, Workspace, Substrate, Agent Platform and the BFF run their real service implementations. Upstream OIDC remains a local fixture. Choose `--connector-mode live` to preserve real provider configuration from the private deployment, or `--connector-mode fixture` for the Git forge fixture. The retained selection is recorded separately from the live model mode. A fixture pass does not establish real provider authentication or access; missing authorization and real provider errors leave live acceptance incomplete.
 
 ## Resume an existing development session
 
@@ -16,7 +16,7 @@ Set these paths from the existing handoff or your own explicit setup. Use an alr
   --state "$LOCAL_ACCEPTANCE_STATE" --source "$DEVCENTER_CHECKOUT"
 ```
 
-`local test` checks the running composition and runs the current checkout's browser acceptance suites. It does not build edited application source, reinstall the chart or repeat setup. It reuses `last-project.json` and its private storage-state file only for the recorded node. Keep the referenced storage-state file when cleaning old evidence directories. If the session or node is no longer valid, diagnose that refusal and renew setup through the normal flow.
+`local test` checks the running composition and runs the current checkout's browser acceptance suites. It does not build edited application source, reinstall the chart or repeat setup. It reuses `last-project.json` and its private storage-state file only for the recorded node and Connector mode. Keep the referenced storage-state file when cleaning old evidence directories. If the session or node is no longer valid, diagnose that refusal and renew setup through the normal flow.
 
 Choose the next action from what actually changed:
 
@@ -26,6 +26,7 @@ Choose the next action from what actually changed:
 | Acceptance assertions or browser readiness change | Run the changed acceptance against existing images with `local test`; preserve the real behavior assertions. |
 | Frontend or BFF application code changes | Run focused source checks, then `local up` with `--build server`. |
 | Composed Connector code or dependencies change | Run its locked source checks, then `local up` with `--build connectors`. Select both builds when both are affected. |
+| Agent Platform implementation changes | Run its source checks, then `local up --agent-platform-source "$AGENT_PLATFORM_CHECKOUT"`; the CLI builds and pins that local checkout without requiring a release. |
 | CLI orchestration, chart or composition values change | Rebuild the CLI if needed, then rerun `local up` with matching baseline inputs and only necessary application builds. |
 | Immutable released images need verification | Supply the released image selections in matching private baseline values and lock; omit application build flags to exercise those published images. Retain the documented fixture-CA requirements. |
 | Documentation or planning changes only | Check the text, links, planning store when changed, and required repository gates; retain prior runtime evidence without a new application build or deployment. |
@@ -88,6 +89,27 @@ The normal `connectors admin integrations` and `connectors admin credentials set
 
 The local fixture writes a provisioning manifest containing integration names, credential names and private value-file paths. The acceptance client discovers requirements, applies each item through the generic endpoint, and checks custody afterward. GitLab is one manifest entry, rather than a special credential route or environment-variable bypass. Provider protocol emulation remains a separate fixture concern. User-bound model credentials and user OAuth connections follow their own normal APIs.
 
+### Real integrations from the private deployment
+
+Use a matching private values/lock pair containing actual provider configuration. Values already rewritten for the Git fixture cannot be a live GitLab baseline. Preserve the retained local Identity image and CA when composing candidate images with those private provider declarations.
+
+```bash
+"$DEVCENTERCTL" local up \
+  --state "$LOCAL_ACCEPTANCE_STATE" --source "$DEVCENTER_CHECKOUT" \
+  --baseline-values "$PRIVATE_BASELINE_VALUES" --baseline-lock "$PRIVATE_BASELINE_LOCK" \
+  --docker-config "$PRIVATE_DOCKER_CONFIG" --k3s-image "$PINNED_K3S_IMAGE" \
+  --connector-mode live --repository-ref "$REAL_REPOSITORY_REF" \
+  --build server --github-token-file "$PRIVATE_GITHUB_TOKEN_FILE"
+```
+
+Complete GitLab, Slack and other provider acquisition through their normal Connector browser forms. Provider availability and endpoint bindings come from the private deployment; enabling live mode does not manufacture credentials or override grants. Optional `--provisioning-file "$PRIVATE_PROVISIONING_MANIFEST"` supplies the existing generic administrative credential flow for integrations that declare administrative requirements. It never substitutes a model credential. Without this option no administrative credential write is attempted in live mode.
+
+`integrations.local.json` retains the selected mode, repository reference and optional manifest path. Omitted options reuse them. Explicitly changing modes clears the previous mode's manifest and repository selection. Live mode never imports the fixture provisioning manifest. Preparation, application and test attempts invalidate previous acceptance receipts. Each new receipt records both `provider_mode: live` and `connector_mode: live|fixture`.
+
+The integration suite derives its required providers from the composed private configuration (native GitLab, Slack and Grafana sections and generic catalogue bindings). For each provider it searches admitted operations, obtains a fresh description, and invokes a read-only operation that accepts an empty input object. Missing authorization, a missing suitable read, or an upstream refusal fails that provider check. Evidence retains only statuses and Connector audit references, never provider response bodies. This is additional to repository materialization and model acceptance.
+
+The lifecycle suite uses the deployed APIs and browser UI, including real Claude turns to prove that a conversation remembers its own previous turn and that a new or cleared conversation does not. Test-created agents and profiles are removed through the normal APIs. Re-run browser acceptance against unchanged candidate images with `local test`; retain the private session file it references.
+
 ## Cleanup and iteration
 
 Follow a short feedback loop: reproduce one failing phase, make the bounded correction, run the relevant source checks, rebuild only changed components, and exercise the affected journey locally. Run the complete required source gate and local acceptance before publishing a changed application. After publication, verify the actual immutable images locally, render the matching private deployment inputs, promote through the existing deployment workflow and verify the remote journey. A compilation pass cannot establish service startup, authorization or browser usability.
@@ -97,6 +119,8 @@ Report which phase failed and what passed independently. The acceptance runner c
 For workspace automation, wait for an actual repository file such as the README before switching panes. An API Ready result can precede the browser's next poll; the initial explorer also contains a Load workspace placeholder. Hidden progress and network-idle checks alone do not prove the editor has initialized. Preserve the exact save/restore, fresh nonce reply and binary PTY assertions when correcting timing.
 
 Use `devcenterctl local doctor --state "$LOCAL_ACCEPTANCE_STATE"` to inspect node readiness and resource pressure. Use `devcenterctl local down --state "$LOCAL_ACCEPTANCE_STATE"` to remove only recorded local resources. This deletes the local test databases and workspaces. Logs, evidence and the protected node-profile verification files stay in the run directory. Keep the latter while its versioned AppArmor profile remains installed in the shared host kernel. A later `local up` creates a fresh installation from the same explicit inputs.
+
+Use a short, task-owned `TMPDIR` when the shared temporary filesystem is exhausted; Unix socket tests can fail if the directory path is too long. If a shared compiler wrapper still writes into an exhausted temporary directory, disable it for the affected command with `RUSTC_WRAPPER=` and bound compilation with `CARGO_BUILD_JOBS=4`. Keep source-test caches separate from image caches and preserve their provenance.
 
 Cold builds include dependency compilation and image pulls. Subsequent builds reuse caches; select only changed components, then rerun the same real-service journey. Keep failed evidence when diagnosing regressions. Remove ephemeral build credentials after use, and review specific inactive build caches before reclaiming space. Avoid broad volume or system pruning.
 

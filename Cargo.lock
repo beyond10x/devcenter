@@ -15,8 +15,8 @@ dependencies = [
 
 [[package]]
 name = "agent-platform-client"
-version = "0.6.7"
-source = "git+https://github.com/beyond10x/agent-platform.git?tag=0.6.7#5ddb427ddde49bec2dbff4815096069982af48a0"
+version = "0.6.8"
+source = "git+https://github.com/beyond10x/agent-platform.git?rev=b14cb0957f1e824a3de6425078692137b02fd01a#b14cb0957f1e824a3de6425078692137b02fd01a"
 dependencies = [
  "agent-platform-core",
  "reqwest 0.13.4",
@@ -28,8 +28,8 @@ dependencies = [
 
 [[package]]
 name = "agent-platform-core"
-version = "0.6.7"
-source = "git+https://github.com/beyond10x/agent-platform.git?tag=0.6.7#5ddb427ddde49bec2dbff4815096069982af48a0"
+version = "0.6.8"
+source = "git+https://github.com/beyond10x/agent-platform.git?rev=b14cb0957f1e824a3de6425078692137b02fd01a#b14cb0957f1e824a3de6425078692137b02fd01a"
 dependencies = [
  "agentide-contracts 0.2.1",
  "schemars 0.8.22",
@@ -3757,7 +3757,7 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "32497e9a4c7b38532efcdebeef879707aa9f794296a4f0244f6f69e9bc8574bd"
 dependencies = [
  "fastrand",
- "getrandom 0.4.3",
+ "getrandom 0.3.4",
  "once_cell",
  "rustix",
  "windows-sys 0.61.2",

@@ -69,6 +69,8 @@ use workspace_core::{
 };
 use zeroize::Zeroizing;
 
+mod agent_lifecycle;
+
 const SESSION_COOKIE: &str = "__Host-devcenter_session";
 const LOGIN_LIFETIME_SECONDS: u64 = 10 * 60;
 const MAX_PENDING_LOGINS: usize = 1_024;
@@ -279,7 +281,7 @@ fn connection_routes() -> Router<AppState> {
         )
         .route(
             "/api/capability-profiles/{profile_id}",
-            axum::routing::patch(update_capability_profile),
+            axum::routing::patch(update_capability_profile).delete(agent_lifecycle::delete_profile),
         )
 }
 
@@ -833,6 +835,7 @@ async fn legacy_connections() -> Redirect {
 
 fn agent_routes() -> Router<AppState> {
     Router::new()
+        .merge(agent_lifecycle::routes())
         .route("/api/agents", get(list_agents).post(create_managed_agent))
         .route(
             "/api/agents/{agent_id}/tasks",
@@ -4219,7 +4222,50 @@ async fn list_capabilities(State(state): State<AppState>, headers: HeaderMap) ->
     {
         Ok(envelope) => match envelope.response {
             Some(operation::OperationResult::Search { operations }) => {
-                confidential_json(operations)
+                let mut capabilities = Vec::with_capacity(operations.len());
+                for summary in operations {
+                    let described = connectors
+                        .operation(
+                            access.credential.expose_at_authorization_boundary(),
+                            &context,
+                            operation::OperationRequest::Describe(operation::DescribeRequest {
+                                operation_ref: summary.operation_ref.clone(),
+                            }),
+                        )
+                        .await;
+                    let (supported, reason) = match described {
+                        Ok(envelope) => match envelope.response {
+                            Some(operation::OperationResult::Describe(description))
+                                if agent_platform_core::model_input_schema_supported(
+                                    &description.input_schema,
+                                ) =>
+                            {
+                                (true, None)
+                            }
+                            Some(operation::OperationResult::Describe(_)) => (
+                                false,
+                                Some(
+                                    "This integration needs a complete input definition before agents can use this capability.",
+                                ),
+                            ),
+                            _ => (
+                                false,
+                                Some("This capability could not be checked. Refresh to try again."),
+                            ),
+                        },
+                        Err(_) => (
+                            false,
+                            Some("This capability could not be checked. Refresh to try again."),
+                        ),
+                    };
+                    let Ok(mut capability) = serde_json::to_value(summary) else {
+                        return unavailable("connectors_invalid_response");
+                    };
+                    capability["agent_supported"] = json!(supported);
+                    capability["agent_unavailable_reason"] = json!(reason);
+                    capabilities.push(capability);
+                }
+                confidential_json(capabilities)
             }
             _ => unavailable("connectors_invalid_response"),
         },
@@ -4374,7 +4420,10 @@ async fn capability_snapshot(
         .map_err(|_| unavailable("identity_access_unavailable"))?;
     let context = connector_owner_context(state, authenticated);
     let mut descriptions = Vec::with_capacity(mappings.len());
-    for mapping in mappings {
+    for mapping in mappings
+        .iter()
+        .filter(|mapping| mapping.posture != CapabilityPosture::Deny)
+    {
         let envelope = connectors
             .operation(
                 access.credential.expose_at_authorization_boundary(),
@@ -4527,7 +4576,10 @@ async fn refresh_agent_capability_profile(
             .await
         {
             Ok(_) => return Ok(()),
-            Err(AgentPlatformError::Refused(409)) if attempt == 0 => {}
+            Err(
+                AgentPlatformError::Refused(409)
+                | AgentPlatformError::RefusedWithDetail { status: 409, .. },
+            ) if attempt == 0 => {}
             Err(error) => return Err(agent_platform_error(&error)),
         }
     }
@@ -4629,6 +4681,8 @@ async fn create_managed_agent(
 struct SubmitPrompt {
     prompt: String,
     idempotency_key: String,
+    #[serde(default)]
+    conversation_id: Option<String>,
 }
 
 #[derive(Serialize)]
@@ -4652,7 +4706,10 @@ struct AgentTaskSummary {
 fn agent_task_summary(task: Task) -> AgentTaskSummary {
     let (prompt, workspace_session_id, agentide_session_id) =
         match serde_json::from_value::<ConversationInput>(task.input.clone()) {
-            Ok(ConversationInput::ProjectConversation { prompt, .. }) => (prompt, None, None),
+            Ok(
+                ConversationInput::AgentConversation { prompt, .. }
+                | ConversationInput::ProjectConversation { prompt, .. },
+            ) => (prompt, None, None),
             Ok(ConversationInput::CodingSessionTurn {
                 prompt,
                 workspace_session_id,
@@ -4881,7 +4938,9 @@ async fn submit_prompt(
             &SubmitTask {
                 agent_id,
                 idempotency_key: request.idempotency_key,
-                input: json!({"prompt": request.prompt}),
+                input: if let Some(conversation_id) = request.conversation_id {
+                    json!({"kind":"agent_conversation","conversation_id":conversation_id,"prompt":request.prompt})
+                } else { json!({"prompt": request.prompt}) },
             },
         )
         .await
@@ -6097,6 +6156,33 @@ fn connector_error(error: &ConnectorsError, refused_code: &str) -> Response {
 
 fn agent_platform_error(error: &AgentPlatformError) -> Response {
     match error {
+        AgentPlatformError::RefusedWithDetail {
+            status,
+            code,
+            message,
+        } if matches!(*status, 409 | 422)
+            && matches!(
+                code.as_str(),
+                "active_work"
+                    | "capability_profile_in_use"
+                    | "capability_refused"
+                    | "invalid_request"
+                    | "conflict"
+            ) =>
+        {
+            let mut response = (
+                StatusCode::from_u16(*status).unwrap_or(StatusCode::BAD_GATEWAY),
+                Json(json!({"code":format!("agent_platform_{code}"),"message":message})),
+            )
+                .into_response();
+            response
+                .headers_mut()
+                .insert(header::CACHE_CONTROL, HeaderValue::from_static("no-store"));
+            response
+        }
+        AgentPlatformError::RefusedWithDetail { status, .. } => {
+            agent_platform_error(&AgentPlatformError::Refused(*status))
+        }
         AgentPlatformError::Refused(401) => problem(
             StatusCode::BAD_GATEWAY,
             "agent_platform_authentication_refused",
@@ -6325,6 +6411,88 @@ mod tests {
             response.headers().get(header::CACHE_CONTROL).unwrap(),
             "public, max-age=31536000, immutable"
         );
+    }
+
+    #[tokio::test]
+    async fn lifecycle_routes_require_authentication_and_origin_before_upstream_access() {
+        for (method, path, body) in [
+            ("GET", "/api/agents/agent-one", ""),
+            (
+                "PATCH",
+                "/api/agents/agent-one",
+                r#"{"name":"New name","instructions":"Help","model":"model","expected_active_revision":1}"#,
+            ),
+            ("DELETE", "/api/agents/agent-one", ""),
+            ("DELETE", "/api/capability-profiles/profile-one", ""),
+            ("GET", "/api/agents/agent-one/conversations", ""),
+            (
+                "POST",
+                "/api/agents/agent-one/conversations",
+                r#"{"title":"New conversation"}"#,
+            ),
+            (
+                "PATCH",
+                "/api/agents/agent-one/conversations/conversation-one",
+                r#"{"title":"Renamed","expected_revision":1}"#,
+            ),
+            (
+                "DELETE",
+                "/api/agents/agent-one/conversations/conversation-one",
+                r#"{"expected_revision":1}"#,
+            ),
+            (
+                "POST",
+                "/api/agents/agent-one/conversations/conversation-one/clear",
+                r#"{"expected_revision":1}"#,
+            ),
+            (
+                "GET",
+                "/api/agents/agent-one/conversations/conversation-one/tasks",
+                "",
+            ),
+        ] {
+            let application = test_router(
+                devcenter_auth::Authentication::development_bearer("identity_session_v1_lifecycle")
+                    .unwrap(),
+            );
+            let response = application
+                .clone()
+                .oneshot(
+                    Request::builder()
+                        .method(method)
+                        .uri(path)
+                        .header(header::CONTENT_TYPE, "application/json")
+                        .header(header::ORIGIN, "https://devcenter.example.invalid")
+                        .body(Body::from(body))
+                        .unwrap(),
+                )
+                .await
+                .unwrap();
+            assert_eq!(
+                response.status(),
+                StatusCode::UNAUTHORIZED,
+                "{method} {path}"
+            );
+            if method != "GET" {
+                let response = application
+                    .oneshot(
+                        Request::builder()
+                            .method(method)
+                            .uri(path)
+                            .header(header::CONTENT_TYPE, "application/json")
+                            .header(
+                                header::COOKIE,
+                                format!("{SESSION_COOKIE}=identity_session_v1_lifecycle"),
+                            )
+                            .header(header::ORIGIN, "https://elsewhere.example.invalid")
+                            .body(Body::from(body))
+                            .unwrap(),
+                    )
+                    .await
+                    .unwrap();
+                assert_eq!(response.status(), StatusCode::FORBIDDEN, "{method} {path}");
+            }
+        }
     }
 
     #[tokio::test]

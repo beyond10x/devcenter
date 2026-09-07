@@ -2,16 +2,19 @@
 import { Bot, X } from "@lucide/vue";
 import { nextTick, onBeforeUnmount, onMounted, ref } from "vue";
 import { z } from "zod";
-import { errorMessage } from "@/api/client";
+import { api, errorMessage } from "@/api/client";
 import { useWorkspaceStore } from "@/stores/workspace";
 
 const emit = defineEmits<{ close: [] }>();
+const props = defineProps<{ agentId?: string }>();
 const workspace = useWorkspaceStore();
 const name = ref("");
 const instructions = ref("");
 const model = ref("claude-opus-5");
 const capabilityProfileId = ref("");
 const submitting = ref(false);
+const loading = ref(Boolean(props.agentId));
+const expectedRevision = ref<number | null>(null);
 const formError = ref("");
 const nameField = ref<HTMLInputElement>();
 
@@ -36,7 +39,12 @@ async function submit() {
   }
   submitting.value = true;
   try {
-    await workspace.createAgent(parsed.data);
+    if (props.agentId)
+      await workspace.updateAgent(props.agentId, {
+        ...parsed.data,
+        expected_active_revision: expectedRevision.value,
+      });
+    else await workspace.createAgent(parsed.data);
     emit("close");
   } catch (error) {
     formError.value = errorMessage(error);
@@ -52,7 +60,22 @@ function onKeydown(event: KeyboardEvent) {
 onMounted(() => {
   document.addEventListener("keydown", onKeydown);
   void nextTick(() => nameField.value?.focus());
+  if (props.agentId) void loadAgent(props.agentId);
 });
+
+async function loadAgent(id: string) {
+  try {
+    const detail = await api.agentDetails(id);
+    name.value = detail.agent.name;
+    instructions.value = detail.spec?.instructions ?? "";
+    model.value = detail.spec?.model ?? "claude-opus-5";
+    capabilityProfileId.value = detail.spec?.capability_profile_id ?? "";
+    expectedRevision.value = detail.agent.active_revision ?? null;
+    loading.value = false;
+  } catch (error) {
+    formError.value = errorMessage(error);
+  }
+}
 onBeforeUnmount(() => {
   document.removeEventListener("keydown", onKeydown);
 });
@@ -64,8 +87,10 @@ onBeforeUnmount(() => {
       <header class="dialog-header">
         <span class="dialog-icon"><Bot :size="22" /></span>
         <div>
-          <p class="eyebrow">New agent</p>
-          <h2 id="new-agent-title">Define a governed worker</h2>
+          <p class="eyebrow">{{ agentId ? "Edit agent" : "New agent" }}</p>
+          <h2 id="new-agent-title">
+            {{ agentId ? "Update your agent" : "Define a governed worker" }}
+          </h2>
         </div>
         <button
           class="icon-button"
@@ -78,6 +103,7 @@ onBeforeUnmount(() => {
         </button>
       </header>
       <form class="form-stack" @submit.prevent="submit">
+        <p v-if="loading && !formError" role="status">Loading agent…</p>
         <div class="field">
           <label for="agent-name">Name</label>
           <input
@@ -123,8 +149,8 @@ onBeforeUnmount(() => {
           <button class="button quiet" type="button" :disabled="submitting" @click="emit('close')">
             Cancel
           </button>
-          <button class="button primary" type="submit" :disabled="submitting">
-            {{ submitting ? "Creating agent…" : "Create and activate" }}
+          <button class="button primary" type="submit" :disabled="submitting || loading">
+            {{ submitting ? "Saving agent…" : agentId ? "Save changes" : "Create and activate" }}
           </button>
         </footer>
       </form>

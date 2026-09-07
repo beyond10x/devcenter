@@ -611,6 +611,24 @@ async function mockAuthenticatedWorkspace(
       await route.fulfill({ json: agents });
       return;
     }
+    const conversationsMatch = path.match(/^\/api\/agents\/([^/]+)\/conversations$/);
+    if (conversationsMatch) {
+      await route.fulfill({
+        json:
+          request.method() === "GET"
+            ? []
+            : {
+                id: "conversation-test",
+                agent_id: conversationsMatch[1],
+                created_by: "actor-1",
+                title: "Test conversation",
+                revision: 1,
+                created_at_ms: 1,
+                task_ids: [],
+              },
+      });
+      return;
+    }
     const agentTasksMatch = path.match(/^\/api\/agents\/([^/]+)\/tasks$/);
     if (agentTasksMatch && request.method() === "GET") {
       await route.fulfill({
@@ -1771,7 +1789,10 @@ test("makes capability posture explicit and applies bulk changes atomically", as
 
   await page.getByRole("button", { name: "Allow all" }).click();
   await expect(
-    page.getByRole("status").filter({ hasText: "All 3 capabilities are now allowed." }),
+    page.getByRole("status").filter({
+      hasText:
+        "Available capabilities are enabled. Required approvals are preserved; unavailable capabilities stay denied.",
+    }),
   ).toBeVisible();
   await expect(page.getByText("3 allowed", { exact: true })).toBeVisible();
   await expect(gitLabCapability.getByRole("button", { name: "Allow" })).toHaveAttribute(
@@ -1781,7 +1802,7 @@ test("makes capability posture explicit and applies bulk changes atomically", as
 
   await page.getByRole("button", { name: "Deny all" }).click();
   await expect(
-    page.getByRole("status").filter({ hasText: "All 3 capabilities are now denied." }),
+    page.getByRole("status").filter({ hasText: "All visible capabilities are now denied." }),
   ).toBeVisible();
   await expect(page.getByText("3 denied", { exact: true })).toBeVisible();
   const accessibility = await new AxeBuilder({ page }).withTags(["wcag2a", "wcag2aa"]).analyze();
@@ -2058,4 +2079,49 @@ test("a previously refused workspace offers a route back to project Files", asyn
   await page.getByRole("link", { name: "Return to project", exact: true }).click();
   await expect(page).toHaveURL(`/projects/${project.id}`);
   await expect(page.getByRole("button", { name: "files", exact: true })).toBeVisible();
+});
+
+test("shows an incomplete attempt's reason alongside its partial output", async ({ page }) => {
+  await mockAuthenticatedWorkspace(page);
+  await page.route("**/api/agents/agent-release/tasks", async (route) => {
+    if (route.request().method() === "GET") {
+      await route.fulfill({ json: [] });
+      return;
+    }
+    await route.fulfill({
+      status: 202,
+      json: {
+        id: "task-partial",
+        agent_id: "agent-release",
+        attempt_id: "attempt-partial",
+        status: "accepted",
+        prompt: "Check the incomplete response",
+        accepted_at_ms: 1,
+      },
+    });
+  });
+  await page.route("**/api/tasks/task-partial/events", (route) =>
+    route.fulfill({
+      contentType: "text/event-stream",
+      body: [
+        { kind: "text_delta", text: "Partial answer" },
+        {
+          kind: "failed",
+          failure: {
+            code: "harness_incomplete",
+            message: "The provider stopped before finishing.",
+          },
+        },
+      ]
+        .map((event) => `event: task\ndata: ${JSON.stringify({ event })}\n\n`)
+        .join(""),
+    }),
+  );
+  await page.goto("/agents/agent-release");
+  await page.getByPlaceholder("Message this agent…").fill("Check the incomplete response");
+  await page.getByRole("button", { name: "Send", exact: true }).click();
+  await expect(page.getByText("Partial answer", { exact: true })).toBeVisible();
+  await expect(
+    page.getByRole("alert").filter({ hasText: "The provider stopped before finishing." }),
+  ).toBeVisible();
 });

@@ -1,4 +1,5 @@
 //! Cached local builds and the complete acceptance cycle.
+use super::integrations::{Options as IntegrationOptions, Selection as IntegrationSelection};
 use super::{
     Apply, Create, LIVE_MODEL_ENDPOINT, Target, bootstrap, capture, container_id, create, doctor,
     kube, load_owned, private_file, write_private,
@@ -14,6 +15,8 @@ use std::{fs, os::unix::fs::PermissionsExt, path::Path, path::PathBuf, process::
 #[derive(Debug, Args)]
 pub struct Up {
     #[command(flatten)]
+    integrations: IntegrationOptions,
+    #[command(flatten)]
     target: Target,
     #[arg(long)]
     source: PathBuf,
@@ -24,6 +27,9 @@ pub struct Up {
     /// Modified Identity checkout; omitted to use the pinned baseline image.
     #[arg(long)]
     identity_source: Option<PathBuf>,
+    /// Modified Agent Platform checkout; omitted to use the pinned baseline image.
+    #[arg(long)]
+    agent_platform_source: Option<PathBuf>,
     /// Components whose current checkout should be built. Others retain their baseline digest.
     #[arg(long, value_parser=["server","connectors"])]
     build: Vec<String>,
@@ -108,6 +114,7 @@ pub fn up(args: &Up) -> Result<()> {
     let (identity, connectors) = candidates(args, &baseline)?;
     forwarder(args, &provider, &mut infrastructure)?;
     bootstrap::prepare(&bootstrap::Prepare {
+        integrations: args.integrations.clone(),
         target: Target {
             state: state.clone(),
         },
@@ -118,7 +125,10 @@ pub fn up(args: &Up) -> Result<()> {
         provider_image: provider,
     })?;
     if args.build.iter().any(|c| c == "server") {
-        select_server(state)?;
+        select_candidate(state, "server", "devcenter")?;
+    }
+    if args.agent_platform_source.is_some() {
+        select_candidate(state, "agent-platform", "agent-platform")?;
     }
     capture(
         state,
@@ -170,6 +180,7 @@ fn candidates(args: &Up, baseline: &Value) -> Result<(String, String)> {
         )?;
         identity = push(args, tag)?;
     }
+    agent_platform_candidate(args)?;
     let mut connectors = image(&baseline["components"]["connectors"]["image"])?;
     for component in &args.build {
         let token = args
@@ -209,6 +220,66 @@ fn candidates(args: &Up, baseline: &Value) -> Result<(String, String)> {
         }
     }
     Ok((identity, connectors))
+}
+
+fn agent_platform_candidate(args: &Up) -> Result<()> {
+    let state = &args.target.state;
+    if let Some(source) = &args.agent_platform_source {
+        let token = args
+            .github_token_file
+            .as_ref()
+            .context("Agent Platform builds require --github-token-file")?;
+        private_file(token)?;
+        let sha = capture(
+            state,
+            "agent-platform-source",
+            Command::new("git")
+                .arg("-C")
+                .arg(source)
+                .args(["rev-parse", "HEAD"]),
+        )?;
+        let sha = String::from_utf8(sha)?.trim().to_owned();
+        let dirty = capture(
+            state,
+            "agent-platform-changes",
+            Command::new("git")
+                .arg("-C")
+                .arg(source)
+                .args(["status", "--porcelain"]),
+        )?;
+        let tag = "localhost:15000/agent-platform:candidate";
+        capture(
+            state,
+            "build-agent-platform",
+            docker(args)
+                .args([
+                    "buildx",
+                    "build",
+                    "--builder",
+                    &args.builder,
+                    "--load",
+                    "-t",
+                    tag,
+                    "--build-arg",
+                    &format!("SOURCE_SHA={sha}"),
+                    "--secret",
+                    &format!("id=github_token,src={}", token.display()),
+                ])
+                .arg(source),
+        )?;
+        let image = push(args, tag)?;
+        write_private(
+            &state.join("agent-platform-candidate.txt"),
+            image.as_bytes(),
+        )?;
+        write_private(
+            &state.join("agent-platform-source.json"),
+            &serde_json::to_vec(
+                &json!({"path":source,"commit":sha,"dirty":!dirty.is_empty(),"image":image}),
+            )?,
+        )?;
+    }
+    Ok(())
 }
 
 fn docker(args: &Up) -> Command {
@@ -478,13 +549,17 @@ fn install_profiles(state: &Path, image: &str) -> Result<()> {
     Ok(())
 }
 
-fn select_server(state: &Path) -> Result<()> {
-    let image = fs::read_to_string(state.join("server-candidate.txt"))?;
+fn select_candidate(state: &Path, candidate: &str, component: &str) -> Result<()> {
+    let image = fs::read_to_string(state.join(format!("{candidate}-candidate.txt")))?;
     let (repository, digest) = image
         .split_once('@')
         .context("candidate server digest missing")?;
     let mut values: Value = serde_yaml::from_slice(&fs::read(state.join("values.local.yaml"))?)?;
-    values["devcenter"]["image"] = json!({"repository":repository,"digest":digest});
+    if component == "devcenter" {
+        values["devcenter"]["image"] = json!({"repository":repository,"digest":digest});
+    } else {
+        values["components"][component]["image"] = json!({"repository":repository,"digest":digest});
+    }
     write_private(
         &state.join("values.local.yaml"),
         serde_yaml::to_string(&values)?.as_bytes(),
@@ -496,7 +571,7 @@ fn select_server(state: &Path) -> Result<()> {
         .and_then(toml::Value::as_table_mut)
         .context("deployment image lock missing")?
         .insert(
-            "devcenter".into(),
+            component.into(),
             toml::Value::try_from(
                 json!({"reference":repository,"digest":digest,"version":"local-candidate"}),
             )?,
@@ -517,17 +592,24 @@ fn browser(args: &Up) -> Result<()> {
     fs::create_dir(&evidence)?;
     acceptance_status(state, "not_completed", Some(&evidence))?;
     let owned = load_owned(state)?;
+    let integrations = IntegrationSelection::load(state)?;
     record_composition(state, &args.source, &args.build, &evidence)?;
     let previous = fs::read(state.join("last-project.json"))
         .ok()
         .and_then(|bytes| serde_json::from_slice::<Value>(&bytes).ok())
-        .filter(|value| value["node_id"] == owned.container_id);
+        .filter(|value| {
+            value["node_id"] == owned.container_id
+                && value["connector_mode"].as_str().unwrap_or("fixture")
+                    == integrations.mode.as_str()
+        });
     let spki = tls_spki(state)?;
     let mut failures = Vec::new();
     for spec in [
         "setup.spec.ts",
+        "integrations.spec.ts",
         "model.spec.ts",
         "history.spec.ts",
+        "lifecycle.spec.ts",
         "workspace.spec.ts",
     ] {
         let mut command = Command::new("pnpm");
@@ -545,12 +627,13 @@ fn browser(args: &Up) -> Result<()> {
             .env("NODE_EXTRA_CA_CERTS", state.join("ca.crt"))
             .env("DEVCENTER_LOCAL_TLS_SPKI", &spki)
             .env("DEVCENTER_PROVIDER_MODE", "live")
-            .env(
-                "DEVCENTER_PROVISIONING_FILE",
-                state.join("fixture-provisioning.json"),
-            )
             .env("DEVCENTER_ORIGIN", "https://devcenter.localhost:18443")
             .env("DEVCENTER_EVIDENCE_ROOT", &evidence);
+        integrations.browser(state, &mut command);
+        command.env(
+            "DEVCENTER_REQUIRED_INTEGRATIONS",
+            serde_json::to_string(&super::integrations::required_providers(state)?)?,
+        );
         if let Some(expected) = previous
             .as_ref()
             .and_then(|value| value["project_id"].as_str())
@@ -582,7 +665,7 @@ fn browser(args: &Up) -> Result<()> {
             write_private(
                 &state.join("last-project.json"),
                 &serde_json::to_vec(
-                    &json!({"node_id":owned.container_id,"project_id":project["id"],"storage_state":evidence.join("storage-state.json")}),
+                    &json!({"node_id":owned.container_id,"project_id":project["id"],"storage_state":evidence.join("storage-state.json"),"connector_mode":integrations.mode.as_str()}),
                 )?,
             )?;
             println!(
@@ -617,12 +700,17 @@ fn finish_acceptance(state: &Path, evidence: &Path, failures: &[&str]) -> Result
 }
 
 fn acceptance_status(state: &Path, result: &str, evidence: Option<&Path>) -> Result<()> {
+    let integrations = IntegrationSelection::load(state)?;
     write_private(
         &state.join("last-acceptance.json"),
         &serde_json::to_vec(
-            &json!({"result":result,"provider_mode":"live","evidence":evidence,"origin":"https://devcenter.localhost:18443"}),
+            &json!({"result":result,"provider_mode":"live","connector_mode":integrations.mode.as_str(),"evidence":evidence,"origin":"https://devcenter.localhost:18443"}),
         )?,
     )
+}
+
+pub(super) fn invalidate_acceptance(state: &Path) -> Result<()> {
+    acceptance_status(state, "not_completed", None)
 }
 
 fn record_composition(
@@ -631,6 +719,7 @@ fn record_composition(
     selected_builds: &[String],
     evidence: &Path,
 ) -> Result<()> {
+    let integrations = IntegrationSelection::load(state)?;
     let lock = crate::deployment::DeploymentLock::read(&state.join("deployment.local.lock.toml"))?;
     let mut admitted = lock
         .images
@@ -701,7 +790,7 @@ fn record_composition(
     write_private(
         &evidence.join("composition.json"),
         &serde_json::to_vec_pretty(
-            &json!({"running":running,"source":source,"selected_builds":selected_builds,"provider_mode":"live","model_endpoint":LIVE_MODEL_ENDPOINT}),
+            &json!({"running":running,"source":source,"selected_builds":selected_builds,"provider_mode":"live","connector_mode":integrations.mode.as_str(),"model_endpoint":LIVE_MODEL_ENDPOINT}),
         )?,
     )?;
     Ok(())
@@ -761,6 +850,8 @@ fn tls_spki(state: &Path) -> Result<String> {
 pub(super) fn test(args: &super::Test) -> Result<()> {
     let state = &args.target.state;
     let owned = load_owned(state)?;
+    invalidate_acceptance(state)?;
+    let integrations = IntegrationSelection::load(state)?;
     super::validate_local_origin(&args.origin)?;
     ensure!(
         owned.https_port == 18443
@@ -777,11 +868,23 @@ pub(super) fn test(args: &super::Test) -> Result<()> {
     acceptance_status(state, "not_completed", Some(&output))?;
     record_composition(state, &args.source, &[], &output)?;
     let mut failures = Vec::new();
-    for spec in ["model.spec.ts", "history.spec.ts", "workspace.spec.ts"] {
+    for spec in [
+        "integrations.spec.ts",
+        "model.spec.ts",
+        "history.spec.ts",
+        "lifecycle.spec.ts",
+        "workspace.spec.ts",
+    ] {
+        let mut command = Command::new("pnpm");
+        integrations.browser(state, &mut command);
+        command.env(
+            "DEVCENTER_REQUIRED_INTEGRATIONS",
+            serde_json::to_string(&super::integrations::required_providers(state)?)?,
+        );
         let result = capture(
             state,
             &format!("browser-{spec}"),
-            Command::new("pnpm")
+            command
                 .arg("--dir")
                 .arg(args.source.join("frontend"))
                 .args([
@@ -820,6 +923,11 @@ fn test_session(args: &super::Test, node_id: &str) -> Result<(PathBuf, String)> 
         &fs::read(args.target.state.join("last-project.json"))
             .context("run local up first, or provide --storage-state and --project")?,
     )?;
+    let integrations = IntegrationSelection::load(&args.target.state)?;
+    ensure!(
+        record["connector_mode"].as_str().unwrap_or("fixture") == integrations.mode.as_str(),
+        "saved project uses another Connector mode; run local up setup for the selected providers"
+    );
     ensure!(
         record["node_id"] == node_id,
         "saved setup belongs to a different node; run local up again"
@@ -997,7 +1105,7 @@ mod tests {
             b"[images.devcenter]\nversion = 'old'\n",
         )
         .unwrap();
-        select_server(state).unwrap();
+        select_candidate(state, "server", "devcenter").unwrap();
         let lock: toml::Value =
             toml::from_str(&fs::read_to_string(state.join("deployment.local.lock.toml")).unwrap())
                 .unwrap();

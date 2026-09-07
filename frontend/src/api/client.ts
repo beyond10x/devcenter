@@ -368,7 +368,12 @@ export interface Capability {
   effect: "read_only" | "mutating" | "destructive";
   approval: "not_required" | "required";
   connections: CapabilityConnection[];
+  agent_supported?: boolean;
+  agent_unavailable_reason?: string | null;
 }
+
+export type AgentConversation = components["schemas"]["AgentConversation"];
+export type AgentDetails = components["schemas"]["AgentDetails"];
 export interface CapabilityMapping {
   operation_ref: string;
   tool_name: string;
@@ -755,14 +760,53 @@ export const api = {
     }),
   disconnect: () => request<ConnectionStatus>("/api/connectors/claude-code", { method: "DELETE" }),
   agents: () => request<Agent[]>("/api/agents"),
+  agentDetails: (id: string) => request<AgentDetails>(`/api/agents/${encodeURIComponent(id)}`),
+  updateAgent: (id: string, input: CreateAgent & { expected_active_revision: number | null }) =>
+    request<Agent>(`/api/agents/${encodeURIComponent(id)}`, {
+      method: "PATCH",
+      body: JSON.stringify(input),
+    }),
+  deleteAgent: (id: string) =>
+    request<undefined>(`/api/agents/${encodeURIComponent(id)}`, { method: "DELETE" }),
+  deleteCapabilityProfile: (id: string) =>
+    request<undefined>(`/api/capability-profiles/${encodeURIComponent(id)}`, { method: "DELETE" }),
+  agentConversations: (id: string) =>
+    request<AgentConversation[]>(`/api/agents/${encodeURIComponent(id)}/conversations`),
+  createAgentConversation: (id: string, title: string) =>
+    request<AgentConversation>(`/api/agents/${encodeURIComponent(id)}/conversations`, {
+      method: "POST",
+      body: JSON.stringify({ title }),
+    }),
+  renameAgentConversation: (conversation: AgentConversation, title: string) =>
+    request<AgentConversation>(
+      `/api/agents/${encodeURIComponent(conversation.agent_id)}/conversations/${encodeURIComponent(conversation.id)}`,
+      {
+        method: "PATCH",
+        body: JSON.stringify({ title, expected_revision: conversation.revision }),
+      },
+    ),
+  deleteAgentConversation: (conversation: AgentConversation) =>
+    request<undefined>(
+      `/api/agents/${encodeURIComponent(conversation.agent_id)}/conversations/${encodeURIComponent(conversation.id)}`,
+      { method: "DELETE", body: JSON.stringify({ expected_revision: conversation.revision }) },
+    ),
+  clearAgentConversation: (conversation: AgentConversation) =>
+    request<AgentConversation>(
+      `/api/agents/${encodeURIComponent(conversation.agent_id)}/conversations/${encodeURIComponent(conversation.id)}/clear`,
+      { method: "POST", body: JSON.stringify({ expected_revision: conversation.revision }) },
+    ),
   agentTasks: (agentId: string) =>
     request<Task[]>(`/api/agents/${encodeURIComponent(agentId)}/tasks`),
   createAgent: (agent: CreateAgent) =>
     request<Agent>("/api/agents", { method: "POST", body: JSON.stringify(agent) }),
-  submitTask: (agentId: string, prompt: string) =>
+  submitTask: (agentId: string, prompt: string, conversationId?: string) =>
     request<Task>(`/api/agents/${encodeURIComponent(agentId)}/tasks`, {
       method: "POST",
-      body: JSON.stringify({ prompt, idempotency_key: crypto.randomUUID() }),
+      body: JSON.stringify({
+        prompt,
+        conversation_id: conversationId,
+        idempotency_key: crypto.randomUUID(),
+      }),
     }),
   submitCodingTurn: (sessionId: string, agentId: string, input: SubmitCodingTurn) =>
     request<Task>(
@@ -834,6 +878,19 @@ function encodeWorkspacePath(path: string): string {
 
 export function errorMessage(error: unknown): string {
   if (error instanceof ApiError) {
+    if (
+      [
+        "agent_platform_active_work",
+        "agent_platform_capability_profile_in_use",
+        "agent_platform_capability_refused",
+        "agent_platform_invalid_request",
+        "agent_platform_conflict",
+      ].includes(error.code)
+    ) {
+      const details = error.details as { message?: unknown } | undefined;
+      if (typeof details?.message === "string" && details.message.length <= 2048)
+        return details.message;
+    }
     return FRIENDLY_ERRORS[error.code] ?? `The request was refused (${error.code}).`;
   }
   return "Devcenter could not reach the service. Try again.";

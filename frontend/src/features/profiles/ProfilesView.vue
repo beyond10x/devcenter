@@ -5,6 +5,7 @@ import {
   CircleAlert,
   CircleOff,
   Plus,
+  Trash2,
   RadioTower,
   RefreshCw,
   ShieldAlert,
@@ -22,6 +23,7 @@ import {
   type CapabilityProfile,
 } from "@/api/client";
 import { useWorkspaceStore } from "@/stores/workspace";
+import ConfirmDialog from "@/components/ConfirmDialog.vue";
 
 const workspace = useWorkspaceStore();
 const route = useRoute();
@@ -40,6 +42,10 @@ const createPreset = ref<"guarded" | "read_only" | "empty">("guarded");
 const editingName = ref("");
 const error = ref("");
 const notice = ref("");
+const deleting = ref<CapabilityProfile>();
+const unavailableCount = computed(
+  () => capabilities.value.filter((item) => item.agent_supported === false).length,
+);
 const postureOptions: { value: CapabilityPosture; label: string }[] = [
   { value: "allow", label: "Allow" },
   { value: "approval_required", label: "Approval" },
@@ -75,10 +81,21 @@ function toolName(operationRef: string): string {
     .replace(/^_+|_+$/g, "");
 }
 
-function mapping(capability: Capability, posture: CapabilityPosture): CapabilityMapping {
-  const existing = selected.value?.mappings.find(
-    (item) => item.operation_ref === capability.operation_ref,
-  );
+function mapping(
+  capability: Capability,
+  posture: CapabilityPosture,
+  preserveExisting = true,
+): CapabilityMapping {
+  const existing = preserveExisting
+    ? selected.value?.mappings.find((item) => item.operation_ref === capability.operation_ref)
+    : undefined;
+  if (capability.agent_supported === false) posture = "deny";
+  if (
+    posture === "allow" &&
+    capability.effect !== "read_only" &&
+    capability.approval !== "required"
+  )
+    posture = "approval_required";
   return {
     ...existing,
     operation_ref: capability.operation_ref,
@@ -131,7 +148,7 @@ async function createProfile() {
       if (createPreset.value === "guarded" && capability.effect !== "read_only") {
         posture = "approval_required";
       }
-      return mapping(capability, posture);
+      return mapping(capability, posture, false);
     });
     const audience = canManageTenantProfiles.value ? createAudience.value : "personal";
     const profile = await api.createCapabilityProfile(name, audience, mappings);
@@ -167,6 +184,29 @@ async function renameProfile() {
   }
 }
 
+async function deleteProfile() {
+  const profile = deleting.value;
+  if (!profile) return;
+  mutating.value = true;
+  error.value = "";
+  try {
+    await api.deleteCapabilityProfile(profile.id);
+    profiles.value = profiles.value.filter((item) => item.id !== profile.id);
+    workspace.capabilityProfiles = profiles.value;
+    if (selectedId.value === profile.id) selectedId.value = profiles.value[0]?.id;
+    await router.replace({
+      path: "/profiles",
+      query: selectedId.value ? { profile: selectedId.value } : {},
+    });
+    deleting.value = undefined;
+    notice.value = "Capability profile deleted.";
+  } catch (cause) {
+    error.value = errorMessage(cause);
+  } finally {
+    mutating.value = false;
+  }
+}
+
 async function setPosture(capability: Capability, posture: CapabilityPosture) {
   await updatePostures(
     (item) => (item.operation_ref === capability.operation_ref ? posture : postureFor(item)),
@@ -177,7 +217,9 @@ async function setPosture(capability: Capability, posture: CapabilityPosture) {
 async function setAllPostures(posture: Extract<CapabilityPosture, "allow" | "deny">) {
   await updatePostures(
     () => posture,
-    `All ${String(capabilities.value.length)} capabilities are now ${posture === "allow" ? "allowed" : "denied"}.`,
+    posture === "allow"
+      ? "Available capabilities are enabled. Required approvals are preserved; unavailable capabilities stay denied."
+      : "All visible capabilities are now denied.",
   );
 }
 
@@ -191,7 +233,11 @@ async function updatePostures(
   error.value = "";
   notice.value = "";
   try {
-    const mappings = capabilities.value.map((item) => mapping(item, resolvePosture(item)));
+    const visible = new Set(capabilities.value.map((item) => item.operation_ref));
+    const mappings = [
+      ...profile.mappings.filter((item) => !visible.has(item.operation_ref)),
+      ...capabilities.value.map((item) => mapping(item, resolvePosture(item))),
+    ];
     const changed = await api.updateCapabilityProfile(profile, mappings);
     profiles.value = profiles.value.map((item) => (item.id === changed.id ? changed : item));
     workspace.capabilityProfiles = profiles.value;
@@ -242,7 +288,9 @@ watch(
       </div>
     </header>
 
-    <p v-if="error" class="form-error" role="alert"><CircleAlert :size="16" /> {{ error }}</p>
+    <p v-if="error && !showCreate && !deleting" class="form-error" role="alert">
+      <CircleAlert :size="16" /> {{ error }}
+    </p>
     <p v-if="notice" class="publication-notice" role="status"><Check :size="16" /> {{ notice }}</p>
 
     <section v-if="!profiles.length && !loading" class="publication-empty">
@@ -311,6 +359,17 @@ watch(
           </div>
           <div class="profile-header-actions">
             <button
+              class="button danger-quiet small"
+              type="button"
+              :disabled="mutating"
+              @click="
+                error = '';
+                deleting = selected;
+              "
+            >
+              <Trash2 :size="15" /> Delete profile
+            </button>
+            <button
               class="button quiet small"
               type="button"
               @click="router.push({ path: '/publications', query: { profile: selected.id } })"
@@ -355,6 +414,10 @@ watch(
           <p>
             Allow exposes a capability while preserving any approval the Connector itself requires.
           </p>
+          <p v-if="unavailableCount">
+            {{ unavailableCount }} capabilities cannot currently be used by agents. They stay denied
+            when creating a profile or enabling all capabilities.
+          </p>
         </div>
         <div
           v-for="capability in capabilities"
@@ -365,6 +428,9 @@ watch(
           <div>
             <strong>{{ capability.title }}</strong>
             <span>{{ capability.operation_ref }} · {{ capability.effect.replace("_", " ") }}</span>
+            <small v-if="capability.agent_supported === false" class="capability-unavailable">{{
+              capability.agent_unavailable_reason
+            }}</small>
           </div>
           <div class="posture-control" :aria-label="`${capability.title} posture`">
             <button
@@ -374,7 +440,9 @@ watch(
               class="posture-button"
               :class="[option.value, { active: postureFor(capability) === option.value }]"
               :aria-pressed="postureFor(capability) === option.value"
-              :disabled="mutating"
+              :disabled="
+                mutating || (capability.agent_supported === false && option.value !== 'deny')
+              "
               @click="setPosture(capability, option.value)"
             >
               <Check v-if="postureFor(capability) === option.value" :size="13" />
@@ -388,6 +456,19 @@ watch(
       </main>
     </div>
 
+    <ConfirmDialog
+      v-if="deleting"
+      :title="`Delete ${deleting.name}?`"
+      description="Remove this capability profile. Profiles assigned to an active agent must be unassigned first; existing revision records are kept."
+      action="Delete profile"
+      :pending="mutating"
+      :error="error"
+      @close="
+        deleting = undefined;
+        error = '';
+      "
+      @confirm="deleteProfile"
+    />
     <div
       v-if="showCreate"
       class="dialog-layer"
@@ -430,6 +511,9 @@ watch(
               <option value="empty">Deny everything</option>
             </select>
             <small>You can review every operation before assigning this profile to an agent.</small>
+            <small v-if="unavailableCount"
+              >{{ unavailableCount }} unavailable capabilities will stay denied.</small
+            >
           </div>
           <div v-if="canManageTenantProfiles" class="field">
             <label for="profile-audience">Visibility</label>
@@ -450,14 +534,11 @@ watch(
             >
               Cancel
             </button>
-            <button
-              class="button primary"
-              type="submit"
-              :disabled="mutating || !capabilities.length"
-            >
+            <button class="button primary" type="submit" :disabled="mutating || loading">
               {{ mutating ? "Creating…" : "Create profile" }}
             </button>
           </footer>
+          <p v-if="error" class="form-error" role="alert">{{ error }}</p>
         </form>
       </section>
     </div>

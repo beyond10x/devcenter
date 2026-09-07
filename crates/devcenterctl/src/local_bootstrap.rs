@@ -1,5 +1,6 @@
 //! Private local deployment inputs. No upstream credentials are copied into this environment.
 
+use super::integrations::{Mode, Options, Selection};
 use super::{LIVE_MODEL_ENDPOINT, Target, capture, kube, load_owned, write_private};
 use anyhow::{Context, Result, ensure};
 use base64::{Engine, engine::general_purpose::STANDARD};
@@ -9,6 +10,8 @@ use std::{fs, path::Path, path::PathBuf, process::Command};
 
 #[derive(Debug, Args)]
 pub struct Prepare {
+    #[command(flatten)]
+    pub(super) integrations: Options,
     #[command(flatten)]
     pub(super) target: Target,
     #[arg(long)]
@@ -26,10 +29,12 @@ pub struct Prepare {
 pub fn prepare(args: &Prepare) -> Result<()> {
     let state = &args.target.state;
     let owned = load_owned(state)?;
+    super::build::invalidate_acceptance(state)?;
     let app = format!("https://devcenter.localhost:{}", owned.https_port);
     let provider = "https://provider.devcenter.localhost".to_owned();
     let baseline: Value = serde_yaml::from_slice(&fs::read(&args.baseline_values)?)?;
-    let mut values = local_values(&baseline, &app, &provider)?;
+    let integrations = Selection::select(state, &args.integrations)?;
+    let mut values = local_values(&baseline, &app, &provider, integrations.mode)?;
     let mut lock: toml::Value = toml::from_str(&fs::read_to_string(&args.baseline_lock)?)?;
     for (name, reference) in [
         ("identity", &args.identity_image),
@@ -62,16 +67,19 @@ pub fn prepare(args: &Prepare) -> Result<()> {
     )?;
     create_keys(state)?;
     create_repository(state)?;
-    write_private(
-        &state.join("gitlab-fixture-client-secret"),
-        b"local-gitlab-fixture-client-secret",
-    )?;
-    write_private(
-        &state.join("fixture-provisioning.json"),
-        &serde_json::to_vec(
-            &json!([{"integration":"gitlab","credential":"oauth_client_secret","value_file":"gitlab-fixture-client-secret"}]),
-        )?,
-    )?;
+    if integrations.mode == Mode::Fixture {
+        write_private(
+            &state.join("gitlab-fixture-client-secret"),
+            b"local-gitlab-fixture-client-secret",
+        )?;
+        write_private(
+            &state.join("fixture-provisioning.json"),
+            &serde_json::to_vec(
+                &json!([{"integration":"gitlab","credential":"oauth_client_secret","value_file":"gitlab-fixture-client-secret"}]),
+            )?,
+        )?;
+    }
+    integrations.save(state)?;
     write_private(
         &state.join("values.local.yaml"),
         serde_yaml::to_string(&values)?.as_bytes(),
@@ -101,7 +109,8 @@ pub fn prepare(args: &Prepare) -> Result<()> {
     configure_dns(state, owned.https_port)?;
     configure_token_review(state)?;
     println!(
-        "prepared local composition at {app}; model provider: live Claude; authorize at {app}/connectors?tab=connections"
+        "prepared local composition at {app}; model provider: live Claude; connectors: {}; authorize at {app}/connectors?tab=connections",
+        integrations.mode.as_str()
     );
     Ok(())
 }
@@ -121,7 +130,7 @@ fn immutable(image: &str) -> Result<(&str, &str)> {
 }
 
 #[allow(clippy::too_many_lines)] // The deployment overlay is kept together for review.
-fn local_values(baseline: &Value, app: &str, provider: &str) -> Result<Value> {
+fn local_values(baseline: &Value, app: &str, provider: &str, mode: Mode) -> Result<Value> {
     let mut values = baseline.clone();
     values["global"] = json!({"tenantId":"local-acceptance","publicOrigin":app,"imagePullSecrets":["github-container-registry"],"podLabels":{}});
     values["devcenter"]["identity"]["redirectUri"] = json!(format!("{app}/auth/sso/callback"));
@@ -185,22 +194,74 @@ fn local_values(baseline: &Value, app: &str, provider: &str) -> Result<Value> {
             .context("Connector config missing")?,
     )?;
     let mut config = original;
-    config
-        .as_table_mut()
-        .context("Connector config table")?
-        .remove("slack");
-    config["sip"] = toml::Value::try_from(json!({"enabled":false}))?;
-    config["kubernetes"] = toml::Value::try_from(json!({"enabled":false,"namespace_access":[]}))?;
-    config["tenant_id"] = toml::Value::String("local-acceptance".into());
-    config["module_tenant_ids"] =
-        toml::Value::Array(vec![toml::Value::String("local-acceptance".into())]);
-    config["identity"]["origin"] = toml::Value::String(app.into());
-    config["catalog"]["public_origin"] = toml::Value::String(format!("{app}/api/connectors/v1"));
-    config["gitlab"]["origin"] = toml::Value::String(provider.into());
-    config["gitlab"]["public_origin"] = toml::Value::String(format!("{app}/api/connectors/v1"));
-    config["gitlab"]["oauth_client_id"] = toml::Value::String("local-gitlab".into());
-    config["gitlab"]["oauth_redirect_uri"] =
-        toml::Value::String(format!("{app}/api/connectors/v1/oauth/gitlab/callback"));
+    if mode == Mode::Live {
+        let origin = config
+            .get("gitlab")
+            .and_then(|gitlab| gitlab.get("origin"))
+            .and_then(toml::Value::as_str);
+        ensure!(
+            origin.is_some_and(|origin| origin != provider),
+            "live integration mode needs the original private provider configuration, not a fixture baseline"
+        );
+    }
+    if mode == Mode::Fixture {
+        config
+            .as_table_mut()
+            .context("Connector config table")?
+            .remove("slack");
+        set_config(
+            &mut config,
+            &["gitlab", "origin"],
+            toml::Value::String(provider.into()),
+        )?;
+        set_config(
+            &mut config,
+            &["gitlab", "oauth_client_id"],
+            toml::Value::String("local-gitlab".into()),
+        )?;
+    } else if let Some(slack) = config.get_mut("slack") {
+        slack["public_origin"] = toml::Value::String(format!("{app}/api/connectors/v1"));
+    }
+    set_config(
+        &mut config,
+        &["sip"],
+        toml::Value::try_from(json!({"enabled":false}))?,
+    )?;
+    set_config(
+        &mut config,
+        &["kubernetes"],
+        toml::Value::try_from(json!({"enabled":false,"namespace_access":[]}))?,
+    )?;
+    set_config(
+        &mut config,
+        &["tenant_id"],
+        toml::Value::String("local-acceptance".into()),
+    )?;
+    set_config(
+        &mut config,
+        &["module_tenant_ids"],
+        toml::Value::Array(vec![toml::Value::String("local-acceptance".into())]),
+    )?;
+    set_config(
+        &mut config,
+        &["identity", "origin"],
+        toml::Value::String(app.into()),
+    )?;
+    set_config(
+        &mut config,
+        &["catalog", "public_origin"],
+        toml::Value::String(format!("{app}/api/connectors/v1")),
+    )?;
+    set_config(
+        &mut config,
+        &["gitlab", "public_origin"],
+        toml::Value::String(format!("{app}/api/connectors/v1")),
+    )?;
+    set_config(
+        &mut config,
+        &["gitlab", "oauth_redirect_uri"],
+        toml::Value::String(format!("{app}/api/connectors/v1/oauth/gitlab/callback")),
+    )?;
     connectors["configFiles"]["hosted.toml"] = json!(toml::to_string_pretty(&config)?);
     connectors["env"]["SSL_CERT_FILE"] = json!("/etc/local-trust/ca.crt");
     connectors["envFrom"] = json!([]);
@@ -234,6 +295,23 @@ fn local_values(baseline: &Value, app: &str, provider: &str) -> Result<Value> {
     values["connectorsGitFetch"]["tls"]["existingSecret"] = json!("devcenter-local-tls");
     values["connectorsGitFetch"]["trustRoots"]["existingSecret"] = json!("devcenter-local-trust");
     Ok(values)
+}
+
+fn set_config(config: &mut toml::Value, path: &[&str], value: toml::Value) -> Result<()> {
+    let (last, parents) = path.split_last().context("config path missing")?;
+    let mut current = config;
+    for key in parents {
+        current = current
+            .as_table_mut()
+            .context("config section must be a table")?
+            .entry((*key).to_owned())
+            .or_insert_with(|| toml::Value::Table(toml::Table::new()));
+    }
+    current
+        .as_table_mut()
+        .context("config section must be a table")?
+        .insert((*last).to_owned(), value);
+    Ok(())
 }
 
 fn set_argument(args: &mut Vec<Value>, flag: &str, value: &str) -> Result<()> {
@@ -633,6 +711,58 @@ fn configure_token_review(state: &Path) -> Result<()> {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn live_overlay_preserves_real_providers_and_rejects_fixture_baselines() {
+        let app = "https://devcenter.localhost:18443";
+        let fixture = "https://provider.devcenter.localhost";
+        let config = r#"
+[identity]
+origin = "https://identity.example.test"
+[catalog]
+public_origin = "https://app.example.test/api/connectors/v1"
+[catalog.bindings.grafana.endpoints]
+origin = "https://monitoring.example.test"
+[gitlab]
+origin = "https://git.example.test"
+oauth_client_id = "deployment-client"
+[slack]
+team_id = "workspace-test"
+public_origin = "https://app.example.test/api/connectors/v1"
+"#;
+        let baseline = json!({"components":{
+            "identity":{"env":{"IDENTITY_AUDIENCE_REGISTRY_JSON":"{\"access\":[]}"}},
+            "connectors":{"configFiles":{"hosted.toml":config}},
+            "agent-platform":{"args":["serve"]},
+            "aep-service":{"args":[]}, "workspace":{}
+        }});
+        let overlay = local_values(&baseline, app, fixture, Mode::Live).unwrap();
+        let actual: toml::Value = toml::from_str(
+            overlay["components"]["connectors"]["configFiles"]["hosted.toml"]
+                .as_str()
+                .unwrap(),
+        )
+        .unwrap();
+        assert_eq!(
+            actual["gitlab"]["origin"].as_str(),
+            Some("https://git.example.test")
+        );
+        assert_eq!(
+            actual["gitlab"]["oauth_client_id"].as_str(),
+            Some("deployment-client")
+        );
+        assert_eq!(actual["slack"]["team_id"].as_str(), Some("workspace-test"));
+        assert_eq!(
+            actual["slack"]["public_origin"].as_str(),
+            Some("https://devcenter.localhost:18443/api/connectors/v1")
+        );
+        assert_eq!(
+            actual["catalog"]["bindings"]["grafana"]["endpoints"]["origin"].as_str(),
+            Some("https://monitoring.example.test")
+        );
+        let fixture_overlay = local_values(&baseline, app, fixture, Mode::Fixture).unwrap();
+        assert!(local_values(&fixture_overlay, app, fixture, Mode::Live).is_err());
+    }
 
     #[test]
     fn repeated_local_overlay_replaces_endpoint_without_duplicate_flags() {

@@ -28,8 +28,8 @@ devcenter-http = { path = "crates/devcenter-http" }
 devcenter-mcp = { path = "crates/devcenter-mcp" }
 devcenter-store = { path = "crates/devcenter-store" }
 identity-client = { git = "https://github.com/beyond10x/identity.git", rev = "e3231bc34eb65695ba0486e1bbe3a0f1ec5b2a23" }
-agent-platform-client = { git = "https://github.com/beyond10x/agent-platform.git", tag = "0.6.7" }
-agent-platform-core = { git = "https://github.com/beyond10x/agent-platform.git", tag = "0.6.7" }
+agent-platform-client = { git = "https://github.com/beyond10x/agent-platform.git", rev = "b14cb0957f1e824a3de6425078692137b02fd01a" }
+agent-platform-core = { git = "https://github.com/beyond10x/agent-platform.git", rev = "b14cb0957f1e824a3de6425078692137b02fd01a" }
 # Agent Platform 0.6.7's public coding-turn type still names AgentIDE 0.2.1. Keep this exact
 # boundary aligned until Platform publishes a newer client; the hosted renderer and generated
 # AgentIDE service below consume the current 0.3.1 release independently.

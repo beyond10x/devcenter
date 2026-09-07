@@ -5,6 +5,8 @@ import {
   api,
   errorMessage,
   type Agent,
+  type AgentConversation,
+  type CreateAgent,
   type CapabilityProfile,
   type ClaudeOAuthStart,
   type IdentityProvider,
@@ -55,11 +57,20 @@ export const useWorkspaceStore = defineStore("workspace", () => {
   const drafts = ref<Record<string, string>>({});
   const runs = ref<Record<string, AgentRun>>({});
   const taskHistory = ref<Record<string, Task[]>>({});
+  const conversations = ref<Record<string, AgentConversation[]>>({});
+  const selectedConversationIds = ref<Record<string, string | undefined>>({});
   const connectionState = ref<LoadState>("idle");
   const connected = ref(false);
   const connectionError = ref("");
   const oauthFlow = ref<ClaudeOAuthStart>();
   const notice = ref("");
+  let sessionGeneration = 0;
+  const conversationGenerations = new Map<string, number>();
+  function changeConversations(agentId: string) {
+    const generation = (conversationGenerations.get(agentId) ?? 0) + 1;
+    conversationGenerations.set(agentId, generation);
+    return generation;
+  }
 
   const selectedAgent = computed(() =>
     agents.value.find((agent) => agent.id === selectedAgentId.value),
@@ -89,6 +100,18 @@ export const useWorkspaceStore = defineStore("workspace", () => {
 
   async function logout() {
     await api.logout();
+    sessionGeneration += 1;
+    streams.forEach((stream) => stream.close());
+    streams.clear();
+    conversationGenerations.clear();
+    conversations.value = {};
+    selectedConversationIds.value = {};
+    drafts.value = {};
+    runs.value = {};
+    taskHistory.value = {};
+    capabilityProfiles.value = [];
+    selectedAgentId.value = undefined;
+    oauthFlow.value = undefined;
     session.value = undefined;
     sessionState.value = "idle";
     agents.value = [];
@@ -186,9 +209,98 @@ export const useWorkspaceStore = defineStore("workspace", () => {
     const created = await api.createAgent(input);
     agents.value = [created, ...agents.value.filter((agent) => agent.id !== created.id)];
     selectedAgentId.value = created.id;
-    drafts.value[created.id] = "";
+
     notice.value = `${created.name} was created and activated.`;
     return created;
+  }
+
+  async function updateAgent(
+    id: string,
+    input: CreateAgent & { expected_active_revision: number | null },
+  ) {
+    const updated = await api.updateAgent(id, input);
+    agents.value = agents.value.map((agent) => (agent.id === id ? updated : agent));
+    notice.value = `${updated.name} was updated.`;
+    return updated;
+  }
+
+  async function deleteAgent(id: string) {
+    await api.deleteAgent(id);
+    changeConversations(id);
+    for (const key of Object.keys(drafts.value)) {
+      if (key.startsWith(`${id}:`)) Reflect.deleteProperty(drafts.value, key);
+    }
+    streams.get(id)?.close();
+    streams.delete(id);
+    agents.value = agents.value.filter((agent) => agent.id !== id);
+    Reflect.deleteProperty(taskHistory.value, id);
+    Reflect.deleteProperty(conversations.value, id);
+    Reflect.deleteProperty(selectedConversationIds.value, id);
+    Reflect.deleteProperty(runs.value, id);
+    if (selectedAgentId.value === id) selectedAgentId.value = agents.value[0]?.id;
+    notice.value = "Agent deleted.";
+  }
+
+  function conversationFor(agentId: string) {
+    return conversations.value[agentId]?.find(
+      (item) => item.id === selectedConversationIds.value[agentId],
+    );
+  }
+
+  async function loadConversations(agentId: string) {
+    const generation = changeConversations(agentId);
+    const owner = sessionGeneration;
+    const items = await api.agentConversations(agentId);
+    if (owner !== sessionGeneration || conversationGenerations.get(agentId) !== generation) return;
+    conversations.value[agentId] = items;
+    if (!items.some((item) => item.id === selectedConversationIds.value[agentId])) {
+      selectedConversationIds.value[agentId] = items.at(-1)?.id;
+    }
+  }
+
+  function selectConversation(agentId: string, id: string) {
+    if (conversations.value[agentId]?.some((item) => item.id === id))
+      selectedConversationIds.value[agentId] = id;
+  }
+
+  async function newConversation(agentId: string, title = "New conversation") {
+    const owner = sessionGeneration;
+    const item = await api.createAgentConversation(agentId, title);
+    if (owner !== sessionGeneration) throw new Error("Session changed. Sign in again.");
+    changeConversations(agentId);
+    conversations.value[agentId] = [...(conversations.value[agentId] ?? []), item];
+    selectedConversationIds.value[agentId] = item.id;
+    return item;
+  }
+
+  async function renameConversation(item: AgentConversation, title: string) {
+    const owner = sessionGeneration;
+    const updated = await api.renameAgentConversation(item, title);
+    if (owner !== sessionGeneration) return;
+    changeConversations(item.agent_id);
+    conversations.value[item.agent_id] = (conversations.value[item.agent_id] ?? []).map((entry) =>
+      entry.id === item.id ? updated : entry,
+    );
+  }
+
+  async function removeConversation(item: AgentConversation, clear = false) {
+    const owner = sessionGeneration;
+    const replacement = clear ? await api.clearAgentConversation(item) : undefined;
+    if (!clear) await api.deleteAgentConversation(item);
+    if (owner !== sessionGeneration) return;
+    changeConversations(item.agent_id);
+    conversations.value[item.agent_id] = (conversations.value[item.agent_id] ?? []).filter(
+      (entry) => entry.id !== item.id,
+    );
+    if (replacement) conversations.value[item.agent_id]?.push(replacement);
+    selectedConversationIds.value[item.agent_id] =
+      replacement?.id ?? conversations.value[item.agent_id]?.at(-1)?.id;
+    Reflect.deleteProperty(drafts.value, `${item.agent_id}:${item.id}`);
+  }
+
+  function conversationHistoryFor(agentId: string) {
+    const ids = new Set(conversationFor(agentId)?.task_ids ?? []);
+    return historyFor(agentId).filter((task) => ids.has(task.id));
   }
 
   function selectAgent(agentId: string) {
@@ -197,8 +309,11 @@ export const useWorkspaceStore = defineStore("workspace", () => {
   }
 
   async function loadAgentTasks(agentId: string) {
+    const owner = sessionGeneration;
+    const previous = taskHistory.value[agentId];
     try {
       const tasks = await api.agentTasks(agentId);
+      if (owner !== sessionGeneration || taskHistory.value[agentId] !== previous) return;
       taskHistory.value[agentId] = tasks;
       const active = [...tasks]
         .reverse()
@@ -228,11 +343,11 @@ export const useWorkspaceStore = defineStore("workspace", () => {
   }
 
   function draftFor(agentId: string): string {
-    return drafts.value[agentId] ?? "";
+    return drafts.value[`${agentId}:${selectedConversationIds.value[agentId] ?? "new"}`] ?? "";
   }
 
   function setDraft(agentId: string, value: string) {
-    drafts.value[agentId] = value;
+    drafts.value[`${agentId}:${selectedConversationIds.value[agentId] ?? "new"}`] = value;
   }
 
   function runFor(agentId: string): AgentRun {
@@ -240,12 +355,31 @@ export const useWorkspaceStore = defineStore("workspace", () => {
   }
 
   async function submitTask(agentId: string) {
+    if (
+      ["submitting", "accepted", "running", "awaiting_approval", "reconnecting"].includes(
+        runFor(agentId).status,
+      )
+    )
+      return;
+    const owner = sessionGeneration;
     const prompt = draftFor(agentId).trim();
     if (!prompt) return;
     runs.value[agentId] = { status: "submitting", output: "", error: "" };
     try {
-      const task = await api.submitTask(agentId, prompt);
-      drafts.value[agentId] = "";
+      const draftKey = `${agentId}:${selectedConversationIds.value[agentId] ?? "new"}`;
+      const conversation =
+        conversationFor(agentId) ?? (await newConversation(agentId, prompt.slice(0, 80)));
+      setDraft(agentId, prompt);
+      const task = await api.submitTask(agentId, prompt, conversation.id);
+      if (owner !== sessionGeneration) return;
+      drafts.value[draftKey] = "";
+      setDraft(agentId, "");
+      changeConversations(agentId);
+      const current = conversations.value[agentId]?.find((item) => item.id === conversation.id);
+      if (current && !current.task_ids.includes(task.id)) {
+        current.task_ids.push(task.id);
+        current.revision += 1;
+      }
       runs.value[agentId] = {
         status: "accepted",
         output: "",
@@ -255,6 +389,7 @@ export const useWorkspaceStore = defineStore("workspace", () => {
       taskHistory.value[agentId] = [...historyFor(agentId), task];
       streamTask(agentId, task.id);
     } catch (error) {
+      if (owner !== sessionGeneration) return;
       runs.value[agentId] = {
         status: "failed",
         output: "",
@@ -425,6 +560,7 @@ export const useWorkspaceStore = defineStore("workspace", () => {
     agentsError,
     capabilityProfiles,
     taskHistory,
+    conversations,
     selectedAgentId,
     selectedAgent,
     connectionState,
@@ -442,6 +578,15 @@ export const useWorkspaceStore = defineStore("workspace", () => {
     cancelOAuth,
     disconnect,
     createAgent,
+    updateAgent,
+    deleteAgent,
+    conversationFor,
+    loadConversations,
+    selectConversation,
+    newConversation,
+    renameConversation,
+    removeConversation,
+    conversationHistoryFor,
     selectAgent,
     loadAgentTasks,
     historyFor,

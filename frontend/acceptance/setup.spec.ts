@@ -7,6 +7,11 @@ test("normal Identity login and Connector custody", async ({ page, context }) =>
   process.umask(0o077);
   const root = z.string().parse(process.env.DEVCENTER_EVIDENCE_ROOT);
   const origin = z.url().parse(process.env.DEVCENTER_ORIGIN);
+  const connectorMode = z
+    .enum(["fixture", "live"])
+    .parse(process.env.DEVCENTER_CONNECTOR_MODE ?? "fixture");
+  const repositoryRef =
+    process.env.DEVCENTER_REPOSITORY_REF ?? (connectorMode === "fixture" ? "1" : undefined);
   const observed: Array<{ path: string; status: number }> = [];
   page.on("response", (response) => {
     const path = new URL(response.url()).pathname;
@@ -76,7 +81,10 @@ test("normal Identity login and Connector custody", async ({ page, context }) =>
     return candidatesSchema.parse(await response.json());
   }
   let candidates = await repositories();
-  if (!candidates.some((entry) => entry.project_ref === "1")) {
+  if (
+    connectorMode === "fixture" &&
+    !candidates.some((entry) => entry.project_ref === repositoryRef)
+  ) {
     const connection = await context.request.post(`${origin}/api/connections`, {
       headers: { Origin: origin },
       data: {
@@ -107,8 +115,15 @@ test("normal Identity login and Connector custody", async ({ page, context }) =>
       .toBe("completed");
     candidates = await repositories();
   }
-  const candidate = candidates.find((entry) => entry.project_ref === "1");
-  if (!candidate) throw new Error("local fixture repository missing");
+  if (connectorMode === "live" && !repositoryRef)
+    throw new Error("Select a real repository with --repository-ref before workspace acceptance.");
+  const candidate = candidates.find((entry) => entry.project_ref === repositoryRef);
+  if (!candidate)
+    throw new Error(
+      connectorMode === "live"
+        ? "Connect your real GitLab account in Connections, then retry with its repository reference."
+        : "local fixture repository missing",
+    );
   const project = candidate.opened_project_id
     ? await context.request.get(`${origin}/api/projects/${candidate.opened_project_id}`)
     : await context.request.post(`${origin}/api/projects`, {

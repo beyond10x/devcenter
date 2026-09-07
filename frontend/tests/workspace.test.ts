@@ -27,6 +27,21 @@ function defaultHandlers() {
     http.get("/api/session", () => HttpResponse.json(session)),
     http.get("/api/agents", () => HttpResponse.json([agent])),
     http.get(`/api/agents/${agent.id}/tasks`, () => HttpResponse.json([])),
+    http.get(`/api/agents/${agent.id}/conversations`, () => HttpResponse.json([])),
+    http.post(`/api/agents/${agent.id}/conversations`, async ({ request }) =>
+      HttpResponse.json(
+        {
+          id: "conversation-1",
+          agent_id: agent.id,
+          created_by: "engineer-1",
+          title: ((await request.json()) as { title: string }).title,
+          revision: 1,
+          created_at_ms: 1,
+          task_ids: [],
+        },
+        { status: 201 },
+      ),
+    ),
     http.get("/api/capability-profiles", () => HttpResponse.json([])),
     http.get("/api/connectors/claude-code", () =>
       HttpResponse.json({ provider: "claude-code", connected: true }),
@@ -380,5 +395,121 @@ describe("workspace store", () => {
     expect(workspace.runFor("agent-1").approvals).toEqual([]);
     expect(workspace.runFor("agent-1").status).toBe("running");
     vi.unstubAllGlobals();
+  });
+  it("keeps each conversation's history and draft separate and deletes only after success", async () => {
+    const first = {
+      id: "conversation-a",
+      agent_id: agent.id,
+      created_by: "engineer-1",
+      title: "First",
+      revision: 2,
+      created_at_ms: 1,
+      task_ids: ["task-a"],
+    };
+    const second = { ...first, id: "conversation-b", title: "Second", task_ids: ["task-b"] };
+    server.use(
+      http.get(`/api/agents/${agent.id}/conversations`, () => HttpResponse.json([first, second])),
+    );
+    const workspace = useWorkspaceStore();
+    await workspace.loadConversations(agent.id);
+    workspace.taskHistory[agent.id] = [
+      {
+        id: "task-a",
+        attempt_id: "attempt-a",
+        agent_id: agent.id,
+        status: "succeeded",
+        prompt: "First secret",
+        accepted_at_ms: 1,
+      },
+      {
+        id: "task-b",
+        attempt_id: "attempt-b",
+        agent_id: agent.id,
+        status: "succeeded",
+        prompt: "Second prompt",
+        accepted_at_ms: 2,
+      },
+    ];
+    workspace.selectConversation(agent.id, first.id);
+    workspace.setDraft(agent.id, "First draft");
+    expect(workspace.conversationHistoryFor(agent.id).map((task) => task.id)).toEqual(["task-a"]);
+    workspace.selectConversation(agent.id, second.id);
+    expect(workspace.draftFor(agent.id)).toBe("");
+    expect(workspace.conversationHistoryFor(agent.id).map((task) => task.id)).toEqual(["task-b"]);
+    workspace.selectConversation(agent.id, first.id);
+    expect(workspace.draftFor(agent.id)).toBe("First draft");
+    server.use(
+      http.delete(`/api/agents/${agent.id}/conversations/${first.id}`, () =>
+        HttpResponse.json(
+          { code: "agent_platform_active_work", message: "Wait for the active task to finish." },
+          { status: 409 },
+        ),
+      ),
+    );
+    await expect(workspace.removeConversation(first)).rejects.toThrow();
+    expect(workspace.conversationFor(agent.id)?.id).toBe(first.id);
+    server.use(
+      http.delete(`/api/agents/${agent.id}/conversations/${first.id}`, async ({ request }) => {
+        expect(await request.json()).toEqual({ expected_revision: 2 });
+        return new HttpResponse(null, { status: 204 });
+      }),
+    );
+    await workspace.removeConversation(first);
+    expect(workspace.conversationFor(agent.id)?.id).toBe(second.id);
+    expect(workspace.historyFor(agent.id)).toHaveLength(2);
+  });
+
+  it("does not overwrite a new conversation with an older fetch", async () => {
+    let release!: () => void;
+    let requested!: () => void;
+    const gate = new Promise<void>((resolve) => {
+      release = resolve;
+    });
+    const arrived = new Promise<void>((resolve) => {
+      requested = resolve;
+    });
+    server.use(
+      http.get(`/api/agents/${agent.id}/conversations`, async () => {
+        requested();
+        await gate;
+        return HttpResponse.json([]);
+      }),
+    );
+    const workspace = useWorkspaceStore();
+    const loading = workspace.loadConversations(agent.id);
+    await arrived;
+    const created = await workspace.newConversation(agent.id);
+    release();
+    await loading;
+    expect(workspace.conversationFor(agent.id)?.id).toBe(created.id);
+  });
+
+  it("does not restore conversation state after logout", async () => {
+    let release!: () => void;
+    let requested!: () => void;
+    const gate = new Promise<void>((resolve) => {
+      release = resolve;
+    });
+    const arrived = new Promise<void>((resolve) => {
+      requested = resolve;
+    });
+    server.use(
+      http.get(`/api/agents/${agent.id}/conversations`, async () => {
+        requested();
+        await gate;
+        return HttpResponse.json([{ id: "late", agent_id: agent.id }]);
+      }),
+      http.post("/auth/logout", () => new HttpResponse(null, { status: 204 })),
+      http.get("/api/auth/providers", () => HttpResponse.json([])),
+    );
+    const workspace = useWorkspaceStore();
+    workspace.setDraft(agent.id, "private draft");
+    const loading = workspace.loadConversations(agent.id);
+    await arrived;
+    await workspace.logout();
+    release();
+    await loading;
+    expect(workspace.conversations).toEqual({});
+    expect(workspace.draftFor(agent.id)).toBe("");
   });
 });

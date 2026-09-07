@@ -288,7 +288,7 @@ export interface paths {
         get?: never;
         put?: never;
         post?: never;
-        delete?: never;
+        delete: operations["deleteCapabilityProfile"];
         options?: never;
         head?: never;
         patch: operations["updateCapabilityProfile"];
@@ -1103,6 +1103,86 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/agents/{agent_id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get: operations["getAgentDetails"];
+        put?: never;
+        post?: never;
+        delete: operations["deleteAgent"];
+        options?: never;
+        head?: never;
+        patch: operations["updateAgent"];
+        trace?: never;
+    };
+    "/api/agents/{agent_id}/conversations": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get: operations["listAgentConversations"];
+        put?: never;
+        post: operations["createAgentConversation"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/agents/{agent_id}/conversations/{conversation_id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post?: never;
+        delete: operations["deleteAgentConversation"];
+        options?: never;
+        head?: never;
+        patch: operations["renameAgentConversation"];
+        trace?: never;
+    };
+    "/api/agents/{agent_id}/conversations/{conversation_id}/clear": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post: operations["clearAgentConversation"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/agents/{agent_id}/conversations/{conversation_id}/tasks": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get: operations["listConversationTasks"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
 }
 export type webhooks = Record<string, never>;
 export interface components {
@@ -1316,6 +1396,8 @@ export interface components {
             /** @enum {string} */
             approval: "not_required" | "required";
             connections: components["schemas"]["CapabilityConnection"][];
+            agent_supported?: boolean;
+            agent_unavailable_reason?: string | null;
         };
         CapabilityMapping: {
             operation_ref: string;
@@ -1708,6 +1790,8 @@ export interface components {
         SubmitTask: {
             prompt: string;
             idempotency_key: string;
+            /** @description Durable owner-scoped conversation. Prior successful turns are assembled by Agent Platform. */
+            conversation_id?: string;
         };
         ConversationMessage: {
             /** @enum {string} */
@@ -1807,6 +1891,44 @@ export interface components {
             /** @constant */
             decision: "deny";
             reason: string;
+        };
+        UpdateAgent: {
+            name: string;
+            instructions: string;
+            model: string;
+            /** @description Existing immutable capability profile assigned to the first agent revision */
+            capability_profile_id?: string;
+            expected_active_revision: number | null;
+        };
+        AgentRevisionSpec: {
+            instructions: string;
+            model: string;
+            capability_profile_id?: string | null;
+            metadata?: unknown;
+        };
+        AgentDetails: {
+            agent: components["schemas"]["Agent"];
+            spec: components["schemas"]["AgentRevisionSpec"] | null;
+        };
+        AgentConversation: {
+            id: string;
+            agent_id: string;
+            created_by: string;
+            title: string;
+            revision: number;
+            created_at_ms: number;
+            deleted_at_ms?: number | null;
+            task_ids: string[];
+        };
+        CreateConversation: {
+            title: string;
+        };
+        ConversationRevision: {
+            expected_revision: number;
+        };
+        UpdateConversation: {
+            title: string;
+            expected_revision: number;
         };
     };
     responses: {
@@ -2386,6 +2508,32 @@ export interface operations {
             };
             401: components["responses"]["Problem"];
             403: components["responses"]["Problem"];
+            422: components["responses"]["Problem"];
+            503: components["responses"]["Unavailable"];
+        };
+    };
+    deleteCapabilityProfile: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                profile_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Owner-scoped durable lifecycle result */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            401: components["responses"]["Problem"];
+            403: components["responses"]["Problem"];
+            404: components["responses"]["Problem"];
+            409: components["responses"]["Problem"];
             422: components["responses"]["Problem"];
             503: components["responses"]["Unavailable"];
         };
@@ -4027,6 +4175,278 @@ export interface operations {
             };
             401: components["responses"]["Problem"];
             403: components["responses"]["Problem"];
+        };
+    };
+    getAgentDetails: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                agent_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Owner-scoped durable lifecycle result */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["AgentDetails"];
+                };
+            };
+            401: components["responses"]["Problem"];
+            403: components["responses"]["Problem"];
+            404: components["responses"]["Problem"];
+            409: components["responses"]["Problem"];
+            422: components["responses"]["Problem"];
+            503: components["responses"]["Unavailable"];
+        };
+    };
+    deleteAgent: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                agent_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Owner-scoped durable lifecycle result */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            401: components["responses"]["Problem"];
+            403: components["responses"]["Problem"];
+            404: components["responses"]["Problem"];
+            409: components["responses"]["Problem"];
+            422: components["responses"]["Problem"];
+            503: components["responses"]["Unavailable"];
+        };
+    };
+    updateAgent: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                agent_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["UpdateAgent"];
+            };
+        };
+        responses: {
+            /** @description Owner-scoped durable lifecycle result */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Agent"];
+                };
+            };
+            401: components["responses"]["Problem"];
+            403: components["responses"]["Problem"];
+            404: components["responses"]["Problem"];
+            409: components["responses"]["Problem"];
+            422: components["responses"]["Problem"];
+            503: components["responses"]["Unavailable"];
+        };
+    };
+    listAgentConversations: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                agent_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Owner-scoped durable lifecycle result */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["AgentConversation"][];
+                };
+            };
+            401: components["responses"]["Problem"];
+            403: components["responses"]["Problem"];
+            404: components["responses"]["Problem"];
+            409: components["responses"]["Problem"];
+            422: components["responses"]["Problem"];
+            503: components["responses"]["Unavailable"];
+        };
+    };
+    createAgentConversation: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                agent_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["CreateConversation"];
+            };
+        };
+        responses: {
+            /** @description Owner-scoped durable lifecycle result */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["AgentConversation"];
+                };
+            };
+            401: components["responses"]["Problem"];
+            403: components["responses"]["Problem"];
+            404: components["responses"]["Problem"];
+            409: components["responses"]["Problem"];
+            422: components["responses"]["Problem"];
+            503: components["responses"]["Unavailable"];
+        };
+    };
+    deleteAgentConversation: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                agent_id: string;
+                conversation_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["ConversationRevision"];
+            };
+        };
+        responses: {
+            /** @description Owner-scoped durable lifecycle result */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            401: components["responses"]["Problem"];
+            403: components["responses"]["Problem"];
+            404: components["responses"]["Problem"];
+            409: components["responses"]["Problem"];
+            422: components["responses"]["Problem"];
+            503: components["responses"]["Unavailable"];
+        };
+    };
+    renameAgentConversation: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                agent_id: string;
+                conversation_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["UpdateConversation"];
+            };
+        };
+        responses: {
+            /** @description Owner-scoped durable lifecycle result */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["AgentConversation"];
+                };
+            };
+            401: components["responses"]["Problem"];
+            403: components["responses"]["Problem"];
+            404: components["responses"]["Problem"];
+            409: components["responses"]["Problem"];
+            422: components["responses"]["Problem"];
+            503: components["responses"]["Unavailable"];
+        };
+    };
+    clearAgentConversation: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                agent_id: string;
+                conversation_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["ConversationRevision"];
+            };
+        };
+        responses: {
+            /** @description Owner-scoped durable lifecycle result */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["AgentConversation"];
+                };
+            };
+            401: components["responses"]["Problem"];
+            403: components["responses"]["Problem"];
+            404: components["responses"]["Problem"];
+            409: components["responses"]["Problem"];
+            422: components["responses"]["Problem"];
+            503: components["responses"]["Unavailable"];
+        };
+    };
+    listConversationTasks: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                agent_id: string;
+                conversation_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Owner-scoped durable lifecycle result */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Task"][];
+                };
+            };
+            401: components["responses"]["Problem"];
+            403: components["responses"]["Problem"];
+            404: components["responses"]["Problem"];
+            409: components["responses"]["Problem"];
+            422: components["responses"]["Problem"];
+            503: components["responses"]["Unavailable"];
         };
     };
 }

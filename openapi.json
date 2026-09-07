@@ -589,6 +589,50 @@
           "422": { "$ref": "#/components/responses/Problem" },
           "503": { "$ref": "#/components/responses/Unavailable" }
         }
+      },
+      "delete": {
+        "operationId": "deleteCapabilityProfile",
+        "security": [
+          {
+            "browserSession": []
+          },
+          {
+            "identityBearer": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "profile_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "401": {
+            "$ref": "#/components/responses/Problem"
+          },
+          "403": {
+            "$ref": "#/components/responses/Problem"
+          },
+          "404": {
+            "$ref": "#/components/responses/Problem"
+          },
+          "409": {
+            "$ref": "#/components/responses/Problem"
+          },
+          "422": {
+            "$ref": "#/components/responses/Problem"
+          },
+          "503": {
+            "$ref": "#/components/responses/Unavailable"
+          },
+          "204": {
+            "description": "Owner-scoped durable lifecycle result"
+          }
+        }
       }
     },
     "/api/agents": {
@@ -2012,6 +2056,549 @@
           "403": { "$ref": "#/components/responses/Problem" }
         }
       }
+    },
+    "/api/agents/{agent_id}": {
+      "get": {
+        "operationId": "getAgentDetails",
+        "security": [
+          {
+            "browserSession": []
+          },
+          {
+            "identityBearer": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "agent_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "401": {
+            "$ref": "#/components/responses/Problem"
+          },
+          "403": {
+            "$ref": "#/components/responses/Problem"
+          },
+          "404": {
+            "$ref": "#/components/responses/Problem"
+          },
+          "409": {
+            "$ref": "#/components/responses/Problem"
+          },
+          "422": {
+            "$ref": "#/components/responses/Problem"
+          },
+          "503": {
+            "$ref": "#/components/responses/Unavailable"
+          },
+          "200": {
+            "description": "Owner-scoped durable lifecycle result",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/AgentDetails"
+                }
+              }
+            }
+          }
+        }
+      },
+      "patch": {
+        "operationId": "updateAgent",
+        "security": [
+          {
+            "browserSession": []
+          },
+          {
+            "identityBearer": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "agent_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "401": {
+            "$ref": "#/components/responses/Problem"
+          },
+          "403": {
+            "$ref": "#/components/responses/Problem"
+          },
+          "404": {
+            "$ref": "#/components/responses/Problem"
+          },
+          "409": {
+            "$ref": "#/components/responses/Problem"
+          },
+          "422": {
+            "$ref": "#/components/responses/Problem"
+          },
+          "503": {
+            "$ref": "#/components/responses/Unavailable"
+          },
+          "200": {
+            "description": "Owner-scoped durable lifecycle result",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Agent"
+                }
+              }
+            }
+          }
+        },
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/UpdateAgent"
+              }
+            }
+          }
+        }
+      },
+      "delete": {
+        "operationId": "deleteAgent",
+        "security": [
+          {
+            "browserSession": []
+          },
+          {
+            "identityBearer": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "agent_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "401": {
+            "$ref": "#/components/responses/Problem"
+          },
+          "403": {
+            "$ref": "#/components/responses/Problem"
+          },
+          "404": {
+            "$ref": "#/components/responses/Problem"
+          },
+          "409": {
+            "$ref": "#/components/responses/Problem"
+          },
+          "422": {
+            "$ref": "#/components/responses/Problem"
+          },
+          "503": {
+            "$ref": "#/components/responses/Unavailable"
+          },
+          "204": {
+            "description": "Owner-scoped durable lifecycle result"
+          }
+        }
+      }
+    },
+    "/api/agents/{agent_id}/conversations": {
+      "get": {
+        "operationId": "listAgentConversations",
+        "security": [
+          {
+            "browserSession": []
+          },
+          {
+            "identityBearer": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "agent_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "401": {
+            "$ref": "#/components/responses/Problem"
+          },
+          "403": {
+            "$ref": "#/components/responses/Problem"
+          },
+          "404": {
+            "$ref": "#/components/responses/Problem"
+          },
+          "409": {
+            "$ref": "#/components/responses/Problem"
+          },
+          "422": {
+            "$ref": "#/components/responses/Problem"
+          },
+          "503": {
+            "$ref": "#/components/responses/Unavailable"
+          },
+          "200": {
+            "description": "Owner-scoped durable lifecycle result",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "array",
+                  "items": {
+                    "$ref": "#/components/schemas/AgentConversation"
+                  }
+                }
+              }
+            }
+          }
+        }
+      },
+      "post": {
+        "operationId": "createAgentConversation",
+        "security": [
+          {
+            "browserSession": []
+          },
+          {
+            "identityBearer": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "agent_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "401": {
+            "$ref": "#/components/responses/Problem"
+          },
+          "403": {
+            "$ref": "#/components/responses/Problem"
+          },
+          "404": {
+            "$ref": "#/components/responses/Problem"
+          },
+          "409": {
+            "$ref": "#/components/responses/Problem"
+          },
+          "422": {
+            "$ref": "#/components/responses/Problem"
+          },
+          "503": {
+            "$ref": "#/components/responses/Unavailable"
+          },
+          "201": {
+            "description": "Owner-scoped durable lifecycle result",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/AgentConversation"
+                }
+              }
+            }
+          }
+        },
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/CreateConversation"
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/agents/{agent_id}/conversations/{conversation_id}": {
+      "patch": {
+        "operationId": "renameAgentConversation",
+        "security": [
+          {
+            "browserSession": []
+          },
+          {
+            "identityBearer": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "agent_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "conversation_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "401": {
+            "$ref": "#/components/responses/Problem"
+          },
+          "403": {
+            "$ref": "#/components/responses/Problem"
+          },
+          "404": {
+            "$ref": "#/components/responses/Problem"
+          },
+          "409": {
+            "$ref": "#/components/responses/Problem"
+          },
+          "422": {
+            "$ref": "#/components/responses/Problem"
+          },
+          "503": {
+            "$ref": "#/components/responses/Unavailable"
+          },
+          "200": {
+            "description": "Owner-scoped durable lifecycle result",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/AgentConversation"
+                }
+              }
+            }
+          }
+        },
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/UpdateConversation"
+              }
+            }
+          }
+        }
+      },
+      "delete": {
+        "operationId": "deleteAgentConversation",
+        "security": [
+          {
+            "browserSession": []
+          },
+          {
+            "identityBearer": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "agent_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "conversation_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "401": {
+            "$ref": "#/components/responses/Problem"
+          },
+          "403": {
+            "$ref": "#/components/responses/Problem"
+          },
+          "404": {
+            "$ref": "#/components/responses/Problem"
+          },
+          "409": {
+            "$ref": "#/components/responses/Problem"
+          },
+          "422": {
+            "$ref": "#/components/responses/Problem"
+          },
+          "503": {
+            "$ref": "#/components/responses/Unavailable"
+          },
+          "204": {
+            "description": "Owner-scoped durable lifecycle result"
+          }
+        },
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ConversationRevision"
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/agents/{agent_id}/conversations/{conversation_id}/clear": {
+      "post": {
+        "operationId": "clearAgentConversation",
+        "security": [
+          {
+            "browserSession": []
+          },
+          {
+            "identityBearer": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "agent_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "conversation_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "401": {
+            "$ref": "#/components/responses/Problem"
+          },
+          "403": {
+            "$ref": "#/components/responses/Problem"
+          },
+          "404": {
+            "$ref": "#/components/responses/Problem"
+          },
+          "409": {
+            "$ref": "#/components/responses/Problem"
+          },
+          "422": {
+            "$ref": "#/components/responses/Problem"
+          },
+          "503": {
+            "$ref": "#/components/responses/Unavailable"
+          },
+          "201": {
+            "description": "Owner-scoped durable lifecycle result",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/AgentConversation"
+                }
+              }
+            }
+          }
+        },
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ConversationRevision"
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/agents/{agent_id}/conversations/{conversation_id}/tasks": {
+      "get": {
+        "operationId": "listConversationTasks",
+        "security": [
+          {
+            "browserSession": []
+          },
+          {
+            "identityBearer": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "agent_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "conversation_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "401": {
+            "$ref": "#/components/responses/Problem"
+          },
+          "403": {
+            "$ref": "#/components/responses/Problem"
+          },
+          "404": {
+            "$ref": "#/components/responses/Problem"
+          },
+          "409": {
+            "$ref": "#/components/responses/Problem"
+          },
+          "422": {
+            "$ref": "#/components/responses/Problem"
+          },
+          "503": {
+            "$ref": "#/components/responses/Unavailable"
+          },
+          "200": {
+            "description": "Owner-scoped durable lifecycle result",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "array",
+                  "items": {
+                    "$ref": "#/components/schemas/Task"
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
     }
   },
   "components": {
@@ -2633,6 +3220,15 @@
           "connections": {
             "type": "array",
             "items": { "$ref": "#/components/schemas/CapabilityConnection" }
+          },
+          "agent_supported": {
+            "type": "boolean"
+          },
+          "agent_unavailable_reason": {
+            "type": [
+              "string",
+              "null"
+            ]
           }
         },
         "additionalProperties": false
@@ -3493,7 +4089,11 @@
         "required": ["prompt", "idempotency_key"],
         "properties": {
           "prompt": { "type": "string" },
-          "idempotency_key": { "type": "string" }
+          "idempotency_key": { "type": "string" },
+          "conversation_id": {
+            "type": "string",
+            "description": "Durable owner-scoped conversation. Prior successful turns are assembled by Agent Platform."
+          }
         },
         "additionalProperties": false
       },
@@ -3734,6 +4334,168 @@
             "additionalProperties": false
           }
         ]
+      },
+      "UpdateAgent": {
+        "type": "object",
+        "required": [
+          "name",
+          "instructions",
+          "model",
+          "expected_active_revision"
+        ],
+        "properties": {
+          "name": {
+            "type": "string"
+          },
+          "instructions": {
+            "type": "string"
+          },
+          "model": {
+            "type": "string"
+          },
+          "capability_profile_id": {
+            "type": "string",
+            "description": "Existing immutable capability profile assigned to the first agent revision"
+          },
+          "expected_active_revision": {
+            "type": [
+              "integer",
+              "null"
+            ]
+          }
+        },
+        "additionalProperties": false
+      },
+      "AgentRevisionSpec": {
+        "type": "object",
+        "required": [
+          "instructions",
+          "model"
+        ],
+        "properties": {
+          "instructions": {
+            "type": "string"
+          },
+          "model": {
+            "type": "string"
+          },
+          "capability_profile_id": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "metadata": {}
+        },
+        "additionalProperties": false
+      },
+      "AgentDetails": {
+        "type": "object",
+        "properties": {
+          "agent": {
+            "$ref": "#/components/schemas/Agent"
+          },
+          "spec": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/AgentRevisionSpec"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          }
+        },
+        "required": [
+          "agent",
+          "spec"
+        ],
+        "additionalProperties": false
+      },
+      "AgentConversation": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string"
+          },
+          "agent_id": {
+            "type": "string"
+          },
+          "created_by": {
+            "type": "string"
+          },
+          "title": {
+            "type": "string"
+          },
+          "revision": {
+            "type": "integer"
+          },
+          "created_at_ms": {
+            "type": "integer"
+          },
+          "deleted_at_ms": {
+            "type": [
+              "integer",
+              "null"
+            ]
+          },
+          "task_ids": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          }
+        },
+        "required": [
+          "id",
+          "agent_id",
+          "created_by",
+          "title",
+          "revision",
+          "created_at_ms",
+          "task_ids"
+        ],
+        "additionalProperties": false
+      },
+      "CreateConversation": {
+        "type": "object",
+        "properties": {
+          "title": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "title"
+        ],
+        "additionalProperties": false
+      },
+      "ConversationRevision": {
+        "type": "object",
+        "properties": {
+          "expected_revision": {
+            "type": "integer"
+          }
+        },
+        "required": [
+          "expected_revision"
+        ],
+        "additionalProperties": false
+      },
+      "UpdateConversation": {
+        "type": "object",
+        "properties": {
+          "title": {
+            "type": "string"
+          },
+          "expected_revision": {
+            "type": "integer"
+          }
+        },
+        "required": [
+          "title",
+          "expected_revision"
+        ],
+        "additionalProperties": false
       }
     }
   }

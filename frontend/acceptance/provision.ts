@@ -36,7 +36,8 @@ export async function provisionCredentials(
   origin: string,
   headers: Record<string, string>,
 ) {
-  const planPath = z.string().parse(process.env.DEVCENTER_PROVISIONING_FILE);
+  const planPath = process.env.DEVCENTER_PROVISIONING_FILE;
+  if (!planPath) return;
   const plan = planSchema.parse(JSON.parse(privateText(planPath)));
   const base = `${origin}/api/connectors/v1/admin/integrations`;
   async function discover() {
