@@ -15,12 +15,14 @@ import {
   api,
   errorMessage,
   type ConnectSession,
+  type ConnectorConnection,
   type ConnectorCatalogOperation,
   type ConnectorCatalogPage,
   type ConnectorProviderDescription,
   type ConnectorProviderSummary,
   type ConnectorSetupProfile,
 } from "@/api/client";
+import { useConnectSessionPolling } from "@/composables/useConnectSessionPolling";
 import ConnectionsView from "@/features/connections/ConnectionsView.vue";
 import { useWorkspaceStore } from "@/stores/workspace";
 
@@ -46,6 +48,38 @@ const exposureFilter = ref<ExposureFilter>("all");
 const startingProfile = ref("");
 const setupSessions = ref<Record<string, ConnectSession>>({});
 const setupError = ref("");
+const savedConnections = ref<ConnectorConnection[]>([]);
+const setupPolling = useConnectSessionPolling(
+  (key) => setupSessions.value[key],
+  (key, session) => {
+    setupSessions.value = { ...setupSessions.value, [key]: session };
+  },
+  loadSavedConnections,
+);
+const setupPollErrors = setupPolling.errors;
+const setupChecking = setupPolling.checking;
+
+async function loadSavedConnections() {
+  savedConnections.value = await api.connections();
+}
+
+function savedConnection(provider: ConnectorProviderSummary, profile: ConnectorSetupProfile) {
+  return savedConnections.value.find(
+    (connection) =>
+      connection.integration_ref === provider.provider_ref &&
+      connection.auth_profile === profile.auth_profile &&
+      connection.state === "callable",
+  );
+}
+
+function setupAction(provider: ConnectorProviderSummary, profile: ConnectorSetupProfile) {
+  const key = setupKey(provider, profile);
+  if (setupPollErrors.value[key]) return "Status unavailable";
+  const state = setupSessions.value[key]?.state;
+  if (state === "pending") return "Waiting for provider…";
+  if (state === "completed" || savedConnection(provider, profile)) return "Connected";
+  return setupLabel(profile);
+}
 
 const providerRef = computed(() =>
   typeof route.params.providerRef === "string" ? route.params.providerRef : undefined,
@@ -85,6 +119,11 @@ watch(activeTab, () => void loadCurrentSurface());
 
 async function loadCurrentSurface() {
   if (activeTab.value !== "catalog") return;
+  try {
+    await loadSavedConnections();
+  } catch (cause) {
+    setupError.value = errorMessage(cause);
+  }
   if (providerRef.value) await loadProvider(providerRef.value);
   else await loadCatalog();
 }
@@ -179,23 +218,12 @@ async function startSetup(provider: ConnectorProviderSummary, profile: Connector
     if (session.browser_completion_url) {
       window.open(session.browser_completion_url, "_blank", "noopener,noreferrer");
     }
-    if (session.state === "pending") void pollSetup(key, session.connect_session_ref, 0);
+    setupPolling.start(key);
+    if (session.state === "completed") await loadSavedConnections();
   } catch (cause) {
     setupError.value = errorMessage(cause);
   } finally {
     startingProfile.value = "";
-  }
-}
-
-async function pollSetup(key: string, sessionRef: string, attempt: number) {
-  if (attempt >= 60) return;
-  await new Promise((resolve) => window.setTimeout(resolve, 2_000));
-  try {
-    const session = await api.connectionSession(sessionRef);
-    setupSessions.value = { ...setupSessions.value, [key]: session };
-    if (session.state === "pending") void pollSetup(key, sessionRef, attempt + 1);
-  } catch (cause) {
-    setupError.value = errorMessage(cause);
   }
 }
 
@@ -245,6 +273,22 @@ function exposureLabel(operation: ConnectorCatalogOperation): string {
       </button>
     </nav>
 
+    <div v-for="(message, key) in setupPollErrors" :key="key" class="catalog-error" role="alert">
+      <CircleAlert :size="20" />
+      <div>
+        <strong>Connection status could not be checked</strong>
+        <p>{{ message }} Your connection may already be saved.</p>
+      </div>
+      <button
+        class="button small"
+        type="button"
+        :disabled="setupChecking[key]"
+        @click="setupPolling.retry(key)"
+      >
+        Check status
+      </button>
+    </div>
+
     <ConnectionsView v-if="activeTab === 'connections'" embedded />
 
     <main v-else-if="providerRef" class="connector-detail">
@@ -285,18 +329,14 @@ function exposureLabel(operation: ConnectorCatalogOperation): string {
               type="button"
               :disabled="
                 startingProfile === setupKey(detail.provider, profile) ||
-                setupState(detail.provider, profile)?.state === 'pending'
+                setupState(detail.provider, profile)?.state === 'pending' ||
+                setupState(detail.provider, profile)?.state === 'completed' ||
+                !!savedConnection(detail.provider, profile)
               "
               @click="startSetup(detail.provider, profile)"
             >
               <KeyRound :size="15" />
-              {{
-                setupState(detail.provider, profile)?.state === "pending"
-                  ? "Waiting for provider…"
-                  : setupState(detail.provider, profile)?.state === "completed"
-                    ? "Connected"
-                    : setupLabel(profile)
-              }}
+              {{ setupAction(detail.provider, profile) }}
             </button>
           </div>
         </section>
@@ -410,18 +450,14 @@ function exposureLabel(operation: ConnectorCatalogOperation): string {
                 type="button"
                 :disabled="
                   startingProfile === setupKey(provider, profile) ||
-                  setupState(provider, profile)?.state === 'pending'
+                  setupState(provider, profile)?.state === 'pending' ||
+                  setupState(provider, profile)?.state === 'completed' ||
+                  !!savedConnection(provider, profile)
                 "
                 @click="startSetup(provider, profile)"
               >
                 <KeyRound :size="14" />
-                {{
-                  setupState(provider, profile)?.state === "pending"
-                    ? "Waiting…"
-                    : setupState(provider, profile)?.state === "completed"
-                      ? "Connected"
-                      : setupLabel(profile)
-                }}
+                {{ setupAction(provider, profile) }}
               </button>
             </footer>
           </article>

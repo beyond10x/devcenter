@@ -34,8 +34,8 @@ agent-platform-core = { git = "https://github.com/beyond10x/agent-platform.git",
 # boundary aligned until Platform publishes a newer client; the hosted renderer and generated
 # AgentIDE service below consume the current 0.3.1 release independently.
 agentide-contracts = { git = "https://github.com/beyond10x/agentide.git", tag = "0.2.1" }
-connectors-client = { git = "https://github.com/beyond10x/connectors.git", rev = "e80b7ae1b2151d13aa9786cf67ea05e66717ee35", version = "=0.7.0" }
-connectors-protocol = { package = "protocol", git = "https://github.com/beyond10x/connectors.git", rev = "e80b7ae1b2151d13aa9786cf67ea05e66717ee35", version = "=0.7.0" }
+connectors-client = { git = "https://github.com/beyond10x/connectors.git", rev = "ff9cc7a5b721874e3b21e3ce22bbdd4e099a35d6", version = "=0.7.0" }
+connectors-protocol = { package = "protocol", git = "https://github.com/beyond10x/connectors.git", rev = "ff9cc7a5b721874e3b21e3ce22bbdd4e099a35d6", version = "=0.7.0" }
 service-http = { git = "https://github.com/beyond10x/service-sdk.git", rev = "f57255a2886cae3ace2a3a35935e8f1fd91a5fd4" }
 workflow-generated-service = { git = "https://github.com/beyond10x/workflow.git", rev = "77c204b4d7a913cdc26e7d3445229571bad84f9a", default-features = false }
 workspace-client = { git = "https://github.com/beyond10x/workspace.git", rev = "f348e3f3e6302e81b09cd4eda1d70affbe24a392", version = "=0.2.19" }

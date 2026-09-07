@@ -128,6 +128,8 @@ The integration suite derives its required providers from the composed private c
 
 For credential-custody changes, include interleaved acquisitions and interrupted-save recovery against populated state. A fresh empty store cannot reveal retirement or recovery conflicts between providers. A rendered Connect form and an unauthenticated health response do not establish successful acquisition: verify credential persistence and an admitted provider read. If a real provider credential is unavailable, record that gap and keep that provider acceptance incomplete.
 
+Exercise pending status through the BFF before completing authorization, and verify that the UI observes completion and displays the saved connection after reload. A failed status read leaves the outcome unconfirmed; recovery checks the same session without submitting credentials again. Describe and invoke provider operations in separate authenticated requests through the public hosted backend. A test that retains a private internal adapter can hide request-to-request state loss in the actual service.
+
 The lifecycle suite uses the deployed APIs and browser UI, including real Claude turns to prove that a conversation remembers its own previous turn and that a new or cleared conversation does not. Test-created agents and profiles are removed through the normal APIs. Re-run browser acceptance against unchanged candidate images with `local test`; retain the private session file it references.
 
 ## Cleanup and iteration

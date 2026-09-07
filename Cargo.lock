@@ -716,7 +716,7 @@ dependencies = [
 [[package]]
 name = "connector-state"
 version = "0.7.0"
-source = "git+https://github.com/beyond10x/connectors.git?rev=e80b7ae1b2151d13aa9786cf67ea05e66717ee35#e80b7ae1b2151d13aa9786cf67ea05e66717ee35"
+source = "git+https://github.com/beyond10x/connectors.git?rev=ff9cc7a5b721874e3b21e3ce22bbdd4e099a35d6#ff9cc7a5b721874e3b21e3ce22bbdd4e099a35d6"
 dependencies = [
  "thiserror",
 ]
@@ -724,7 +724,7 @@ dependencies = [
 [[package]]
 name = "connectors-client"
 version = "0.7.0"
-source = "git+https://github.com/beyond10x/connectors.git?rev=e80b7ae1b2151d13aa9786cf67ea05e66717ee35#e80b7ae1b2151d13aa9786cf67ea05e66717ee35"
+source = "git+https://github.com/beyond10x/connectors.git?rev=ff9cc7a5b721874e3b21e3ce22bbdd4e099a35d6#ff9cc7a5b721874e3b21e3ce22bbdd4e099a35d6"
 dependencies = [
  "base64",
  "getrandom 0.3.4",
@@ -1077,7 +1077,7 @@ dependencies = [
 [[package]]
 name = "domain"
 version = "0.7.0"
-source = "git+https://github.com/beyond10x/connectors.git?rev=e80b7ae1b2151d13aa9786cf67ea05e66717ee35#e80b7ae1b2151d13aa9786cf67ea05e66717ee35"
+source = "git+https://github.com/beyond10x/connectors.git?rev=ff9cc7a5b721874e3b21e3ce22bbdd4e099a35d6#ff9cc7a5b721874e3b21e3ce22bbdd4e099a35d6"
 dependencies = [
  "async-trait",
  "connector-state 0.7.0",
@@ -1659,6 +1659,7 @@ dependencies = [
  "hyper",
  "hyper-util",
  "rustls",
+ "rustls-native-certs",
  "tokio",
  "tokio-rustls",
  "tower-service",
@@ -2463,7 +2464,7 @@ dependencies = [
 [[package]]
 name = "protocol"
 version = "0.7.0"
-source = "git+https://github.com/beyond10x/connectors.git?rev=e80b7ae1b2151d13aa9786cf67ea05e66717ee35#e80b7ae1b2151d13aa9786cf67ea05e66717ee35"
+source = "git+https://github.com/beyond10x/connectors.git?rev=ff9cc7a5b721874e3b21e3ce22bbdd4e099a35d6#ff9cc7a5b721874e3b21e3ce22bbdd4e099a35d6"
 dependencies = [
  "domain 0.7.0",
  "fluent-uri",
@@ -2742,6 +2743,7 @@ dependencies = [
  "pin-project-lite",
  "quinn",
  "rustls",
+ "rustls-native-certs",
  "rustls-pki-types",
  "serde",
  "serde_json",
@@ -3757,7 +3759,7 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "32497e9a4c7b38532efcdebeef879707aa9f794296a4f0244f6f69e9bc8574bd"
 dependencies = [
  "fastrand",
- "getrandom 0.3.4",
+ "getrandom 0.4.3",
  "once_cell",
  "rustix",
  "windows-sys 0.61.2",

@@ -19,6 +19,7 @@ import {
   type ConnectorProviderDescription,
   type ConnectorSetupProfile,
 } from "@/api/client";
+import { useConnectSessionPolling } from "@/composables/useConnectSessionPolling";
 import { useWorkspaceStore } from "@/stores/workspace";
 
 const workspace = useWorkspaceStore();
@@ -38,6 +39,18 @@ const curatedUnavailable = ref<string[]>([]);
 const curatedSessions = ref<Record<string, ConnectSession>>({});
 const curatedStarting = ref<Record<string, boolean>>({});
 const curatedError = ref("");
+const curatedPolling = useConnectSessionPolling(
+  (key) => curatedSessions.value[key],
+  (key, session) => {
+    curatedSessions.value = {
+      ...curatedSessions.value,
+      [key]: retainSafeCompletionUrl(session, curatedSessions.value[key]),
+    };
+  },
+  loadProviderConnections,
+);
+const curatedPollErrors = curatedPolling.errors;
+const curatedChecking = curatedPolling.checking;
 const curatedProviders = [
   {
     providerRef: "gitlab",
@@ -197,6 +210,7 @@ function curatedProfile(providerRef: string): ConnectorSetupProfile | undefined 
 
 function curatedStatus(providerRef: string) {
   const session = curatedSessions.value[providerRef];
+  if (curatedPollErrors.value[providerRef]) return "Status unavailable";
   if (session?.state === "pending") return "Authorization pending";
   const connection = curatedConnection(providerRef);
   if (providerLoading.value && !connection) return "Checking";
@@ -216,6 +230,7 @@ function curatedStatusClass(providerRef: string) {
 
 function curatedAction(providerRef: string, name: string) {
   if (curatedStarting.value[providerRef]) return "Starting…";
+  if (curatedPollErrors.value[providerRef]) return "Status unavailable";
   if (curatedSessions.value[providerRef]?.state === "pending") return "Waiting…";
   const connection = curatedConnection(providerRef);
   if (!connection) return `Connect ${name}`;
@@ -281,41 +296,13 @@ async function connectCurated(providerRef: string, name: string) {
     if (session.browser_completion_url) {
       window.open(session.browser_completion_url, "_blank", "noopener,noreferrer");
     }
-    if (session.state === "pending") void pollCurated(providerRef, session.connect_session_ref, 0);
+    curatedPolling.start(providerRef);
     if (session.state === "completed") await loadProviderConnections();
   } catch (cause) {
     curatedError.value = errorMessage(cause);
   } finally {
     curatedStarting.value = { ...curatedStarting.value, [providerRef]: false };
   }
-}
-
-async function pollCurated(providerRef: string, sessionRef: string, attempt: number) {
-  if (attempt >= 60) {
-    failPendingCuratedSession(providerRef, sessionRef);
-    return;
-  }
-  await new Promise((resolve) => window.setTimeout(resolve, 2_000));
-  try {
-    const current = curatedSessions.value[providerRef];
-    if (current?.connect_session_ref !== sessionRef) return;
-    const session = retainSafeCompletionUrl(await api.connectionSession(sessionRef), current);
-    curatedSessions.value = { ...curatedSessions.value, [providerRef]: session };
-    if (session.state === "pending") void pollCurated(providerRef, sessionRef, attempt + 1);
-    if (session.state === "completed") await loadProviderConnections();
-  } catch (cause) {
-    failPendingCuratedSession(providerRef, sessionRef);
-    curatedError.value = errorMessage(cause);
-  }
-}
-
-function failPendingCuratedSession(providerRef: string, sessionRef: string) {
-  const session = curatedSessions.value[providerRef];
-  if (session?.connect_session_ref !== sessionRef || session.state !== "pending") return;
-  curatedSessions.value = {
-    ...curatedSessions.value,
-    [providerRef]: { ...session, state: "failed" },
-  };
 }
 
 onMounted(() => void loadProviderConnections());
@@ -562,6 +549,9 @@ onMounted(() => void loadProviderConnections());
           <div>
             <strong>{{ provider.name }}</strong>
             <p>{{ provider.description }}</p>
+            <p v-if="curatedPollErrors[provider.providerRef]" role="alert">
+              {{ curatedPollErrors[provider.providerRef] }} Your connection may already be saved.
+            </p>
             <p v-if="curatedSessionMessage(provider.providerRef)" role="status">
               {{ curatedSessionMessage(provider.providerRef) }}
             </p>
@@ -586,6 +576,15 @@ onMounted(() => void loadProviderConnections());
             <span class="status-pill" :class="curatedStatusClass(provider.providerRef)">
               {{ curatedStatus(provider.providerRef) }}
             </span>
+            <button
+              v-if="curatedPollErrors[provider.providerRef]"
+              class="button small"
+              type="button"
+              :disabled="curatedChecking[provider.providerRef]"
+              @click="curatedPolling.retry(provider.providerRef)"
+            >
+              Check status
+            </button>
             <button
               v-if="curatedProfile(provider.providerRef)"
               class="button small"

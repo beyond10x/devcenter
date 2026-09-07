@@ -65,7 +65,7 @@ function useProviderHandlers(onStart?: (body: unknown) => void) {
           connect_session_ref: "connect-session:replacement",
           integration_ref: "gitlab",
           state: "failed",
-          expires_at_unix_ms: 1_788_260_900_000,
+          expires_at_unix_ms: Date.now() + 300_000,
         },
         { status: 201 },
       );
@@ -248,7 +248,7 @@ describe("curated connection recovery", () => {
             connect_session_ref: "connect-session:person",
             integration_ref: "gitlab",
             state: "failed",
-            expires_at_unix_ms: 1_788_260_900_000,
+            expires_at_unix_ms: Date.now() + 300_000,
           },
           { status: 201 },
         );
@@ -273,23 +273,45 @@ describe("curated connection recovery", () => {
     });
   });
 
-  it("allows another recovery attempt when session status becomes unavailable", async () => {
+  it("checks an unconfirmed session again without creating another authorization", async () => {
     vi.useFakeTimers();
     useProviderHandlers();
+    let starts = 0;
+    let polls = 0;
+    const deadline = Date.now() + 300_000;
     server.use(
-      http.post("/api/connections", () =>
-        HttpResponse.json(
+      http.post("/api/connections", () => {
+        starts += 1;
+        return HttpResponse.json(
           {
             connect_session_ref: "connect-session:pending",
             integration_ref: "gitlab",
             state: "pending",
-            expires_at_unix_ms: 1_788_260_900_000,
+            expires_at_unix_ms: deadline,
           },
           { status: 201 },
+        );
+      }),
+      http.get("/api/connect-sessions/:sessionRef", () => {
+        polls += 1;
+        return polls === 1
+          ? HttpResponse.json({ code: "connectors_unavailable" }, { status: 503 })
+          : HttpResponse.json({
+              connect_session_ref: "connect-session:pending",
+              integration_ref: "gitlab",
+              state: "completed",
+              connection_ref: "connection:gitlab:user",
+              expires_at_unix_ms: deadline,
+            });
+      }),
+      http.get("/api/connections", () =>
+        HttpResponse.json(
+          connections.map((connection) =>
+            polls > 1 && connection.integration_ref === "gitlab"
+              ? { ...connection, state: "callable" }
+              : connection,
+          ),
         ),
-      ),
-      http.get("/api/connect-sessions/:sessionRef", () =>
-        HttpResponse.json({ code: "connectors_unavailable" }, { status: 503 }),
       ),
     );
     const wrapper = mount(ConnectionsView, {
@@ -297,41 +319,40 @@ describe("curated connection recovery", () => {
       global: { plugins: [createPinia()] },
     });
     await flushPromises();
-
     await curatedCard(wrapper, "GitLab").get("button").trigger("click");
     await flushPromises();
     await vi.advanceTimersByTimeAsync(2_000);
     await flushPromises();
-
     const gitlab = curatedCard(wrapper, "GitLab");
-    expect(gitlab.get("button").attributes("disabled")).toBeUndefined();
-    expect(gitlab.get("button").text()).toContain("Reconnect GitLab");
+    expect(gitlab.text()).toContain("Status unavailable");
+    expect(gitlab.text()).not.toContain("Authorization failed");
+    expect(gitlab.text()).toContain("already be saved");
+    expect(gitlab.get("button").text()).toBe("Check status");
+    await gitlab.get("button").trigger("click");
+    await flushPromises();
+    expect(gitlab.text()).toContain("Callable");
+    expect(gitlab.text()).not.toContain("Status unavailable");
+    expect(starts).toBe(1);
+    expect(polls).toBe(2);
+    wrapper.unmount();
   });
 
-  it("fails an exhausted pending session after the bounded polling window", async () => {
+  it("continues beyond two minutes and stops at the issued deadline without inventing failure", async () => {
     vi.useFakeTimers();
-    let statusRequests = 0;
     useProviderHandlers();
+    let statusRequests = 0;
+    const deadline = Date.now() + 300_000;
+    const session = {
+      connect_session_ref: "connect-session:pending",
+      integration_ref: "gitlab",
+      state: "pending",
+      expires_at_unix_ms: deadline,
+    };
     server.use(
-      http.post("/api/connections", () =>
-        HttpResponse.json(
-          {
-            connect_session_ref: "connect-session:pending",
-            integration_ref: "gitlab",
-            state: "pending",
-            expires_at_unix_ms: 1_788_260_900_000,
-          },
-          { status: 201 },
-        ),
-      ),
+      http.post("/api/connections", () => HttpResponse.json(session, { status: 201 })),
       http.get("/api/connect-sessions/:sessionRef", () => {
         statusRequests += 1;
-        return HttpResponse.json({
-          connect_session_ref: "connect-session:pending",
-          integration_ref: "gitlab",
-          state: "pending",
-          expires_at_unix_ms: 1_788_260_900_000,
-        });
+        return HttpResponse.json(session);
       }),
     );
     const wrapper = mount(ConnectionsView, {
@@ -339,18 +360,24 @@ describe("curated connection recovery", () => {
       global: { plugins: [createPinia()] },
     });
     await flushPromises();
-
     await curatedCard(wrapper, "GitLab").get("button").trigger("click");
     await flushPromises();
-    for (let attempt = 0; attempt < 60; attempt += 1) {
+    for (let attempt = 0; attempt < 61; attempt += 1) {
       await vi.advanceTimersByTimeAsync(2_000);
       await flushPromises();
     }
-
+    expect(statusRequests).toBe(61);
+    expect(curatedCard(wrapper, "GitLab").text()).toContain("Authorization pending");
+    for (let attempt = 61; attempt < 150; attempt += 1) {
+      await vi.advanceTimersByTimeAsync(2_000);
+      await flushPromises();
+    }
     const gitlab = curatedCard(wrapper, "GitLab");
-    expect(statusRequests).toBe(60);
-    expect(gitlab.text()).toContain("Authorization failed");
-    expect(gitlab.get("button").attributes("disabled")).toBeUndefined();
+    expect(gitlab.text()).toContain("Check status");
+    expect(gitlab.text()).not.toContain("Authorization failed");
+    await vi.advanceTimersByTimeAsync(10_000);
+    expect(statusRequests).toBe(150);
+    wrapper.unmount();
   });
 
   it("does not fail another provider's pending session when one status request fails", async () => {
@@ -364,7 +391,7 @@ describe("curated connection recovery", () => {
             connect_session_ref: `connect-session:${body.integration_ref}`,
             integration_ref: body.integration_ref,
             state: "pending",
-            expires_at_unix_ms: 1_788_260_900_000,
+            expires_at_unix_ms: Date.now() + 300_000,
           },
           { status: 201 },
         );
@@ -378,7 +405,7 @@ describe("curated connection recovery", () => {
           connect_session_ref: sessionRef,
           integration_ref: "slack",
           state: "pending",
-          expires_at_unix_ms: 1_788_260_900_000,
+          expires_at_unix_ms: Date.now() + 300_000,
         });
       }),
     );
@@ -414,7 +441,7 @@ describe("curated connection recovery", () => {
             connect_session_ref: `connect-session:${integrationRef}`,
             integration_ref: integrationRef,
             state: "failed",
-            expires_at_unix_ms: 1_788_260_900_000,
+            expires_at_unix_ms: Date.now() + 300_000,
           },
           { status: 201 },
         );
@@ -456,7 +483,7 @@ describe("curated connection recovery", () => {
             connect_session_ref: "connect-session:pending",
             integration_ref: "gitlab",
             state: "pending",
-            expires_at_unix_ms: 1_788_260_900_000,
+            expires_at_unix_ms: Date.now() + 300_000,
             browser_completion_url: "https://connectors.example/connect-sessions/pending",
           },
           { status: 201 },

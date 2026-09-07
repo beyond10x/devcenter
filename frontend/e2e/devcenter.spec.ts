@@ -2125,3 +2125,63 @@ test("shows an incomplete attempt's reason alongside its partial output", async 
     page.getByRole("alert").filter({ hasText: "The provider stopped before finishing." }),
   ).toBeVisible();
 });
+
+test("recovers catalog connection status without resubmission and retains it after reload", async ({
+  page,
+}) => {
+  await mockAuthenticatedWorkspace(page);
+  let starts = 0;
+  let polls = 0;
+  let saved = false;
+  const session = {
+    connect_session_ref: "connect-session:catalog",
+    integration_ref: "gitlab",
+    state: "pending",
+    expires_at_unix_ms: Date.now() + 300_000,
+  };
+  await page.route("**/api/connections", async (route) => {
+    if (route.request().method() === "POST") {
+      starts += 1;
+      await route.fulfill({ status: 201, json: session });
+    } else {
+      await route.fulfill({
+        json: saved
+          ? [
+              {
+                connection_ref: "connection:gitlab:saved",
+                integration_ref: "gitlab",
+                label: "My GitLab",
+                state: "callable",
+                auth_profile: "gitlab.oauth_user",
+              },
+            ]
+          : [],
+      });
+    }
+  });
+  await page.route("**/api/connect-sessions/**", async (route) => {
+    polls += 1;
+    if (polls === 1) await route.fulfill({ status: 503, json: { code: "connectors_unavailable" } });
+    else {
+      saved = true;
+      await route.fulfill({
+        json: { ...session, state: "completed", connection_ref: "connection:gitlab:saved" },
+      });
+    }
+  });
+  await page.goto("/connectors/gitlab");
+  await page.getByRole("button", { name: "Oauth User", exact: true }).click();
+  await expect(page.getByRole("button", { name: "Check status", exact: true })).toBeVisible();
+  await expect(
+    page.getByRole("button", { name: "Status unavailable", exact: true }),
+  ).toBeDisabled();
+  await expect(page.getByText("Waiting for provider…", { exact: true })).toHaveCount(0);
+  await page.getByRole("button", { name: "Check status", exact: true }).click();
+  await expect(page.getByRole("button", { name: "Connected", exact: true })).toBeDisabled();
+  await expect(page.getByRole("alert")).toHaveCount(0);
+  expect(starts).toBe(1);
+  expect(polls).toBe(2);
+  await page.reload();
+  await expect(page.getByRole("button", { name: "Connected", exact: true })).toBeDisabled();
+  expect(starts).toBe(1);
+});
