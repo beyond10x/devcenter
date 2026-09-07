@@ -20,16 +20,16 @@ Set these paths from the existing handoff or your own explicit setup. Use an alr
 
 Choose the next action from what actually changed:
 
-| Change or observation | Next action |
-| --- | --- |
-| Owner reconnects Claude; runtime is unchanged | Run `local test` against the retained installation. |
-| Acceptance assertions or browser readiness change | Run the changed acceptance against existing images with `local test`; preserve the real behavior assertions. |
-| Frontend or BFF application code changes | Run focused source checks, then `local up` with `--build server`. |
-| Composed Connector code or dependencies change | Run its locked source checks, then `local up` with `--build connectors`. Select both builds when both are affected. |
-| Agent Platform implementation changes | Run its source checks, then `local up --agent-platform-source "$AGENT_PLATFORM_CHECKOUT"`; the CLI builds and pins that local checkout without requiring a release. |
-| CLI orchestration, chart or composition values change | Rebuild the CLI if needed, then rerun `local up` with matching baseline inputs and only necessary application builds. |
-| Immutable released images need verification | Supply the released image selections in matching private baseline values and lock; omit application build flags to exercise those published images. Retain the documented fixture-CA requirements. |
-| Documentation or planning changes only | Check the text, links, planning store when changed, and required repository gates; retain prior runtime evidence without a new application build or deployment. |
+| Change or observation                                 | Next action                                                                                                                                                                                        |
+| ----------------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Owner reconnects Claude; runtime is unchanged         | Run `local test` against the retained installation.                                                                                                                                                |
+| Acceptance assertions or browser readiness change     | Run the changed acceptance against existing images with `local test`; preserve the real behavior assertions.                                                                                       |
+| Frontend or BFF application code changes              | Run focused source checks, then `local up` with `--build server`.                                                                                                                                  |
+| Composed Connector code or dependencies change        | Run its locked source checks, then `local up` with `--build connectors`. Select both builds when both are affected.                                                                                |
+| Agent Platform implementation changes                 | Run its source checks, then `local up --agent-platform-source "$AGENT_PLATFORM_CHECKOUT"`; the CLI builds and pins that local checkout without requiring a release.                                |
+| CLI orchestration, chart or composition values change | Rebuild the CLI if needed, then rerun `local up` with matching baseline inputs and only necessary application builds.                                                                              |
+| Immutable released images need verification           | Supply the released image selections in matching private baseline values and lock; omit application build flags to exercise those published images. Retain the documented fixture-CA requirements. |
+| Documentation or planning changes only                | Check the text, links, planning store when changed, and required repository gates; retain prior runtime evidence without a new application build or deployment.                                    |
 
 Every `local up` starts from its supplied baseline. Omitting `--build server`, for example, selects the server in that baseline; it does not mean "keep whichever server is currently running." Carry forward the other validated candidate digests in matching private inputs when rebuilding only one component. Keep the same builder and its caches. `--identity-source` requests an Identity build, so omit it on ordinary repeats once the baseline retains the required Identity image.
 
@@ -83,11 +83,27 @@ After authorization, rerun acceptance without building or reinstalling. The CLI 
 
 ## Programmatic Connector setup
 
-Credential provisioning uses the existing provider-neutral administrative contract. An external client discovers active integrations and declared requirements with `GET /admin/integrations`, then writes a named credential with `PUT /admin/integrations/{integration_ref}/credentials/{credential}`. The response confirms custody without returning credential bytes. Identity authentication, operator admission, auditing and Connector-owned secret custody remain mandatory. This surface configures credentials for activated integrations; it does not dynamically install arbitrary provider code.
+Administrative credential provisioning uses the existing provider-neutral contract. An external client discovers active integrations and declared requirements with `GET /admin/integrations`, then writes a named credential with `PUT /admin/integrations/{integration_ref}/credentials/{credential}`. The response confirms custody without returning credential bytes. Identity authentication, operator admission, auditing and Connector-owned secret custody remain mandatory. This surface configures only credentials that an activated integration declares as administrative requirements. A catalog provider's endpoint binding alone does not add such a requirement or provision a connection.
 
 The normal `connectors admin integrations` and `connectors admin credentials set` commands expose the same contract and accept a short-lived Identity access token from an owner-only file. Inspect their `--help` for the installed CLI's input flags.
 
 The local fixture writes a provisioning manifest containing integration names, credential names and private value-file paths. The acceptance client discovers requirements, applies each item through the generic endpoint, and checks custody afterward. GitLab is one manifest entry, rather than a special credential route or environment-variable bypass. Provider protocol emulation remains a separate fixture concern. User-bound model credentials and user OAuth connections follow their own normal APIs.
+
+Catalog profiles that declare one secret credential entry use the principal-owned Connect Session flow. A CLI candidate with hosted token setup can submit an existing token from an owner-only file through this same flow. Set `CONNECTORS_CLI` to that candidate executable; the installed release may support only local `setup connect`. Keep the local login's non-secret selection separate from your normal remote CLI selection:
+
+```bash
+XDG_STATE_HOME="$PRIVATE_LOCAL_CLI_STATE" SSL_CERT_FILE="$LOCAL_ACCEPTANCE_STATE/ca.crt" \
+  "$CONNECTORS_CLI" session login "$LOCAL_CONNECTORS_API_BASE"
+XDG_STATE_HOME="$PRIVATE_LOCAL_CLI_STATE" SSL_CERT_FILE="$LOCAL_ACCEPTANCE_STATE/ca.crt" \
+  "$CONNECTORS_CLI" setup connect "$PROVIDER" --target hosted \
+  --auth-profile "$AUTH_PROFILE" --credential-file "$PRIVATE_PROVIDER_TOKEN_FILE"
+```
+
+Use the exact public Connector API base, including the application prefix. The saved Identity login remains in normal OS keyring custody; no browser cookie or upstream credential is copied from another client. The CA file establishes certificate trust without disabling hostname or certificate verification. Token files must be regular, owned by the invoking user, have no group or other access, and contain at most 8192 bytes. Credential bytes must not appear in command arguments or environment variables.
+
+Hosted token setup submits once to the exact Connector-issued completion route and confirms the resulting owner-scoped connection. An unconfirmed submission may already have stored the credential; inspect connections before starting another session. A callable connection still requires a fresh admitted provider read for local acceptance. OAuth consent and native acquisition requiring multiple fields use their declared flows.
+
+For example, `grafana.service_account_token` needs an existing Grafana service account token. A person's SSO password is not that API credential. Token creation and its permissions belong to the deployment's Grafana administration or provisioning; the Connector setup flow does not create the service account. Automation can call the reusable `HostedClient::connect_with_credential_file` with a normally issued short-lived Identity bearer and owner context, without requiring a desktop keyring. Private provisioning references stay in the downstream deployment repository.
 
 ### Real integrations from the private deployment
 

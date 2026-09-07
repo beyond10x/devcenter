@@ -30,39 +30,38 @@ scope:
   path: frontend/src/features/connections
 - confidence: cited
   path: frontend/src/features/connectors
-revision: 9
+revision: 12
 ---
 ## Outcome
 
-The retained local deployment can exercise real activated provider integrations, including the repository forge and collaboration and observability providers, before publication.
+The retained local deployment exercises real activated provider integrations before publication. Private deployment configuration supplies the repository forge, collaboration provider and observability origin; generic source owns no organization-specific identifiers.
 
 ## Acceptance
 
-- An explicit local provider mode preserves private baseline integration configuration and uses local Identity, Connector custody, and normal user connection flows.
-- Generic operator credential provisioning remains provider-neutral and reads owner-only value files; no secret values enter source, arguments, environment variables, logs, or evidence.
-- Fixture setup cannot overwrite live provider configuration or credentials on subsequent local builds or browser retries.
-- Acceptance records the provider mode and validates real repository discovery, materialization, and an admitted read operation for each configured provider; missing user authorization remains a visible incomplete result.
-- Only changed services are built, no release is required to test them, and retained databases, model connection, CA, caches and cluster identity survive ordinary iterations.
-- The browser exposes normal connection setup and explains actionable prerequisites for integrations awaiting authorization.
+- Explicit live mode preserves the private provider configuration and normal Identity, Connector custody and grants. Fixture mode is recorded separately from the always-real model mode.
+- Generic setup uses declared administrative requirements or owner-scoped Connect Sessions. Provider endpoint configuration alone never manufactures a credential or connection.
+- Credential values stay in normal custody or owner-only input files, never source, command arguments, environment variables, logs or evidence.
+- Actual freshly described read operations succeed for every configured provider, and the real repository materializes with working Files and terminal before complete acceptance.
+- Only changed components are built; normal iterations retain the cluster, databases, model connection, CA, quota state and caches.
 
-## Scope
+## Implementation
 
-The local deployment CLI and acceptance runner, generic configuration and credential setup, Connections UI where a diagnosed omission prevents setup, and reusable local-development documentation. Provider endpoints and credentials remain in private local inputs. No remote release or provider write operation is required for these read-only checks.
+The local Rust CLI retains live/fixture selection, clears inherited fixture provisioning on mode changes, supports a local Agent Platform source build, and invalidates acceptance receipts on prepare/apply/test. A live test refuses a fixture-derived last project. Required provider reads derive from composed private configuration and use fresh admitted operation descriptions.
 
-## Local verification
+Connectors endpoint and form candidate 129aece1ef6ae3717229cf1505a40106cdee92c1 is composed and deployed locally. The hosted catalog form renders the selected profile's credential label, help and documentation, including the observability service-account-token versus SSO-password distinction. Native administrative requirements remain distinct from generic catalog principal-owned credentials.
 
-The generic hosted-endpoint candidate is composed from Connectors 7e11cb919bd2746e8d3e04c1e74ede788409f147. Its complete upstream gate and the consuming Connector fmt/clippy/tests pass. Actual local browser setup forms pass for the three requested providers, including the private deployment's bound observability destination. The reusable integration suite derives configured provider targets from the composed values and invokes only freshly described admitted read operations. Its latest real run reaches Identity and Connector search successfully, then reports authorization required for all three providers. Provider credential entry remains pending owner setup; there is no successful real repository or provider read yet. The receipt remains incomplete and the fixture project cannot be reused as live acceptance. No shared deployment or release was performed.
+## Verification
 
-## Current local verification
+The full required Devcenter source gate passed, including frontend checks, browser regressions, root and composed Connector Rust checks, generated contract consistency, chart, version and leak checks. The upstream endpoint/form candidate passed its full gate. Actual headless browser checks passed for all three provider forms, including the declared observability destination, token label, SSO guidance and official documentation link. Actual agent and capability-profile lifecycle checks passed against the retained local composition.
 
-The local CLI now retains explicit fixture/live selection, preserves private provider declarations in live mode, clears inherited fixture provisioning, supports a local Agent Platform source build and invalidates earlier acceptance receipts on prepare/apply/test. A live test refuses a fixture-derived last project. Required provider reads derive from the composed configuration, obtain fresh Connector descriptions, and fail on missing authorization.
+All three real external provider reads currently return authorization required. Service-account provisioning has not been located through the available integration access and the operator has been asked for its reference. Real repository materialization and PTY acceptance remain pending normal Git authorization; the retained fixture-derived project cannot satisfy live acceptance. No successful external read is claimed from a form, URL binding or custody status.
 
-Full source checks passed: frontend formatting/lint/types/unit/build, generated API consistency, browser regression, root Rust fmt/clippy/tests, composed Connector fmt/clippy/tests, chart checks, version and leak checks. Actual local agent/profile lifecycle checks passed, and the provider forms opened through the real Connector. The generic catalog form now consumes credential-specific guidance from upstream candidate 129aece1ef6ae3717229cf1505a40106cdee92c1, whose full upstream gate passed. Browser verification of that latest form image is pending.
+The latest real conversation test remains incomplete after a properly typed history correction: the provider still refused the recall turn with category reasoning_extraction. This is recorded as a failure rather than hidden by partial output or replaced by the earlier successful run.
 
-Actual reads from all configured external providers remain blocked by missing normal authorization. Generic catalog service-account credentials currently have only the principal-owned Connect Session path; the existing administrative provisioning endpoint cannot provision them. This is an explicit remaining gap for deployment-managed setup, not a credential supplied by a URL binding. Real model acceptance also remains incomplete: a complete conversation run passed once, but a later composed run received a terminal provider refusal with partial output. The separately gated provider-diagnostic candidate is being composed; no refusal has been suppressed or counted as success. No release or shared-environment promotion is ready.
+## Programmatic setup follow-up
 
-## Deployed candidate observations
+The generic hosted token CLI/client candidate reuses the existing owner-scoped Connect Session. It accepts an owner-only token file, validates the exact completion destination, submits once without redirects or automatic retry, and confirms owner-scoped status and connection description. The CLI checks its catalog declaration before reading credentials or opening Identity state. Its supported scope is single-secret catalog token profiles; OAuth consent and native multi-field acquisition keep their normal routes. The reusable protocol client remains independent of catalog implementation and supports normally issued short-lived Identity authority without a desktop keyring.
 
-Actual headless browser checks passed for the corrected catalog credential forms: the configured observability provider shows its declared service-account-token field, SSO distinction and official setup link. The form contract applies generically to the selected catalog profile. This does not establish provider authorization or a successful external read.
+The candidate passed focused client and CLI boundary tests and all-target clippy. Native CA support was verified with TLS tests and then through actual normal Identity login against the retained local deployment. A fresh headless browser completed upstream login and the loopback callback; the CLI stored its session through the normal OS keyring and selected the local deployment in an isolated XDG state directory. A subsequent owner-scoped hosted connection list succeeded. The ordinary CLI metadata still selects the existing non-local deployment. The first browser helper attempt failed before browser startup because its TMPDIR was not set; after correcting that environment prerequisite, the normal login passed. Failed evidence is retained.
 
-The separately published Agent Platform candidate now replays main-agent history as typed conversation roles. Its unchanged live conversation test still failed with provider refusal category reasoning_extraction. This remains incomplete acceptance. Programmatic catalog token acquisition through the existing owner-scoped Connect Session is being inspected as the smallest way to supply deployment-managed credentials without inventing shared authority.
+The Grafana operation search still returned no admitted operations, and no provider token has been supplied. Thus actual token acquisition and external reads remain unverified. The candidate is published at acf8ef8c01e6a794860babd5d6df15a2d71b8014. Its full repository gate passed all twelve workspaces, both runtime feature configurations, catalog and documentation checks, and exact ESS projection. Client, CLI and console all-target clippy passed. The tested CLI binary matches the final implementation; only evidence updates followed its build. This is a client-only candidate compatible with the deployed endpoint/form runtime; no service image rebuild or shared deployment was performed.
