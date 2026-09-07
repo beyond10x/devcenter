@@ -27,7 +27,7 @@ scope:
   path: frontend/acceptance/setup.spec.ts
 - confidence: cited
   path: frontend/acceptance/workspace.spec.ts
-revision: 9
+revision: 11
 ---
 ## Outcome
 
@@ -67,3 +67,15 @@ Local 0.7 testing exposed two composition failures while model authorization was
 The corrected Connectors 0.7 composition passed actual local k3d acceptance, followed by a second browser-only retry without a rebuild or rollout. Both runs obtained fresh nonce-checked Claude replies in main Agents, project chat and coding chat, exercised history pagination, edited and exactly restored a workspace file, executed a real PTY command and closed their owned workspaces. The running model endpoint was https://api.anthropic.com/v1. Model authorization became available during execution; no assertion is made about who completed it.
 
 Evidence: local-evidence:devcenter-local-k3d-20260906/acceptance-1788773149796210203 and acceptance-1788773500893271555. The retry records checks.json with an empty failed list and provider_mode=live/result=pass. The setup-only project.json file is absent from the retry directory, proving the new API lookup is exercised. Targeted devcenterctl tests and clippy plus frontend check passed after the runner correction. Upstream OIDC and Git forge remain explicit fixtures. Remote promotion still requires published artifact verification and remote user-journey evidence.
+
+## Browser readiness in deployed acceptance
+
+Published-image local acceptance passed, but the deployed workspace test clicked Agent chat while the browser still displayed Preparing workspace files. Its separate API poll had already observed Ready; the explorer predicate incorrectly matched the Load workspace placeholder, and the loading-progress element was not yet mounted. The resulting absence of a layout POST was a test readiness failure, not evidence that the UI had finished loading.
+
+A bounded remote diagnostic awaited the actual README entry, then observed layout initialization and Agent focus persist with HTTP 200 and the composer visible. Its owned workspace closed normally. Evidence: local-evidence:devcenter-claude-20260907/remote-focus-YK1ji5 and remote-focus-AHTpeA. Tighten frontend/acceptance/workspace.spec.ts to await the real repository file before navigation, keeping the API, persistence, editor, terminal and model assertions. Verify against the published local and remote composition. This changes acceptance timing only; no application image behavior is changed.
+
+## Browser readiness verification
+
+After the readiness correction, frontend check passed and the complete local run against published 0.8.35 passed again with actual Claude replies across all three surfaces, Files edit/restore, PTY execution and history checks. Evidence: local-evidence:devcenter-local-k3d-20260906/acceptance-1788776449880916246.
+
+The corrected remote run passed Files entry, repeated navigation, editor editing/save/exact restoration, binary PTY input/output, terminal termination and normal owned workspace closure. Evidence: local-evidence:devcenter-claude-20260907/remote-readiness-retry/deployment-acceptance-JCmH9g/result.json. Coding and project replies still failed, so that run correctly records DEPLOYMENT_ACCEPTANCE_FAILED. The separate main Agents attempt also failed model_credential_unavailable. The connection owner has been asked to complete the normal deployed reconnect flow; no full remote acceptance is asserted.
