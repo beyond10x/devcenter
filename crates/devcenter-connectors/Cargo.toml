@@ -19,8 +19,8 @@ path = "src/main.rs"
 agentide-generated-service = { git = "https://github.com/beyond10x/agentide.git", rev = "176a57f58457a7c16f105584c66964263b3c2e41" }
 anyhow = "1"
 clap = { version = "4.6", features = ["derive", "env"] }
-connectors-runtime = { git = "ssh://git@github.com/beyond10x/connectors.git", rev = "db9f4c555a4213a082072fe6d6b3725da765250e", default-features = false }
-connectors-service = { package = "service", git = "ssh://git@github.com/beyond10x/connectors.git", rev = "db9f4c555a4213a082072fe6d6b3725da765250e" }
+connectors-runtime = { git = "ssh://git@github.com/beyond10x/connectors.git", rev = "8d0cbcfe39d83793fcb7413acd3755be531da8c2", default-features = false }
+connectors-service = { package = "service", git = "ssh://git@github.com/beyond10x/connectors.git", rev = "8d0cbcfe39d83793fcb7413acd3755be531da8c2" }
 eventlog-postgres = { git = "https://github.com/beyond10x/eventlog.git", rev = "b7e8f0d87b01c403415546d311952cb155caf16f" }
 rustls = { version = "0.23", default-features = false, features = ["aws_lc_rs", "std"] }
 # Honor deployment-selected operating-system CA roots without disabling TLS verification.
@@ -36,8 +36,8 @@ tokio = { version = "1", features = ["macros", "rt-multi-thread", "signal"] }
 # Unify its shared contracts with the repaired runtime at the same exact source.
 # Cargo requires a distinct source URL for a Git patch; delivery authenticates both transports.
 [patch."https://github.com/beyond10x/connectors.git"]
-protocol = { git = "ssh://git@github.com/beyond10x/connectors.git", rev = "db9f4c555a4213a082072fe6d6b3725da765250e" }
-service = { git = "ssh://git@github.com/beyond10x/connectors.git", rev = "db9f4c555a4213a082072fe6d6b3725da765250e" }
+protocol = { git = "ssh://git@github.com/beyond10x/connectors.git", rev = "8d0cbcfe39d83793fcb7413acd3755be531da8c2" }
+service = { git = "ssh://git@github.com/beyond10x/connectors.git", rev = "8d0cbcfe39d83793fcb7413acd3755be531da8c2" }
 
 [workspace.lints.rust]
 unsafe_code = "forbid"
