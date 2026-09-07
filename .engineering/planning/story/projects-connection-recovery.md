@@ -66,7 +66,7 @@ scope:
   path: generated/ess/build.json
 - confidence: cited
   path: openapi.json
-revision: 60
+revision: 61
 ---
 ## Outcome
 
@@ -338,3 +338,15 @@ The first actual headless browser run after this deployment passes fresh Git mat
 A subsequent instrumented headless run waits for initial PTY output, clicks the actual terminal canvas, and asserts input focus before typing the split random printf sentinel. The initial output wait is 502 ms. Fifty binary input bytes and ten binary output frames are observed; the complete sentinel is received from the PTY. Terminal creation, real command output, explicit termination, and subsequent Ready state plus a readable file tree pass. The fresh workspace reaches Ready in approximately 23 seconds. Project Files entry and persisted pane navigation, editor layout, real keyboard save, exact content and hash restoration, and reload all pass. Both disposable Workspace and coordination close after one normal cleanup reconciliation retry. No JavaScript or content-security-policy failure is observed. The changed test readiness and focus conditions do not establish which one caused the first run's missing input.
 
 Both Agent checks still fail, so overall deployment acceptance remains incomplete. The coding attempt now reaches a distinct workspace_actor_view_unavailable failure after a terminal exists. Read-only source diagnosis identifies an absolute execution directory copied into AgentIDE's relative-path terminal context; terminated terminals are included in that validation. Workspace owns its focused repair under story:normalize-terminal-context-directory. The original model credential blocker remains open because no successful model redemption or reply has been observed. Files and terminal acceptance must not be reported as complete Agent acceptance.
+
+## Local-first publication and current deployed acceptance
+
+Publication 0.8.34 selects the tested server, composed Connectors, chart and deployment CLI from source 9bde475043b4974ce839c139ca1f2786db50a1a7. The complete local k3d source-candidate journey passed fresh and repeated runs, followed by another successful journey against the actual published images. Local normal Identity login and Connector custody, paginated history, materialized Files/editor, real PTY execution and all three Agent surfaces are covered; external providers are explicitly deterministic fixtures.
+
+The private composition passed its normal validate, atomic deploy and verify jobs. Its selected immutable digests match the release receipt. Ten serving workloads are Ready; the deployment render additionally verifies initializer images. All durable volume identities are unchanged. The original user workspace remains Ready, has no open terminal and retains its exact README checksum.
+
+A fresh headless check on the promoted deployment passes repository search, existing-project open and reopen, normal Files entry, persisted pane navigation, editor geometry, keyboard edit/save/exact restore/reload, real binary terminal input/output with an executed random sentinel, and explicit terminal termination. Workspace and coordination closure are both acknowledged after normal cleanup reconciliation. No test writes or cleanup target the original user workspace.
+
+Overall remote acceptance still fails. Personal Agents, project Agent and coding Agent requests are admitted but fail at the model credential boundary; a fresh coding request returns model_credential_unavailable in about three seconds. Connected metadata is not evidence that this credential is redeemable. The owner has been asked to use the current Connections UI: Disconnect the Claude connection, then Connect Claude, complete provider approval and enter the one-time code in Devcenter. No completion or successful remote model reply has been observed.
+
+Credential-free receipts are retained at local-evidence:devcenter-remote-20260907/deployment-acceptance-st0yMO/result.json, remote-projects.json, remote-agents.json, operator-workspace-after.json and promoted-runtime-proof.json. The existing credential blocker remains open; this story remains active.

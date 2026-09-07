@@ -56,7 +56,7 @@ scope:
   path: frontend/tests/devcenter-workbench-host.test.ts
 - confidence: cited
   path: frontend/tsconfig.node.json
-revision: 19
+revision: 20
 ---
 ## Outcome
 
@@ -94,3 +94,13 @@ Local testing exposed and fixed a workbench race: layout and terminal hydration 
 The frontend gate, existing browser suite, root Rust gate, composed Connector gate, Identity gate, chart lint and rollout checks, version check, leak check and ESS validation passed. The existing browser suite reports 32 passes and 18 deliberately skipped mobile cases; the new composed acceptance checks skip none. The organization-wide documentation check remains refused by the current clean Atlas main because another repository already declares an unsupported documentation schema. This limitation is retained as a failure, not counted as green validation.
 
 Obsolete Docker build layers and audited inactive Rust targets were reclaimed. Active caches remain for iteration; source, other deployments, persistent application data and private evidence were preserved. Public source contains no private baseline values, deployment credentials or browser sessions.
+
+## Published artifact verification
+
+The implementation passed the full source gate and affected OCI builds in https://github.com/beyond10x/devcenter/actions/runs/34070536687 and merged with an identical tree at 9bde475043b4974ce839c139ca1f2786db50a1a7. Publication 0.8.34 completed in https://github.com/beyond10x/devcenter/actions/runs/34072072815, including both native architectures, image signing and the exact composed manifest.
+
+The released CLI installed the published server, Connectors and chart in the owned k3d cluster. The published-image run passed normal Identity login, generic administrative credential custody, paginated history, Files navigation, editor read/edit/save/exact restore/reload, binary terminal input/output and acknowledged termination, and project plus coding Agent replies. An independent main Agents browser check also returned the expected reply. Runtime image observations match the publication digests. The local canonical Identity image retains fixture CA support, while the external provider endpoints remain deterministic fixtures. This result does not establish live provider credential readiness.
+
+Earlier host disk pressure evicted local pods after free space crossed the node's 10 GiB reserve. A further 1.8 GiB of audited obsolete task build output was reclaimed without removing the compiled CLI, examples, active dependency caches or application data. The evicted execution-profile installer was replaced through normal control; its DaemonSet is Ready and node pressure is clear. Protected execution-profile source files remain intact.
+
+Credential-free evidence is retained at local-evidence:devcenter-remote-20260907/published-local-acceptance/receipt.json, published-local-runtime-proof.json, published-local-global-agents.json and local-profile-recovery.log. The original fresh and repeat source-candidate acceptance receipts remain retained separately.

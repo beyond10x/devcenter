@@ -8,7 +8,7 @@ relations:
 - blocks: story:projects-connection-recovery
 - blocks: story:refresh-user-bound-model-credential
 withholds: test_result
-revision: 2
+revision: 3
 ---
 ## Missing credential evidence
 
@@ -24,6 +24,6 @@ Repository discovery, Git checkout, file transport and workspace/coordination cl
 
 ## Latest deployed observation
 
-After server 0.8.29 and Workspace 0.2.22 delivery, a fresh coding-Agent browser request is admitted with HTTP202 and fails model_credential_unavailable within about three seconds. The earlier project-Agent request failed at the same credential boundary, and normal one-use subscription redemption previously returned subscription-oauth-refused. File read/edit/save/restoration and both normal workspace close states now pass independently.
+After publication 0.8.34 and the successful private validate/deploy/verify pipeline, fresh requests through personal Agents, project Agent and coding Agent still fail at the model credential boundary. The coding request returns model_credential_unavailable after about three seconds; the independent main Agents task returns the same code. Projects, materialization, Files/editor, real terminal execution, original-workspace preservation and owned-session cleanup all pass independently. Evidence is retained at local-evidence:devcenter-remote-20260907/deployment-acceptance-st0yMO/result.json and remote-agents.json.
 
-The operator has been notified that Files is ready and that Claude must be reconnected through the normal connection flow before Agent acceptance can be completed. No reconnection completion or successful model reply has been observed, so this blocker remains open. Once reconnection is reported, verify both Agent surfaces through fresh normal requests before clearing it.
+The current Claude UI offers Disconnect and then Connect Claude, followed by provider approval and submission of the one-time code in Devcenter. The previously requested reconnect action refers to this sequence; there is no button literally named Reconnect Claude. The owner has not reported completion. Keep this blocker open until real provider-backed replies pass on all three Agent surfaces.
