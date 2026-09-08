@@ -1,3 +1,4 @@
+{{- $workspaceTasks := and (index .Values.components "workspace").enabled (index .Values.components "agent-platform").enabled -}}
 apiVersion: apps/v1
 kind: Deployment
 metadata:
@@ -47,6 +48,10 @@ spec:
                 secretKeyRef:
                   name: {{ required "devcenter.database.existingSecret is required" .Values.devcenter.database.existingSecret | quote }}
                   key: {{ .Values.devcenter.database.databaseUrlKey | quote }}
+          {{- if $workspaceTasks }}
+          volumeMounts:
+            - {name: workspace-coordinator, mountPath: /etc/workspace-coordinator, readOnly: true}
+          {{- end }}
           ports:
             - {name: http, containerPort: 8080, protocol: TCP}
           readinessProbe: {httpGet: {path: /readyz, port: http}}
@@ -56,3 +61,11 @@ spec:
             allowPrivilegeEscalation: false
             readOnlyRootFilesystem: true
             capabilities: {drop: ["ALL"]}
+
+      {{- if $workspaceTasks }}
+      volumes:
+        - name: workspace-coordinator
+          secret:
+            secretName: {{ required "workspaceAuthority.coordinator.existingSecret is required" .Values.workspaceAuthority.coordinator.existingSecret | quote }}
+            items: [{key: {{ .Values.workspaceAuthority.coordinator.privateKey | quote }}, path: private.pem}]
+      {{- end }}

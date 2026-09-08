@@ -38,6 +38,10 @@ pub struct Config {
     pub connectors_docs_available: bool,
     /// Internal Workspace origin. Absence disables repository projects fail-closed.
     pub workspace_origin: Option<String>,
+    /// Configured Ed25519 coordinator key path; the key is read only by the HTTP adapter.
+    pub workspace_signing_key_file: Option<std::path::PathBuf>,
+    /// Model selected for the analysis-only project agent.
+    pub project_agent_model: Option<String>,
     /// Internal standalone Workflow origin. Absence disables the workflow library fail-closed.
     pub workflow_origin: Option<String>,
     /// Expose the native hosted coding workbench. Disabled unless deployment opts in.

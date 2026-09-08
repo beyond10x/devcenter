@@ -32,6 +32,12 @@ Choose the next action from what actually changed:
 
 Every `local up` starts from its supplied baseline. Omitting `--build server`, for example, selects the server in that baseline; it does not mean "keep whichever server is currently running." Carry forward the other validated candidate digests in matching private inputs when rebuilding only one component. Keep the same builder and its caches. `--identity-source` requests an Identity build, so omit it on ordinary repeats once the baseline retains the required Identity image.
 
+For an existing local installation whose service configuration must stay intact, use `local prepare
+--preserve-existing-services` with the matching baseline values and lock. It prepares only the
+Workspace executor/coordinator keys and configuration, preserving current Identity, Connector and
+model settings. Apply the resulting values with `local apply`, then run `local test`. This mode
+requires the already owned installation; it does not bootstrap the upstream fixtures or databases.
+
 ## Inputs and prerequisites
 
 Use the repository-pinned Node and pnpm versions, Rust, Docker with Buildx, k3d, kubectl, Helm, OpenSSL and Git on an amd64 Linux host with AppArmor and loop-device support. Install frontend dependencies with `pnpm --dir frontend install --frozen-lockfile` and Chromium with `pnpm --dir frontend exec playwright install chromium`.

@@ -38,6 +38,14 @@
         }
       }
     },
+    "workspaceAuthority": {
+      "type": "object", "additionalProperties": false,
+      "required": ["executor", "coordinator"],
+      "properties": {
+        "executor": { "$ref": "#/$defs/workspaceKey" },
+        "coordinator": { "$ref": "#/$defs/workspaceKey" }
+      }
+    },
     "ingress": {
       "type": "object",
       "additionalProperties": false,
@@ -198,6 +206,15 @@
     "serviceMonitor": { "type": "object" }
   },
   "$defs": {
+    "workspaceKey": {
+      "type": "object", "additionalProperties": false,
+      "required": ["existingSecret", "privateKey", "publicKey"],
+      "properties": {
+        "existingSecret": { "type": "string" },
+        "privateKey": { "type": "string", "minLength": 1 },
+        "publicKey": { "type": "string", "minLength": 1 }
+      }
+    },
     "routeToggle": {
       "type": "object",
       "additionalProperties": false,

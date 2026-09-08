@@ -452,3 +452,29 @@ fi
 grep -q "ingress.connectorClientApi.enabled requires components.connectors.enabled" "$invalid_connector_client_error"
 
 bash ci/check-substrate-volume-permissions.sh
+
+# Downward request authority projects only each host's key material into its pod.
+workspace_manifest=$(resource_manifest Deployment devcenter-workspace < "$rendered")
+executor_manifest=$(resource_manifest Deployment devcenter-agent-platform < "$rendered")
+coordinator_manifest=$(resource_manifest Deployment devcenter < "$rendered")
+grep -Fq 'name: WORKSPACE_EXECUTOR_PUBLIC_KEY_FILE' <<<"$workspace_manifest"
+grep -Fq 'name: WORKSPACE_COORDINATOR_PUBLIC_KEY_FILE' <<<"$workspace_manifest"
+grep -Fq 'path: executor.pem' <<<"$workspace_manifest"
+grep -Fq 'path: coordinator.pem' <<<"$workspace_manifest"
+if grep -Eq 'private.pem|WORKSPACE_AGENT_PLATFORM_ORIGIN' <<<"$workspace_manifest"; then
+  echo "Workspace must receive public verification material without a task callback" >&2
+  exit 1
+fi
+grep -Fq 'secretName: "example-workspace-executor"' <<<"$executor_manifest"
+grep -Fq 'secretName: "example-workspace-coordinator"' <<<"$coordinator_manifest"
+if grep -Fq 'example-workspace-coordinator' <<<"$executor_manifest" ||    grep -Fq 'example-workspace-executor' <<<"$coordinator_manifest"; then
+  echo "Workspace host signing keys crossed their deployment roles" >&2
+  exit 1
+fi
+for role in executor coordinator; do
+  if helm template devcenter "$chart" --namespace devcenter --values "$values"     --set "workspaceAuthority.$role.existingSecret=" > /dev/null 2>"$invalid_workflow_error"; then
+    echo "chart admitted an unconfigured Workspace $role key" >&2
+    exit 1
+  fi
+  grep -Fq "workspaceAuthority.$role.existingSecret is required" "$invalid_workflow_error"
+done

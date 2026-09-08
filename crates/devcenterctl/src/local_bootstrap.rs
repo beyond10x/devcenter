@@ -21,6 +21,9 @@ pub struct Prepare {
     pub(super) connectors_image: String,
     #[arg(long)]
     pub(super) provider_image: String,
+    /// Reuse an existing local installation; provision only downward Workspace authority.
+    #[arg(long)]
+    pub(super) preserve_existing_services: bool,
 }
 
 pub fn prepare(args: &Prepare) -> Result<()> {
@@ -29,6 +32,9 @@ pub fn prepare(args: &Prepare) -> Result<()> {
     let app = format!("https://devcenter.localhost:{}", owned.https_port);
     let provider = "https://provider.devcenter.localhost".to_owned();
     let baseline: Value = serde_yaml::from_slice(&fs::read(&args.baseline_values)?)?;
+    if args.preserve_existing_services {
+        return prepare_workspace_authority(state, &baseline, &args.baseline_lock);
+    }
     let mut values = local_values(&baseline, &app, &provider)?;
     let mut lock: toml::Value = toml::from_str(&fs::read_to_string(&args.baseline_lock)?)?;
     for (name, reference) in [
@@ -120,9 +126,66 @@ fn immutable(image: &str) -> Result<(&str, &str)> {
     Ok((repository, digest))
 }
 
+fn workspace_authority_values(values: &mut Value) -> Result<()> {
+    let model = values["devcenter"]["projectAgentModel"]
+        .as_str()
+        .filter(|value| !value.is_empty())
+        .or_else(|| {
+            values["components"]["workspace"]["env"]["WORKSPACE_PROJECT_AGENT_MODEL"].as_str()
+        })
+        .context("local acceptance requires devcenter.projectAgentModel")?
+        .to_owned();
+    values["devcenter"]["projectAgentModel"] = json!(model);
+    if let Some(env) = values["components"]["workspace"]["env"].as_object_mut() {
+        env.remove("WORKSPACE_PROJECT_AGENT_MODEL");
+        env.remove("WORKSPACE_AGENT_PLATFORM_ORIGIN");
+    }
+    values["workspaceAuthority"] = json!({
+        "executor":{"existingSecret":"devcenter-local-workspace-executor", "privateKey":"private.pem", "publicKey":"public.pem"},
+        "coordinator":{"existingSecret":"devcenter-local-workspace-coordinator", "privateKey":"private.pem", "publicKey":"public.pem"}
+    });
+    Ok(())
+}
+
+fn prepare_workspace_authority(state: &Path, baseline: &Value, baseline_lock: &Path) -> Result<()> {
+    let mut values = baseline.clone();
+    workspace_authority_values(&mut values)?;
+    let lock = fs::read_to_string(baseline_lock)?;
+    let _: toml::Value = toml::from_str(&lock)?;
+    workspace_authority_keys(state)?;
+    let resources = workspace_authority_secrets(state)?;
+    let resource_file = state.join("workspace-authority.json");
+    write_private(
+        &resource_file,
+        &serde_json::to_vec(&json!({"apiVersion":"v1", "kind":"List", "items":resources}))?,
+    )?;
+    capture(
+        state,
+        "workspace-authority-apply",
+        kube(state).args(["apply", "-f"]).arg(&resource_file),
+    )?;
+    write_private(
+        &state.join("values.local.yaml"),
+        serde_yaml::to_string(&values)?.as_bytes(),
+    )?;
+    write_private(&state.join("deployment.local.lock.toml"), lock.as_bytes())?;
+    println!("prepared downward Workspace authority; retained existing service configuration");
+    Ok(())
+}
+
+fn workspace_authority_secrets(state: &Path) -> Result<Vec<Value>> {
+    ["executor", "coordinator"].into_iter().map(|role| {
+        Ok(secret(&format!("devcenter-local-workspace-{role}"), json!({
+            "private.pem":fs::read_to_string(state.join(format!("workspace-{role}-private.pem")))?,
+            "public.pem":fs::read_to_string(state.join(format!("workspace-{role}-public.pem")))?
+        })))
+    }).collect()
+}
+
 #[allow(clippy::too_many_lines)] // The deployment overlay is kept together for review.
 fn local_values(baseline: &Value, app: &str, provider: &str) -> Result<Value> {
     let mut values = baseline.clone();
+    workspace_authority_values(&mut values)?;
     values["global"] = json!({"tenantId":"local-acceptance","publicOrigin":app,"imagePullSecrets":["github-container-registry"],"podLabels":{}});
     values["devcenter"]["identity"]["redirectUri"] = json!(format!("{app}/auth/sso/callback"));
     values["devcenter"]["identity"]["providers"] =
@@ -278,7 +341,53 @@ fn random_file(state: &Path, name: &str) -> Result<String> {
     Ok(fs::read_to_string(path)?)
 }
 
+fn workspace_authority_keys(state: &Path) -> Result<()> {
+    for role in ["executor", "coordinator"] {
+        let private = state.join(format!("workspace-{role}-private.pem"));
+        let public = state.join(format!("workspace-{role}-public.pem"));
+        if !private.exists() {
+            // Publish only a complete key, and never replace a concurrently retained key.
+            let pending = tempfile::NamedTempFile::new_in(state)?;
+            capture(
+                state,
+                &format!("workspace-{role}-key"),
+                Command::new("openssl")
+                    .args(["genpkey", "-algorithm", "ED25519", "-out"])
+                    .arg(pending.path()),
+            )?;
+            pending.as_file().sync_all()?;
+            pending.persist_noclobber(&private)?;
+        }
+        super::private_file(&private)?;
+        capture(
+            state,
+            &format!("workspace-{role}-check-key"),
+            Command::new("openssl")
+                .args(["pkey", "-check", "-noout", "-in"])
+                .arg(&private),
+        )?;
+        if public.symlink_metadata().is_ok() {
+            super::private_file(&public)?;
+        }
+        let pending = tempfile::NamedTempFile::new_in(state)?;
+        capture(
+            state,
+            &format!("workspace-{role}-public-key"),
+            Command::new("openssl")
+                .args(["pkey", "-pubout", "-in"])
+                .arg(&private)
+                .arg("-out")
+                .arg(pending.path()),
+        )?;
+        pending.as_file().sync_all()?;
+        pending.persist(&public)?;
+    }
+    fs::File::open(state)?.sync_all()?;
+    Ok(())
+}
+
 fn create_keys(state: &Path) -> Result<()> {
+    workspace_authority_keys(state)?;
     if !state.join("ca.crt").exists() {
         capture(
             state,
@@ -472,6 +581,7 @@ fn resources(
         json!({"apiVersion":"v1","kind":"PersistentVolume","metadata":{"name":"devcenter-local-workspaces"},"spec":{"capacity":{"storage":"4Gi"},"volumeMode":"Filesystem","accessModes":["ReadWriteOnce"],"persistentVolumeReclaimPolicy":"Retain","storageClassName":"devcenter-local-quota","local":{"path":"/var/lib/devcenter-local/workspaces"},"nodeAffinity":{"required":{"nodeSelectorTerms":[{"matchExpressions":[{"key":"kubernetes.io/hostname","operator":"In","values":[format!("k3d-{cluster}-server-0")]}]}]}}}}),
         json!({"apiVersion":"v1","kind":"PersistentVolumeClaim","metadata":{"name":"devcenter-substrate-workspaces","namespace":"devcenter"},"spec":{"accessModes":["ReadWriteOnce"],"storageClassName":"devcenter-local-quota","volumeName":"devcenter-local-workspaces","resources":{"requests":{"storage":"4Gi"}}}}),
     ];
+    docs.extend(workspace_authority_secrets(state)?);
     let labels = json!({"app.kubernetes.io/instance":"devcenter","app.kubernetes.io/component":"local-provider"});
     docs.push(json!({"apiVersion":"apps/v1","kind":"Deployment","metadata":{"name":"devcenter-local-provider","namespace":"devcenter"},"spec":{"replicas":1,"selector":{"matchLabels":labels},"template":{"metadata":{"labels":labels},"spec":{"securityContext":{"runAsUser":65532,"runAsGroup":65532,"fsGroup":65532,"runAsNonRoot":true,"seccompProfile":{"type":"RuntimeDefault"}},"initContainers":[{"name":"fixture-state","image":provider_image,"command":["/bin/sh","-c","install -m 600 /input/oidc-signing.key /input/oidc-client-secret /state/ && tar xzf /input/repositories.tar.gz -C /state"],"securityContext":{"allowPrivilegeEscalation":false,"capabilities":{"drop":["ALL"]}},"volumeMounts":[{"name":"input","mountPath":"/input","readOnly":true},{"name":"state","mountPath":"/state"}]}],"containers":[{"name":"provider","image":provider_image,"args":["--origin",provider,"--app-origin",app,"--state","/state"],"env":[{"name":"LOCAL_ACCEPTANCE_FIXTURE","value":"1"}],"ports":[{"name":"http","containerPort":8080}],"readinessProbe":{"httpGet":{"path":"/readyz","port":"http"}},"securityContext":{"allowPrivilegeEscalation":false,"readOnlyRootFilesystem":true,"capabilities":{"drop":["ALL"]}},"volumeMounts":[{"name":"state","mountPath":"/state"}]}],"volumes":[{"name":"input","secret":{"secretName":"devcenter-local-provider"}},{"name":"state","emptyDir":{}}]}}}}));
     docs.push(json!({"apiVersion":"v1","kind":"Service","metadata":{"name":"devcenter-local-provider","namespace":"devcenter"},"spec":{"selector":labels,"ports":[{"port":8080,"targetPort":"http"}]}}));
@@ -633,6 +743,79 @@ fn configure_token_review(state: &Path) -> Result<()> {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn workspace_authority_overlay_preserves_existing_integrations_and_model_routes() {
+        let baseline = json!({"devcenter":{"image":{"digest":"retained"}}, "components":{
+            "workspace":{"env":{"WORKSPACE_PROJECT_AGENT_MODEL":"retained-model", "WORKSPACE_AGENT_PLATFORM_ORIGIN":"old-callback", "OTHER":"unchanged"}},
+            "identity":{"env":{"registry":"retained"}},
+            "connectors":{"configFiles":{"hosted.toml":"retained integration config"}},
+            "agent-platform":{"args":["serve","--model-endpoint-base=retained-route"]}
+        }, "networkPolicy":{"extraEgress":[{"retained":true}]}});
+        let mut values = baseline.clone();
+        workspace_authority_values(&mut values).unwrap();
+        assert_eq!(values["devcenter"]["projectAgentModel"], "retained-model");
+        assert_eq!(
+            values["components"]["workspace"]["env"]["OTHER"],
+            "unchanged"
+        );
+        assert!(
+            values["components"]["workspace"]["env"]
+                .get("WORKSPACE_AGENT_PLATFORM_ORIGIN")
+                .is_none()
+        );
+        let mut restored = values;
+        restored["devcenter"]
+            .as_object_mut()
+            .unwrap()
+            .remove("projectAgentModel");
+        restored["components"]["workspace"] = baseline["components"]["workspace"].clone();
+        restored
+            .as_object_mut()
+            .unwrap()
+            .remove("workspaceAuthority");
+        assert_eq!(restored, baseline);
+    }
+
+    #[test]
+    fn workspace_key_preparation_preserves_retained_keys() {
+        let state = tempfile::tempdir().unwrap();
+        workspace_authority_keys(state.path()).unwrap();
+        let names = [
+            "workspace-executor-private.pem",
+            "workspace-executor-public.pem",
+            "workspace-coordinator-private.pem",
+            "workspace-coordinator-public.pem",
+        ];
+        let before: Vec<_> = names
+            .iter()
+            .map(|name| fs::read(state.path().join(name)).unwrap())
+            .collect();
+        workspace_authority_keys(state.path()).unwrap();
+        for (name, expected) in names.iter().zip(&before) {
+            let path = state.path().join(name);
+            super::super::private_file(&path).unwrap();
+            assert_eq!(fs::read(path).unwrap(), *expected);
+            assert!(!expected.is_empty());
+        }
+        assert_ne!(before[0], before[2]);
+    }
+
+    #[test]
+    fn an_invalid_retained_workspace_key_is_refused_without_rotation() {
+        let state = tempfile::tempdir().unwrap();
+        let private = state.path().join("workspace-executor-private.pem");
+        write_private(&private, b"").unwrap();
+        assert!(workspace_authority_keys(state.path()).is_err());
+        assert!(fs::read(private).unwrap().is_empty());
+        assert!(!state.path().join("workspace-executor-public.pem").exists());
+        assert!(
+            !state
+                .path()
+                .join("workspace-coordinator-private.pem")
+                .exists()
+        );
+    }
 
     #[test]
     fn repeated_local_overlay_replaces_endpoint_without_duplicate_flags() {

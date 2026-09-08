@@ -1,3 +1,4 @@
+{{- $workspaceTasks := and (index .Values.components "workspace").enabled (index .Values.components "agent-platform").enabled -}}
 {{- range $name, $component := .Values.components }}
 {{- if $component.enabled }}
 {{- $claimName := default (printf "%s-%s" (include "devcenter.fullname" $) $name) $component.persistence.claimName }}
@@ -117,9 +118,11 @@ spec:
             - name: WORKSPACE_SUBSTRATE_CA_BUNDLE
               value: {{ ternary "/etc/workspace/substrate/ca.crt" $.Values.substrate.client.trustRoots.path (not (empty $.Values.substrate.client.trustRoots.existingSecret)) | quote }}
             {{- end }}
-            {{- if and (index $.Values.components "agent-platform").enabled (hasKey ($component.env | default dict) "WORKSPACE_PROJECT_AGENT_MODEL") }}
-            - name: WORKSPACE_AGENT_PLATFORM_ORIGIN
-              value: {{ printf "http://%s-agent-platform.%s.svc.cluster.local:%v" (include "devcenter.fullname" $) $.Release.Namespace (index $.Values.components "agent-platform").port | quote }}
+            {{- if $workspaceTasks }}
+            - name: WORKSPACE_EXECUTOR_PUBLIC_KEY_FILE
+              value: /etc/workspace-authority/executor.pem
+            - name: WORKSPACE_COORDINATOR_PUBLIC_KEY_FILE
+              value: /etc/workspace-authority/coordinator.pem
             {{- end }}
             {{- if and (index $.Values.components "aep-service").enabled (hasKey ($component.env | default dict) "WORKSPACE_AEP_REALM") (hasKey ($component.env | default dict) "WORKSPACE_AEP_WORKSPACE") }}
             - name: WORKSPACE_AEP_SERVICE_ORIGIN
@@ -149,6 +152,10 @@ spec:
             - name: AGENT_PLATFORM_WORKSPACE_ORIGIN
               value: {{ printf "http://%s-workspace.%s.svc.cluster.local:%v" (include "devcenter.fullname" $) $.Release.Namespace (index $.Values.components "workspace").port | quote }}
             {{- end }}
+            {{- if $workspaceTasks }}
+            - name: AGENT_PLATFORM_WORKSPACE_SIGNING_KEY_FILE
+              value: /etc/workspace-executor/private.pem
+            {{- end }}
             {{- if and $component.persistence.enabled (not (hasKey ($component.env | default dict) "AGENT_PLATFORM_STATE_PATH")) }}
             - name: AGENT_PLATFORM_STATE_PATH
               value: {{ printf "%s/state.json" (trimSuffix "/" $component.persistence.mountPath) | quote }}
@@ -166,8 +173,14 @@ spec:
           {{- with $component.envFrom }}
           envFrom: {{ toYaml . | nindent 12 }}
           {{- end }}
-          {{- if or $component.configFiles $component.persistence.enabled $component.volumeMounts (and (eq $name "connectors") $.Values.connectorsCatalogBundle.enabled) (and (eq $name "connectors") (index $.Values.components "secrets").enabled) (and (eq $name "connectors") $.Values.connectorsGitFetch.enabled) (eq $name "secrets") (and (eq $name "workspace") $.Values.substrate.enabled $.Values.substrate.client.trustRoots.existingSecret) }}
+          {{- if or (and $workspaceTasks (or (eq $name "workspace") (eq $name "agent-platform"))) $component.configFiles $component.persistence.enabled $component.volumeMounts (and (eq $name "connectors") $.Values.connectorsCatalogBundle.enabled) (and (eq $name "connectors") (index $.Values.components "secrets").enabled) (and (eq $name "connectors") $.Values.connectorsGitFetch.enabled) (eq $name "secrets") (and (eq $name "workspace") $.Values.substrate.enabled $.Values.substrate.client.trustRoots.existingSecret) }}
           volumeMounts:
+            {{- if and $workspaceTasks (eq $name "workspace") }}
+            - {name: workspace-authority, mountPath: /etc/workspace-authority, readOnly: true}
+            {{- end }}
+            {{- if and $workspaceTasks (eq $name "agent-platform") }}
+            - {name: workspace-executor, mountPath: /etc/workspace-executor, readOnly: true}
+            {{- end }}
             {{- if $component.configFiles }}
             {{- range $path, $_ := $component.configFiles }}
             - name: component-config
@@ -216,8 +229,25 @@ spec:
           readinessProbe: {{ toYaml $component.readinessProbe | nindent 12 }}
           livenessProbe: {{ toYaml $component.livenessProbe | nindent 12 }}
           resources: {{ toYaml $component.resources | nindent 12 }}
-      {{- if or $component.configFiles $component.persistence.enabled $component.volumes (and (eq $name "connectors") $.Values.connectorsCatalogBundle.enabled) (and (eq $name "connectors") (index $.Values.components "secrets").enabled) (and (eq $name "connectors") $.Values.connectorsGitFetch.enabled) (eq $name "secrets") (and (eq $name "workspace") $.Values.substrate.enabled $.Values.substrate.client.trustRoots.existingSecret) }}
+      {{- if or (and $workspaceTasks (or (eq $name "workspace") (eq $name "agent-platform"))) $component.configFiles $component.persistence.enabled $component.volumes (and (eq $name "connectors") $.Values.connectorsCatalogBundle.enabled) (and (eq $name "connectors") (index $.Values.components "secrets").enabled) (and (eq $name "connectors") $.Values.connectorsGitFetch.enabled) (eq $name "secrets") (and (eq $name "workspace") $.Values.substrate.enabled $.Values.substrate.client.trustRoots.existingSecret) }}
       volumes:
+        {{- if and $workspaceTasks (eq $name "workspace") }}
+        - name: workspace-authority
+          projected:
+            sources:
+              - secret:
+                  name: {{ required "workspaceAuthority.executor.existingSecret is required" $.Values.workspaceAuthority.executor.existingSecret | quote }}
+                  items: [{key: {{ $.Values.workspaceAuthority.executor.publicKey | quote }}, path: executor.pem}]
+              - secret:
+                  name: {{ required "workspaceAuthority.coordinator.existingSecret is required" $.Values.workspaceAuthority.coordinator.existingSecret | quote }}
+                  items: [{key: {{ $.Values.workspaceAuthority.coordinator.publicKey | quote }}, path: coordinator.pem}]
+        {{- end }}
+        {{- if and $workspaceTasks (eq $name "agent-platform") }}
+        - name: workspace-executor
+          secret:
+            secretName: {{ required "workspaceAuthority.executor.existingSecret is required" $.Values.workspaceAuthority.executor.existingSecret | quote }}
+            items: [{key: {{ $.Values.workspaceAuthority.executor.privateKey | quote }}, path: private.pem}]
+        {{- end }}
         {{- if $component.configFiles }}
         - name: component-config
           configMap: {name: {{ include "devcenter.fullname" $ }}-{{ $name }}-config}

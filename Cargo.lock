@@ -2001,6 +2001,21 @@ dependencies = [
 ]
 
 [[package]]
+name = "jsonwebtoken"
+version = "9.3.1"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "5a87cc7a48537badeae96744432de36f4be2b4a34a05a5ef32e9dd8a1c169dde"
+dependencies = [
+ "base64",
+ "js-sys",
+ "pem",
+ "ring",
+ "serde",
+ "serde_json",
+ "simple_asn1",
+]
+
+[[package]]
 name = "keyring"
 version = "4.2.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -2324,6 +2339,16 @@ dependencies = [
  "redox_syscall 0.5.18",
  "smallvec",
  "windows-link",
+]
+
+[[package]]
+name = "pem"
+version = "3.0.6"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "1d30c53c26bc5b31a98cd02d20f25a7c8567146caf63ed593a9d87b2775291be"
+dependencies = [
+ "base64",
+ "serde_core",
 ]
 
 [[package]]
@@ -3427,6 +3452,18 @@ name = "simdutf8"
 version = "0.1.5"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "e3a9fe34e3e7a50316060351f37187a3f546bce95496156754b601a5fa71b76e"
+
+[[package]]
+name = "simple_asn1"
+version = "0.6.3"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "297f631f50729c8c99b84667867963997ec0b50f32b2a7dbcab828ef0541e8bb"
+dependencies = [
+ "num-bigint",
+ "num-traits",
+ "thiserror",
+ "time",
+]
 
 [[package]]
 name = "slab"
@@ -4653,21 +4690,27 @@ dependencies = [
 
 [[package]]
 name = "workspace-client"
-version = "0.2.19"
-source = "git+https://github.com/beyond10x/workspace.git?rev=f348e3f3e6302e81b09cd4eda1d70affbe24a392#f348e3f3e6302e81b09cd4eda1d70affbe24a392"
+version = "0.2.24"
+source = "git+https://github.com/beyond10x/workspace.git?branch=main#2c25863658a648862231b61b25c9db48ef02b91d"
 dependencies = [
  "agentide-contracts 0.3.4",
+ "getrandom 0.3.4",
+ "hex",
+ "jsonwebtoken",
  "reqwest 0.13.4",
  "serde",
+ "serde_json",
+ "sha2 0.10.9",
  "thiserror",
  "url",
  "workspace-core",
+ "zeroize",
 ]
 
 [[package]]
 name = "workspace-core"
-version = "0.2.19"
-source = "git+https://github.com/beyond10x/workspace.git?rev=f348e3f3e6302e81b09cd4eda1d70affbe24a392#f348e3f3e6302e81b09cd4eda1d70affbe24a392"
+version = "0.2.24"
+source = "git+https://github.com/beyond10x/workspace.git?branch=main#2c25863658a648862231b61b25c9db48ef02b91d"
 dependencies = [
  "serde",
  "serde_json",

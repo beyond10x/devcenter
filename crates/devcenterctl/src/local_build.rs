@@ -116,6 +116,7 @@ pub fn up(args: &Up) -> Result<()> {
         identity_image: identity,
         connectors_image: connectors,
         provider_image: provider,
+        preserve_existing_services: false,
     })?;
     if args.build.iter().any(|c| c == "server") {
         select_server(state)?;

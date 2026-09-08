@@ -69,6 +69,8 @@ use workspace_core::{
 };
 use zeroize::Zeroizing;
 
+mod project_tasks;
+
 const SESSION_COOKIE: &str = "__Host-devcenter_session";
 const LOGIN_LIFETIME_SECONDS: u64 = 10 * 60;
 const MAX_PENDING_LOGINS: usize = 1_024;
@@ -99,6 +101,7 @@ struct AppState {
     agent_platform: Option<AgentPlatformClient>,
     connectors: Option<HostedClient>,
     workspace: Option<WorkspaceClient>,
+    project_observers: project_tasks::Observers,
     workflow: Option<WorkflowClient>,
     pending_logins: Arc<Mutex<BTreeMap<String, PendingLogin>>>,
     publications: Store,
@@ -146,9 +149,22 @@ pub fn router_with_store(
     let workspace = config
         .workspace_origin
         .as_deref()
-        .map(WorkspaceClient::new)
-        .transpose()
-        .map_err(|_| ConfigurationError)?;
+        .map(|origin| {
+            let client = WorkspaceClient::new(origin).map_err(|_| ConfigurationError)?;
+            match config.workspace_signing_key_file.as_deref() {
+                Some(path) => {
+                    let key = Zeroizing::new(std::fs::read(path).map_err(|_| ConfigurationError)?);
+                    let signer = workspace_client::attestation::RequestSigner::from_pem(
+                        workspace_client::attestation::HostRole::Coordinator,
+                        &key,
+                    )
+                    .map_err(|_| ConfigurationError)?;
+                    Ok(client.with_request_signer(signer))
+                }
+                None => Ok(client),
+            }
+        })
+        .transpose()?;
     let workflow = config
         .workflow_origin
         .as_deref()
@@ -160,6 +176,7 @@ pub fn router_with_store(
         agent_platform,
         connectors,
         workspace,
+        project_observers: project_tasks::Observers::default(),
         workflow,
         pending_logins: Arc::new(Mutex::new(BTreeMap::new())),
         publications,
@@ -2001,16 +2018,7 @@ async fn create_thread_message(
         Ok(authenticated) => authenticated,
         Err(response) => return response,
     };
-    let Some(workspace) = state.workspace.as_ref() else {
-        return unavailable("workspace_not_configured");
-    };
-    match workspace
-        .create_message(authenticated.authorization.as_str(), &thread_id, &input)
-        .await
-    {
-        Ok(message) => confidential_json(message),
-        Err(error) => workspace_error(&error),
-    }
+    project_tasks::create_message(&state, authenticated, &thread_id, input).await
 }
 
 async fn project_message_events(
@@ -2022,29 +2030,7 @@ async fn project_message_events(
         Ok(authenticated) => authenticated,
         Err(response) => return response,
     };
-    let Some(workspace) = state.workspace.as_ref() else {
-        return unavailable("workspace_not_configured");
-    };
-    let upstream = match workspace
-        .message_events(
-            authenticated.authorization.as_str(),
-            &thread_id,
-            message_sequence,
-        )
-        .await
-    {
-        Ok(upstream) => upstream,
-        Err(error) => return workspace_error(&error),
-    };
-    let mut response = Response::new(Body::from_stream(upstream.bytes_stream()));
-    response.headers_mut().insert(
-        header::CONTENT_TYPE,
-        HeaderValue::from_static("text/event-stream"),
-    );
-    response
-        .headers_mut()
-        .insert(header::CACHE_CONTROL, HeaderValue::from_static("no-store"));
-    response
+    project_tasks::message_events(&state, authenticated, &thread_id, message_sequence).await
 }
 
 async fn list_project_workflows(
@@ -2056,16 +2042,7 @@ async fn list_project_workflows(
         Ok(authenticated) => authenticated,
         Err(response) => return response,
     };
-    let Some(workspace) = state.workspace.as_ref() else {
-        return unavailable("workspace_not_configured");
-    };
-    match workspace
-        .workflows(authenticated.authorization.as_str(), &project_id)
-        .await
-    {
-        Ok(workflows) => confidential_json(workflows),
-        Err(error) => workspace_error(&error),
-    }
+    project_tasks::workflows(&state, &authenticated, &project_id).await
 }
 
 async fn start_project_workflow(
@@ -2078,16 +2055,7 @@ async fn start_project_workflow(
         Ok(authenticated) => authenticated,
         Err(response) => return response,
     };
-    let Some(workspace) = state.workspace.as_ref() else {
-        return unavailable("workspace_not_configured");
-    };
-    match workspace
-        .start_workflow(authenticated.authorization.as_str(), &project_id, &input)
-        .await
-    {
-        Ok(run) => confidential_json(run),
-        Err(error) => workspace_error(&error),
-    }
+    project_tasks::start_workflow(&state, authenticated, &project_id, input).await
 }
 
 async fn list_project_workflow_runs(
@@ -2099,16 +2067,7 @@ async fn list_project_workflow_runs(
         Ok(authenticated) => authenticated,
         Err(response) => return response,
     };
-    let Some(workspace) = state.workspace.as_ref() else {
-        return unavailable("workspace_not_configured");
-    };
-    match workspace
-        .workflow_runs(authenticated.authorization.as_str(), &project_id)
-        .await
-    {
-        Ok(runs) => confidential_json(runs),
-        Err(error) => workspace_error(&error),
-    }
+    project_tasks::workflow_runs(&state, authenticated, &project_id).await
 }
 
 #[derive(Clone, Copy)]
@@ -6263,6 +6222,8 @@ mod tests {
             connectors_api_base: None,
             connectors_docs_available: false,
             workspace_origin: None,
+            workspace_signing_key_file: None,
+            project_agent_model: None,
             workflow_origin: None,
             agentide_workspace_enabled: false,
         })
@@ -6642,6 +6603,8 @@ mod tests {
             connectors_api_base: None,
             connectors_docs_available: false,
             workspace_origin: Some("http://127.0.0.1:3002".into()),
+            workspace_signing_key_file: None,
+            project_agent_model: None,
             workflow_origin: None,
             agentide_workspace_enabled: true,
         })
@@ -7134,6 +7097,8 @@ mod tests {
             connectors_api_base: None,
             connectors_docs_available: false,
             workspace_origin: None,
+            workspace_signing_key_file: None,
+            project_agent_model: None,
             workflow_origin: None,
             agentide_workspace_enabled: false,
         };

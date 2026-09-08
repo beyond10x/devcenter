@@ -2,6 +2,7 @@ global:
   tenantId: tenant-example
   publicOrigin: https://devcenter.example.invalid
 devcenter:
+  projectAgentModel: "default"
   features:
     agentideWorkspace:
       enabled: true
@@ -80,7 +81,6 @@ components:
       digest: sha256:abababababababababababababababababababababababababababababababab
     env:
       WORKSPACE_DATABASE_URL: "sqlite::memory:"
-      WORKSPACE_PROJECT_AGENT_MODEL: "default"
       WORKSPACE_AEP_REALM: "engineering"
       WORKSPACE_AEP_WORKSPACE: "central"
 connectorsGitFetch:
@@ -113,3 +113,9 @@ secrets:
     image:
       repository: postgres
       digest: sha256:ffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff
+
+workspaceAuthority:
+  executor:
+    existingSecret: example-workspace-executor
+  coordinator:
+    existingSecret: example-workspace-coordinator

@@ -6,6 +6,8 @@ global:
 
 devcenter:
   replicaCount: 1
+  # Model selection belongs to product orchestration. Required with Workspace and Agent Platform.
+  projectAgentModel: ""
   features:
     # The native AgentIDE workbench remains fail-closed until its deployment dependencies pass.
     agentideWorkspace:
@@ -40,6 +42,18 @@ devcenter:
     limits:
       cpu: "1"
       memory: 512Mi
+
+# Pre-provisioned Ed25519 keys. Only the named host receives each private key;
+# Workspace receives the two public keys. Values never contain key bytes.
+workspaceAuthority:
+  executor:
+    existingSecret: ""
+    privateKey: private.pem
+    publicKey: public.pem
+  coordinator:
+    existingSecret: ""
+    privateKey: private.pem
+    publicKey: public.pem
 
 ingress:
   enabled: false

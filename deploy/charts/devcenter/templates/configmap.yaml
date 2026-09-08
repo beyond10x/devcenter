@@ -53,3 +53,8 @@ data:
   {{- if (index .Values.components "workflow").enabled }}
   DEV_CENTER_WORKFLOW_ORIGIN: {{ printf "http://%s-workflow.%s.svc.cluster.local:%v" (include "devcenter.fullname" .) .Release.Namespace (index .Values.components "workflow").port | quote }}
   {{- end }}
+
+  {{- if and (index .Values.components "workspace").enabled (index .Values.components "agent-platform").enabled }}
+  DEV_CENTER_PROJECT_AGENT_MODEL: {{ required "devcenter.projectAgentModel is required with Workspace and Agent Platform" .Values.devcenter.projectAgentModel | quote }}
+  DEV_CENTER_WORKSPACE_SIGNING_KEY_FILE: "/etc/workspace-coordinator/private.pem"
+  {{- end }}

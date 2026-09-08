@@ -265,3 +265,25 @@ chart values or rendered ConfigMaps.
 
 [Devcenter documentation](https://beyond10x.github.io/docs/devcenter/) · [Start](https://beyond10x.github.io/) · [Ecosystem](https://beyond10x.github.io/ecosystem/) · [Impact](https://beyond10x.github.io/changes/) · [Releases](https://beyond10x.github.io/releases/)
 <!-- b10x-docs:end -->
+
+## Project task coordination
+
+Sending a message to `POST /api/threads/{thread_id}/messages` now asks Workspace for the exact project
+context and existing conversation, submits the task directly to Agent Platform, and records the
+original task ID in Workspace. The BFF streams Agent Platform events and records the final message
+once. Project review workflows use the same direction: the product owns their definitions and
+observes their tasks; Workspace preserves the existing run and recovery rows. An ambiguous
+submission retries with the same run identity and task idempotency key.
+
+With both Workspace and Agent Platform enabled, set `devcenter.projectAgentModel` and provision two
+separate Ed25519 key-pair Secrets through normal deployment custody. Reference them in
+`workspaceAuthority.executor.existingSecret` and `workspaceAuthority.coordinator.existingSecret`;
+`privateKey` and `publicKey` select Secret data keys, defaulting to `private.pem` and `public.pem`.
+The chart mounts the executor private key only in Agent Platform, the coordinator private key only
+in Devcenter, and both public keys in Workspace. Use versioned Secret names and roll out the matching
+hosts together when rotating keys. Values contain Secret references, never credential bytes.
+
+For a standalone BFF, configure `DEV_CENTER_WORKSPACE_SIGNING_KEY_FILE` and
+`DEV_CENTER_PROJECT_AGENT_MODEL`. The previous `WORKSPACE_PROJECT_AGENT_MODEL` configuration moves
+to the product. Local acceptance creates and retains its own owner-only host keys in private state;
+it can migrate that model setting from an older private baseline without changing its selection.

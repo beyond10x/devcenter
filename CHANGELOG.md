@@ -2,6 +2,12 @@
 
 ## Unreleased
 
+- Own project-chat and review-workflow task orchestration above Workspace and Agent Platform,
+  preserving existing conversations and workflow checkpoints. Recover results with a fresh session
+  and retry ambiguous workflow admission using the original task intent.
+- Configure separate downward executor/coordinator request authority through referenced key Secrets;
+  Workspace receives only public keys. Move project model configuration into Devcenter.
+
 ## 0.8.33 - 2026-09-06
 
 - Follow bounded AgentIDE query continuations, including empty filtered pages, so workspace coordination remains available beyond the first raw projection window.
