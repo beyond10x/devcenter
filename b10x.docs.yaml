@@ -51,9 +51,6 @@ surfaces:
     label: identity source packages consumed by devcenter
     target: identity/docs
   - kind: uses
-    label: The Devcenter chart composes the Secrets service and its development database
-    target: secrets/docs
-  - kind: uses
     label: The Devcenter Connectors composition consumes the standalone service SDK at an exact revision.
     target: service-sdk/docs
   - kind: uses
