@@ -42,6 +42,9 @@ surfaces:
     label: Devcenter consumes Agent Platform client and core crates at an exact revision.
     target: agent-platform/docs
   - kind: uses
+    label: devcenter/Cargo.toml:36 crate agentide-contracts from beyond10x/agentide at tag 0.2.1, and 2 more lines
+    target: agentide/docs
+  - kind: uses
     label: Devcenter consumes the hosted Connectors client and protocol at an exact revision.
     target: connectors/docs
   - kind: uses
@@ -53,6 +56,9 @@ surfaces:
   - kind: uses
     label: The Devcenter Connectors composition consumes the standalone service SDK at an exact revision.
     target: service-sdk/docs
+  - kind: uses
+    label: devcenter/Cargo.toml:40 crate workflow-generated-service from beyond10x/workflow at rev 77c204b4d7a913cdc26e7d3445229571bad84f9a
+    target: workflow/docs
   - kind: uses
     label: Devcenter consumes Workspace client and core crates at an exact revision.
     target: workspace/docs
