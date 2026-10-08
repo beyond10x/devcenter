@@ -45,9 +45,6 @@ surfaces:
     label: devcenter/Cargo.toml:36 crate agentide-contracts from beyond10x/agentide at tag 0.2.1, and 2 more lines
     target: agentide/docs
   - kind: uses
-    label: Devcenter consumes the hosted Connectors client and protocol at an exact revision.
-    target: connectors/docs
-  - kind: uses
     label: The Devcenter Connectors composition persists service events through Eventlog Postgres at an exact revision.
     target: eventlog/docs
   - kind: uses
